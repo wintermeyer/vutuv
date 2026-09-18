@@ -133,7 +133,9 @@ defmodule VutuvWeb.ShellLive do
         mount_static(socket, session, path)
       end
 
-    {:ok, socket}
+    # A config read, so it cannot change without a restart; assigned once
+    # rather than called per render of a component that is on every page.
+    {:ok, assign(socket, :ads_enabled?, Vutuv.Ads.enabled?())}
   end
 
   # The dead render's identity: the curated display fields LayoutHTML.shell_session/1
@@ -1610,6 +1612,18 @@ defmodule VutuvWeb.ShellLive do
                   public browse directory stays linked in the footer. --%>
                   <.link href={~p"/settings/organizations"} class={[menu_item_class(), "block"]}>
                     {gettext("Organizations")}
+                  </.link>
+
+                  <%!-- The ads a member booked, and the way to book another. Only
+                  while the system is on: the whole /system/ads flow 404s when it
+                  is off, and a menu item into a 404 is worse than none. --%>
+                  <.link
+                    :if={@ads_enabled?}
+                    href={~p"/system/ads/bookings"}
+                    data-my-ads-link
+                    class={[menu_item_class(), "block"]}
+                  >
+                    {gettext("My ads")}
                   </.link>
 
                   <div class="my-1 border-t border-slate-100 dark:border-slate-800"></div>

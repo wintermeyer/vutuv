@@ -1,0 +1,153 @@
+<%!-- The form beside the list it lands in: making a code, copying it and
+handing it over is one act, and a separate /new page would only be a detour. --%>
+<.page_header
+  title={gettext("Ad discount codes")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Ads"), ~p"/admin/ads"},
+    gettext("Discount codes")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <h1>{gettext("Make a code")}</h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("The code is its own id, so nobody can guess one. Copy it from the list and hand it over.")}
+    </p>
+
+    <.form
+      :let={f}
+      for={@changeset}
+      action={~p"/admin/ads/discounts"}
+      class="editform mt-4"
+      id="discount-form"
+    >
+      <.form_error changeset={@changeset} />
+
+      <div class="editform__field">
+        <fieldset class="editform__group">
+          <legend>{gettext("What it takes off")}</legend>
+          <div class="space-y-3">
+            <label class="m-0 flex flex-wrap items-center gap-3">
+              <input
+                type="radio"
+                name="discount_code[kind]"
+                value="percent"
+                checked={Phoenix.HTML.Form.input_value(f, :cents_off) in [nil, ""]}
+                class="size-4 shrink-0 border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800"
+              />
+              <span class="text-sm text-slate-900 dark:text-slate-100">{gettext("Percent")}</span>
+              {number_input(f, :percent_off,
+                min: 1,
+                max: 100,
+                step: 1,
+                placeholder: "20",
+                class: narrow_input_class()
+              )}
+              <span class="text-sm text-slate-600 dark:text-slate-400">
+                {gettext("1 to 100")}
+              </span>
+            </label>
+            <label class="m-0 flex flex-wrap items-center gap-3">
+              <input
+                type="radio"
+                name="discount_code[kind]"
+                value="euro"
+                checked={Phoenix.HTML.Form.input_value(f, :cents_off) not in [nil, ""]}
+                class="size-4 shrink-0 border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800"
+              />
+              <span class="text-sm text-slate-900 dark:text-slate-100">{gettext("Euro")}</span>
+              {number_input(f, :cents_off,
+                min: 100,
+                max: 300_000,
+                step: 100,
+                placeholder: "5000",
+                class: narrow_input_class()
+              )}
+              <span class="text-sm text-slate-600 dark:text-slate-400">
+                {gettext("in cents, 1 € to 3.000 €")}
+              </span>
+            </label>
+          </div>
+        </fieldset>
+        {error_tag(f, :percent_off)}
+        {error_tag(f, :cents_off)}
+      </div>
+
+      <.editform_field form={f} field={:expires_on}>
+        {label(f, :expires_on, gettext("Valid until"))}
+        {date_input(f, :expires_on, [value: @default_expiry] ++ err_attrs(f, :expires_on))}
+        {error_tag(f, :expires_on)}
+        <p class="editform__hint">
+          {gettext("The last day it works. Suggested: the end of the month four months out.")}
+        </p>
+      </.editform_field>
+
+      <.editform_field form={f} field={:user_id}>
+        {label(f, :user_id, gettext("Only for this member (optional)"))}
+        <input
+          type="text"
+          name="discount_code[username]"
+          placeholder="@handle"
+          class={input_class(f, :user_id)}
+        />
+        {error_tag(f, :user_id)}
+        <p class="editform__hint">
+          {gettext("Leave empty and anybody may use it, once each. With a handle it belongs to that member and works exactly once.")}
+        </p>
+      </.editform_field>
+
+      <.editform_field form={f} field={:note}>
+        {label(f, :note, gettext("What it is for (optional)"))}
+        {text_input(f, :note, [placeholder: gettext("Trade fair, October")] ++ err_attrs(f, :note))}
+        {error_tag(f, :note)}
+        <p class="editform__hint">
+          {gettext("Only you see this. A list of bare codes tells nobody what they were for.")}
+        </p>
+      </.editform_field>
+
+      <div class="editform__actions">
+        <.button type="submit">{gettext("Make the code")}</.button>
+      </div>
+    </.form>
+  </section>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <h1>{gettext("Codes")} ({compact_count(length(@codes))})</h1>
+
+    <p :if={@codes == []} class="card__empty">{gettext("No codes yet.")}</p>
+
+    <div :if={@codes != []} class="card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Code")}</th>
+            <th>{gettext("Takes off")}</th>
+            <th>{gettext("For")}</th>
+            <th>{gettext("Valid until")}</th>
+            <th>{gettext("What it is for")}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={code <- @codes} id={"code-#{code.id}"}>
+            <td><.copy_field id={"code-copy-#{code.id}"} variant="inline">{code.id}</.copy_field></td>
+            <td class="whitespace-nowrap font-semibold">{worth(code)}</td>
+            <td><.reach code={code} /></td>
+            <td><.expiry code={code} /></td>
+            <td>{code.note}</td>
+            <td class="text-right">
+              <.row_actions
+                delete_to={~p"/admin/ads/discounts/#{code}"}
+                confirm={gettext("Forget this code? Bookings that used it keep their price.")}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

@@ -48,6 +48,24 @@ defmodule Vutuv.AdsTest do
     )
   end
 
+  # A booking can only be MADE three days out, so a test that needs one already
+  # running moves it back afterwards - the changeset is what refuses a past day,
+  # and that refusal is the thing being worked around, not tested here.
+  defp shift_back(%Ad{} = ad, days) do
+    scope =
+      if ad.group_id,
+        do: from(a in Ad, where: a.group_id == ^ad.group_id),
+        else: from(a in Ad, where: a.id == ^ad.id)
+
+    for row <- Repo.all(scope) do
+      Repo.update_all(from(a in Ad, where: a.id == ^row.id),
+        set: [day: Date.add(row.day, -days)]
+      )
+    end
+
+    Repo.get!(Ad, ad.id)
+  end
+
   defp pending_booking(user \\ booker()) do
     {:ok, ad} = Ads.book_ad(user, @valid_attrs)
     flush_emails()
@@ -338,6 +356,83 @@ defmodule Vutuv.AdsTest do
       attrs = Map.drop(@valid_attrs, ["billing_name", "billing_street"])
       assert {:error, changeset} = Ads.book_ad(booker(), attrs)
       assert %{billing_name: [_], billing_street: [_]} = errors_on(changeset)
+    end
+
+    test "the country is optional" do
+      # Most invoices stay in the country the installation bills from, where
+      # writing it out says nothing.
+      attrs = Map.drop(@valid_attrs, ["billing_country"])
+
+      assert {:ok, ad} = Ads.book_ad(booker(), attrs)
+      assert ad.billing_country == nil
+
+      # And the operator mail simply leaves the line out rather than printing
+      # an empty one.
+      assert [mail] = mails_to(flush_emails(), @operator)
+      assert mail.text_body =~ "Musterstraße 1"
+      refute mail.text_body =~ "\n\n\n"
+    end
+  end
+
+  describe "taking an approved ad off the site" do
+    test "it stops today, the past stays, and no money comes back" do
+      user = booker()
+      first = Ads.next_available_day()
+      {:ok, ad} = Ads.book_ad(user, Map.put(@valid_attrs, "day", Date.to_iso8601(first)), 7)
+      {:ok, _} = Ads.approve_ad(ad, admin())
+      # Three of its seven days have run.
+      ad = shift_back(ad, Date.diff(first, Ads.today()) + 3)
+      flush_emails()
+
+      assert Ads.withdrawable?(ad)
+      assert {:ok, _} = Ads.withdraw_booking(ad, user)
+
+      rows = Repo.all(from(a in Ad, where: a.group_id == ^ad.group_id, order_by: a.day))
+      {past, from_today} = Enum.split_with(rows, &(Date.compare(&1.day, Ads.today()) == :lt))
+
+      assert length(past) == 3
+      assert Enum.all?(past, &is_nil(&1.cancelled_at))
+      assert Enum.all?(from_today, &(not is_nil(&1.cancelled_at)))
+
+      # The operator is told, and told that nothing is credited - the opposite
+      # of the cancellation notice, which asks for a credit note.
+      assert [mail] = mails_to(flush_emails(), @operator)
+      assert mail.subject =~ "zurückgezogen"
+      assert mail.text_body =~ "kein Geld zurück"
+      refute mail.text_body =~ "gutschreiben"
+    end
+
+    test "it stops the ad serving at once" do
+      user = booker()
+      first = Ads.next_available_day()
+      {:ok, ad} = Ads.book_ad(user, Map.put(@valid_attrs, "day", Date.to_iso8601(first)), 1)
+      {:ok, _} = Ads.approve_ad(ad, admin())
+      ad = shift_back(ad, Date.diff(first, Ads.today()))
+      flush_emails()
+
+      assert {:ad, _} = Ads.current_banner()
+      assert {:ok, _} = Ads.withdraw_booking(ad, user)
+      assert Ads.current_banner() == :house
+    end
+
+    test "a booking that still waits for approval is not this act" do
+      user = booker()
+      ad = pending_booking(user)
+
+      # Before approval the free `cancel_booking/2` is the way out, so the
+      # expensive one must not reach it.
+      refute Ads.withdrawable?(ad)
+      assert {:error, :not_pending} = Ads.withdraw_booking(ad, user)
+      assert flush_emails() == []
+    end
+
+    test "somebody else's booking is not there to withdraw" do
+      ad = pending_booking()
+      {:ok, approved} = Ads.approve_ad(ad, admin())
+      flush_emails()
+
+      assert {:error, :not_found} = Ads.withdraw_booking(approved, booker())
+      assert flush_emails() == []
     end
   end
 

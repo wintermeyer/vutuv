@@ -192,6 +192,8 @@ defmodule VutuvWeb.AdHTML do
   attr(:ad, Ad, required: true)
 
   def booking_actions(assigns) do
+    assigns = assign(assigns, :withdrawable?, Ads.withdrawable?(assigns.ad))
+
     ~H"""
     <p :if={Ad.status(@ad) == :pending} class="mb-0 mt-3 text-xs text-slate-600 dark:text-slate-400">
       {gettext(
@@ -214,6 +216,45 @@ defmodule VutuvWeb.AdHTML do
         {gettext("Cancel booking")}
       </.button>
     </.form>
+
+    <%!-- Taking an approved ad off the site costs the whole booking, so it is
+    not a `data-confirm` one-liner: the price of the act is the thing that has
+    to be read, and a native confirm cannot say it in more than a sentence. --%>
+    <div :if={@withdrawable?} class="mt-3">
+      <button
+        type="button"
+        data-modal-open={"withdraw-#{@ad.id}"}
+        class={[button_class("danger-ghost")]}
+      >
+        {gettext("Take this ad off the site")}
+      </button>
+    </div>
+    <%!-- `m-auto` is load-bearing: a native dialog centres itself with
+    `margin: auto`, and Tailwind's preflight zeroes every margin, which parks
+    the modal in the top-left corner. --%>
+    <dialog
+      :if={@withdrawable?}
+      id={"withdraw-#{@ad.id}"}
+      class="m-auto w-[min(30rem,calc(100vw-2rem))] rounded-2xl bg-white p-6 text-slate-900 shadow-lg backdrop:bg-slate-900/50 dark:bg-slate-900 dark:text-slate-100"
+    >
+      <h2 class="text-lg font-bold">{gettext("Take this ad off the site?")}</h2>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+        {gettext("It stops showing today. There is no money back: the booking was approved and the invoice stands.")}
+      </p>
+      <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">
+        {gettext("Days that have already run stay as they are.")}
+      </p>
+      <div class="mt-5 flex flex-wrap items-center justify-end gap-3">
+        <button type="button" data-modal-close class={[button_class("secondary")]}>
+          {gettext("Keep it running")}
+        </button>
+        <.form for={%{}} id={"withdraw-form-#{@ad.id}"} action={~p"/system/ads/#{@ad}/withdraw"} method="post">
+          <.button type="submit" variant="danger">
+            {gettext("Take it off, no money back")}
+          </.button>
+        </.form>
+      </div>
+    </dialog>
     """
   end
 

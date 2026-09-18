@@ -43,6 +43,12 @@ defmodule Vutuv.Ads.Ad do
     # their list in `Vutuv.Ads.book_ad/3`, never trusted from the form.
     field(:invoice_email, :string)
 
+    # What a discount code took off this row, stamped beside the price it was
+    # booked at: the invoice is written from the pair, so neither is recomputed
+    # later from a code that has since expired or been deleted.
+    field(:discount_cents, :integer, default: 0)
+    belongs_to(:discount_code, Vutuv.Ads.DiscountCode)
+
     # The admin review gate: an ad only serves once approved_at is set
     # (see Vutuv.Ads.approve_ad/2 and current_banner/0).
     field(:approved_at, :utc_datetime)
@@ -129,16 +135,19 @@ defmodule Vutuv.Ads.Ad do
       :billing_city,
       :billing_country,
       :vat_id,
-      :invoice_email
+      :invoice_email,
+      :discount_code_id
     ])
     |> validate_text()
+    # The country is optional: most invoices go to the same country the
+    # installation bills from, where writing it out says nothing, and an
+    # address abroad carries it in the street or city line anyway.
     |> validate_required([
       :day,
       :billing_name,
       :billing_street,
       :billing_zip_code,
-      :billing_city,
-      :billing_country
+      :billing_city
     ])
     # The billing fields are free-text varchar(255) columns: an oversized value
     # must be a changeset error, never a raised Postgres 22001 on booking.

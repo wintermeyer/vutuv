@@ -183,6 +183,50 @@ defmodule VutuvWeb.AdControllerTest do
     end
   end
 
+  describe "taking an approved ad off the site" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      first = Ads.next_available_day()
+
+      {:ok, ad} =
+        Ads.book_ad(user, %{booking_params() | "day" => Date.to_iso8601(first)}, 1)
+
+      {:ok, _} = Ads.approve_ad(ad, insert(:user))
+      Repo.update_all(Ads.Ad, set: [day: Ads.today()])
+      flush_emails()
+
+      %{conn: conn, ad: Repo.get!(Ads.Ad, ad.id)}
+    end
+
+    test "the bookings page offers it in a modal that says there is no refund", %{conn: conn} do
+      html = conn |> get(~p"/system/ads/bookings") |> html_response(200)
+
+      # A <dialog>, not a `data-confirm` one-liner: what has to be read is the
+      # price of the act, and a native confirm gives one unstyled line.
+      assert html =~ "<dialog"
+      assert html =~ "no money back"
+      assert html =~ "the invoice stands"
+      assert html =~ "/withdraw"
+    end
+
+    test "it takes the ad off and says the invoice stands", %{conn: conn, ad: ad} do
+      conn = post(conn, ~p"/system/ads/#{ad}/withdraw")
+
+      assert redirected_to(conn) == ~p"/system/ads/bookings"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "invoice stands"
+      assert Repo.get!(Ads.Ad, ad.id).cancelled_at != nil
+      assert Ads.current_banner() == :house
+    end
+
+    test "somebody else's booking is a 404", %{ad: ad} do
+      {other_conn, _other} =
+        build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user()
+
+      assert other_conn |> post(~p"/system/ads/#{ad}/withdraw") |> html_response(404)
+      assert Repo.get!(Ads.Ad, ad.id).cancelled_at == nil
+    end
+  end
+
   describe "cancel" do
     test "requires login", %{conn: conn} do
       ad = insert(:ad, approved_at: nil)

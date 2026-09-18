@@ -1,0 +1,26 @@
+<.email_layout preheader="Anzeige zurückgezogen" locale={@locale}>
+  <.email_heading>Anzeige zurückgezogen</.email_heading>
+  <.email_panel>
+    <.email_row label="Tage">{@period} ({@days} Tage)</.email_row>
+    <.email_row label="Preis">{@price} EUR (netto)</.email_row>
+    <.email_row label="MwSt.">{@vat_percent} % → {@gross} EUR brutto</.email_row>
+    <.email_row label="Zurückgezogen von">
+      @{@booker.username} ({@url}{@booker.username})
+    </.email_row>
+  </.email_panel>
+  <.email_p>
+    Die Anzeige war freigeschaltet und wurde vom Buchenden zurückgezogen. Ab heute läuft sie nicht mehr.
+  </.email_p>
+  <.email_p>
+    <strong>Es gibt kein Geld zurück:</strong> die Rechnung bleibt bestehen, keine Gutschrift.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titel">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p><strong>Rechnungsadresse</strong></.email_p>
+  <.email_p>
+    <span :for={line <- String.split(@billing_address, "\n")}>{line}<br /></span>
+  </.email_p>
+</.email_layout>

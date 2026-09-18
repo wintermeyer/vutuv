@@ -1,0 +1,21 @@
+Anzeige zurückgezogen
+=====================
+
+Tage:   <%= @period %> (<%= @days %> Tage)
+Preis:  <%= @price %> EUR (netto)
+MwSt.:  <%= @vat_percent %> % -> <%= @gross %> EUR brutto
+
+Zurückgezogen von @<%= @booker.username %> (<%= @url %><%= @booker.username %>),
+nachdem die Anzeige freigeschaltet war. Ab heute läuft sie nicht mehr.
+
+Es gibt kein Geld zurück: die Rechnung bleibt bestehen, keine Gutschrift.
+
+Anzeige
+-------
+Titel: <%= @ad.title %>
+Text:  <%= @ad.body %>
+Link:  <%= @ad.url %>
+
+Rechnungsadresse
+----------------
+<%= @billing_address %>

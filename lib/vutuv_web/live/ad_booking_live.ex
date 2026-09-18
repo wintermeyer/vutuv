@@ -32,10 +32,12 @@ defmodule VutuvWeb.AdBookingLive do
   alias Vutuv.Ads
   alias Vutuv.Ads.Ad
   alias Vutuv.Ads.Creative
+  alias Vutuv.Ads.Discounts
   alias VutuvWeb.AdComponents
   alias VutuvWeb.AdHTML
   alias VutuvWeb.AgentDocs.AdsDoc
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.UI
 
   on_mount({InitAssigns, :require_login})
 
@@ -70,6 +72,8 @@ defmodule VutuvWeb.AdBookingLive do
     # asking twice, so a returning booker meets it filled in.
     |> assign_billing_form(previous_billing(user))
     |> assign_addresses(user)
+    |> assign(:discount_code, "")
+    |> assign(:discount, {:error, :blank})
     |> assign_calendar()
   end
 
@@ -159,7 +163,11 @@ defmodule VutuvWeb.AdBookingLive do
       start_day =
         if start_fits?(socket, socket.assigns.start_day, days), do: socket.assigns.start_day
 
-      {:noreply, socket |> assign(:days, days) |> assign(:start_day, start_day)}
+      {:noreply,
+       socket
+       |> assign(:days, days)
+       |> assign(:start_day, start_day)
+       |> assign_discount(socket.assigns.discount_code)}
     else
       {:noreply, socket}
     end
@@ -188,7 +196,8 @@ defmodule VutuvWeb.AdBookingLive do
     {:noreply,
      socket
      |> assign_billing_form(params)
-     |> assign(:invoice_email, chosen_address(params, socket.assigns.addresses))}
+     |> assign(:invoice_email, chosen_address(params, socket.assigns.addresses))
+     |> assign_discount(params["discount_code"])}
   end
 
   def handle_event("book", %{"ad" => params}, socket) do
@@ -218,6 +227,18 @@ defmodule VutuvWeb.AdBookingLive do
 
   # Only one of the member's own addresses may be remembered, for the reason
   # `Vutuv.Ads.book_ad/3` re-checks it: a form field is not an allow-list.
+  # What the code is worth right now. Shown, never trusted: `book_ad/3` asks
+  # `Discounts.check/3` again with the same arguments before it stamps anything,
+  # because a price the form can set is not a price.
+  defp assign_discount(socket, code) do
+    code = code || ""
+    cents = Ads.block_price_cents(socket.assigns.days) || Ads.price_cents()
+
+    socket
+    |> assign(:discount_code, code)
+    |> assign(:discount, Discounts.check(code, socket.assigns.current_user, cents))
+  end
+
   defp chosen_address(params, addresses) do
     if params["invoice_email"] in addresses,
       do: params["invoice_email"],
@@ -322,6 +343,7 @@ defmodule VutuvWeb.AdBookingLive do
          billing_country vat_id invoice_email))
     |> Map.merge(%{
       "day" => Date.to_iso8601(socket.assigns.start_day),
+      "discount_code" => socket.assigns.discount_code,
       "title" => text.title,
       "body" => text.body,
       "url" => text.url
@@ -738,6 +760,7 @@ defmodule VutuvWeb.AdBookingLive do
 
   attr(:days, :integer, required: true)
   attr(:start_day, :any, required: true)
+  attr(:discount, :any, default: {:error, :blank})
 
   defp order_summary(assigns) do
     ~H"""
@@ -763,16 +786,46 @@ defmodule VutuvWeb.AdBookingLive do
           <dd class="m-0 mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
             {AdHTML.block_price(@days)}
           </dd>
+          <%!-- A discount changes the VAT too, because it comes off the net -
+          which is why the summary recomputes the pair rather than showing the
+          list price with a line under it. --%>
           <dd
-            :if={AdHTML.block_vat(@days)}
+            :if={!discounted(@discount) && AdHTML.block_vat(@days)}
             class="m-0 text-sm font-normal text-slate-600 dark:text-slate-400"
           >
             {AdHTML.block_vat(@days)}
+          </dd>
+          <dd
+            :if={discounted(@discount)}
+            class="m-0 mt-1 text-sm font-normal text-brand-700 dark:text-brand-300"
+          >
+            {gettext("Discount code: −%{amount} €", amount: UI.euro_cents(discounted(@discount)))}
+          </dd>
+          <dd
+            :if={discounted(@discount)}
+            class="m-0 mt-1 text-sm font-normal text-slate-600 dark:text-slate-400"
+          >
+            {net_after(@days, @discount)}
           </dd>
         </div>
       </dl>
     </.card>
     """
+  end
+
+  defp discounted({:ok, _code, cents_off}) when cents_off > 0, do: cents_off
+  defp discounted(_other), do: nil
+
+  # Net after the discount, and the VAT on THAT - the one figure a reader is
+  # about to be invoiced for.
+  defp net_after(days, {:ok, _code, cents_off}) do
+    net = (Ads.block_price_cents(days) || Ads.price_cents()) - cents_off
+
+    gettext("%{net} € net, plus %{percent} % VAT = %{gross} €",
+      net: UI.euro_cents(net),
+      percent: Ads.vat_percent(),
+      gross: UI.euro_cents(Ads.gross_cents(net))
+    )
   end
 
   defp billing_step(assigns) do
@@ -807,7 +860,11 @@ defmodule VutuvWeb.AdBookingLive do
               <.billing_field form={@billing_form} field={:billing_city} label={gettext("City")} />
             </div>
           </div>
-          <.billing_field form={@billing_form} field={:billing_country} label={gettext("Country")} />
+          <.billing_field
+            form={@billing_form}
+            field={:billing_country}
+            label={gettext("Country (optional)")}
+          />
           <.billing_field form={@billing_form} field={:vat_id} label={gettext("VAT ID (optional)")} />
 
           <%!-- A member may hold several addresses (work and private), and
@@ -837,6 +894,35 @@ defmodule VutuvWeb.AdBookingLive do
               </label>
             </div>
           </fieldset>
+
+          <div>
+            <label
+              for="ad-discount-code"
+              class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+            >
+              {gettext("Discount code (optional)")}
+            </label>
+            <input
+              type="text"
+              id="ad-discount-code"
+              name="ad[discount_code]"
+              value={@discount_code}
+              phx-debounce="300"
+              autocomplete="off"
+              class={input_class()}
+            />
+            <p
+              :if={discount_message(@discount)}
+              id="discount-message"
+              class={[
+                "mt-1 text-sm",
+                match?({:ok, _, _}, @discount) && "font-semibold text-brand-700 dark:text-brand-300",
+                !match?({:ok, _, _}, @discount) && "text-red-600 dark:text-red-400"
+              ]}
+            >
+              {discount_message(@discount)}
+            </p>
+          </div>
 
           <%!-- Both reservations said plainly, on the step where the money is
           agreed to, and not folded into a sentence about something else: we may
@@ -870,11 +956,22 @@ defmodule VutuvWeb.AdBookingLive do
           <.section_title>{gettext("Your ad")}</.section_title>
           <AdComponents.ad_preview id="billing-preview" banner={{:ad, @text}} class="mt-3" />
         </.card>
-        <.order_summary days={@days} start_day={@start_day} />
+        <.order_summary days={@days} start_day={@start_day} discount={@discount} />
       </div>
     </div>
     """
   end
+
+  # What a code is worth, or why it is worth nothing. A blank field says
+  # nothing at all - not having a code is the ordinary case, not a mistake.
+  defp discount_message({:ok, _code, cents_off}),
+    do: gettext("%{amount} € off", amount: UI.euro_cents(cents_off))
+
+  defp discount_message({:error, :blank}), do: nil
+  defp discount_message({:error, :unknown}), do: gettext("We do not know this code.")
+  defp discount_message({:error, :expired}), do: gettext("This code has expired.")
+  defp discount_message({:error, :not_yours}), do: gettext("This code belongs to somebody else.")
+  defp discount_message({:error, :used}), do: gettext("You have already used this code.")
 
   attr(:form, :any, required: true)
   attr(:field, :atom, required: true)

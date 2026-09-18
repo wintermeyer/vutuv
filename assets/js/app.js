@@ -1141,6 +1141,34 @@ const NewMarks = {
   },
 }
 
+// Native <dialog> modals on classic pages: a control carrying
+// `data-modal-open="<id>"` opens that dialog, anything inside it carrying
+// `data-modal-close` closes it. Delegated, so markup rendered later works too.
+//
+// A <dialog> rather than `data-confirm` wherever the CONSEQUENCE is the thing
+// that has to be read: a native confirm gives one unstyled line, and "there is
+// no money back" does not fit in one line anybody reads.
+document.addEventListener("click", (event) => {
+  const opener = event.target.closest("[data-modal-open]")
+  if (opener) {
+    const dialog = document.getElementById(opener.dataset.modalOpen)
+    if (dialog && typeof dialog.showModal === "function") {
+      event.preventDefault()
+      dialog.showModal()
+    }
+    return
+  }
+
+  const closer = event.target.closest("[data-modal-close]")
+  if (closer) {
+    const dialog = closer.closest("dialog")
+    if (dialog) {
+      event.preventDefault()
+      dialog.close()
+    }
+  }
+})
+
 const Hooks = {
   MarkdownEditor,
   TagInput,

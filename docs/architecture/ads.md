@@ -141,6 +141,38 @@ way the reader writes dates (`VutuvWeb.AdHTML.day_label/1`); the offer page
 wraps them in `<time datetime>`, which keeps the ISO date for its agent-format
 siblings.
 
+**Taking an ad off the site while it runs** is a second, deliberate act beside
+the free cancellation (`withdraw_booking/2` against `cancel_booking/2`). One is
+free because nothing was promised yet, the other costs the whole booking, and a
+single function with a branch in it would let a caller reach the expensive one
+by accident. It stops the ad from today, leaves days that already ran as
+history, and gives **no money back**; a `<dialog>` on the bookings page says so
+before the act is reachable, because what has to be read is the price of it and
+a `data-confirm` gives one unstyled line. Its operator notice is its own
+message: the cancellation one asks for a credit note, this one says the invoice
+stands. "My ads" sits in the account menu (`ShellLive`), but only while
+`Ads.enabled?` — every `/system/ads` page 404s otherwise, and a menu item into
+a 404 is worse than none.
+
+**Discount codes** (`Vutuv.Ads.Discounts`, `/admin/ads/discounts`): the code IS
+the row's id, a UUID v7, so nothing can collide and nobody can guess one.
+Percent **or** euro, never both (1–100 %, 1–3.000 €), enforced by a database
+`CHECK` as well as the changeset, because the money must not depend on a
+validation somebody forgets. A code with a `user_id` belongs to that member and
+is good once; one without may be used by anybody, **once each**. Redemptions are
+rows, not a counter — "once per member" is a fact about a pair, and the partial
+unique index on `(code_id, user_id) where released_at IS NULL` is what enforces
+both readings of it. A booking we turn down, or one cancelled before approval,
+**releases** the code (nothing ran); a withdrawal after approval does not. The
+discount is **stamped beside the price** (`ads.discount_cents`), not folded into
+it, so an invoice is not rewritten when a code later expires or is deleted, and
+it comes off the **net** — the wizard's summary recomputes the VAT on the
+reduced amount. Every rule about whether a code may be used lives in
+`Discounts.check/3`, which the wizard asks to SHOW a price and `book_ad/3` asks
+again before it stamps one. A code that turns out unusable books at the list
+price rather than failing the booking: nobody loses their week over a typo in a
+voucher.
+
 **Every ad is reviewed before it runs.** A booking is pending, then approved
 or rejected, and it can be cancelled on the way (`Vutuv.Ads.Ad.status/1`):
 

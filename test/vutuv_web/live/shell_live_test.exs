@@ -282,6 +282,37 @@ defmodule VutuvWeb.ShellLiveTest do
     assert html =~ ~s(href="/notifications")
   end
 
+  describe "the ads entry in the account menu" do
+    test "a member finds their ads without knowing the URL", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/feed") |> html_response(200)
+
+      # The whole ad flow lives under /system/, which nobody guesses; the
+      # account menu is where a member looks for the things that are theirs.
+      assert html =~ ~s(data-my-ads-link)
+      assert html =~ ~p"/system/ads/bookings"
+    end
+
+    test "it is absent while the ad system is off", %{conn: conn} do
+      original = Application.fetch_env(:vutuv, :ads_enabled)
+      Application.put_env(:vutuv, :ads_enabled, false)
+
+      on_exit(fn ->
+        case original do
+          {:ok, was} -> Application.put_env(:vutuv, :ads_enabled, was)
+          :error -> Application.delete_env(:vutuv, :ads_enabled)
+        end
+      end)
+
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/feed") |> html_response(200)
+
+      # Every /system/ads page 404s then, and a menu item into a 404 is worse
+      # than no menu item.
+      refute html =~ ~s(data-my-ads-link)
+    end
+  end
+
   describe "profile navigation" do
     test "the desktop nav carries an explicit Profile link to the member's profile", %{
       conn: conn

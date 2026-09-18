@@ -787,6 +787,15 @@ defmodule Vutuv.Notifications.Emailer do
     operator_ad_email(ad, booker, "ad_cancellation", "vutuv Stornierung der Anzeige:")
   end
 
+  @doc """
+  The operator notice that a booker took an already approved ad off the site.
+  Its own message rather than the cancellation one, because the money question
+  is the opposite: nothing is credited, and the invoice stands.
+  """
+  def ad_withdrawal_email(%Vutuv.Ads.Ad{} = ad, booker) do
+    operator_ad_email(ad, booker, "ad_withdrawal", "vutuv Anzeige zurückgezogen:")
+  end
+
   defp operator_ad_email(ad, booker, template_base, subject) do
     # The invoice is written from this mail, so it names the purchase: the whole
     # stretch of days and the price of the block, never one row's share.

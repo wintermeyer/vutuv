@@ -3,7 +3,7 @@ defmodule VutuvWeb.AdController do
 
   # The whole public ad flow is dark while the system is switched off.
   plug(VutuvWeb.Plug.RequireAdsEnabled)
-  plug(VutuvWeb.Plug.RequireLogin when action in [:bookings, :cancel])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:bookings, :cancel, :withdraw])
 
   alias Vutuv.Ads
   alias VutuvWeb.AdHTML
@@ -56,6 +56,37 @@ defmodule VutuvWeb.AdController do
       _missing_or_foreign ->
         ControllerHelpers.render_error(conn, 404)
     end
+  end
+
+  # Taking an approved ad off the site. It costs the whole booking, which the
+  # modal on the bookings page says before this is ever reached.
+  def withdraw(conn, %{"id" => id}) do
+    with %Ads.Ad{} = ad <- Ads.get_ad_by_id(id),
+         {:ok, withdrawn} <- Ads.withdraw_booking(ad, conn.assigns[:current_user]) do
+      conn
+      |> put_flash(:info, withdrawn_flash(withdrawn, Ads.purchase_days(withdrawn)))
+      |> redirect(to: ~p"/system/ads/bookings")
+    else
+      {:error, :not_pending} ->
+        conn
+        |> put_flash(:error, gettext("This ad can no longer be taken off the site."))
+        |> redirect(to: ~p"/system/ads/bookings")
+
+      _missing_or_foreign ->
+        ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  defp withdrawn_flash(ad, 1) do
+    gettext("Your ad for %{day} is off the site. The invoice stands.",
+      day: AdHTML.day_label(ad.day)
+    )
+  end
+
+  defp withdrawn_flash(ad, days) do
+    gettext("Your ad for %{period} is off the site from today. The invoice stands.",
+      period: AdHTML.period_label(ad.day, days)
+    )
   end
 
   defp cancelled_flash(ad, 1) do

@@ -1067,8 +1067,10 @@ defmodule VutuvWeb.Router do
     # live_session below): the ad is drawn as it is typed and the calendar works
     # in the block being bought, neither of which a dead form can do.
     get("/system/ads/bookings", AdController, :bookings)
-    # The booker withdraws a booking that still waits for approval.
+    # The booker withdraws a booking that still waits for approval (free), or
+    # takes an approved one off the site (no money back).
     post("/system/ads/:id/cancel", AdController, :cancel)
+    post("/system/ads/:id/withdraw", AdController, :withdraw)
 
     # Blocking: the profile-footer Block control, the private blocked list,
     # and unblocking. Logged-in only ("blocks" is in ReservedSlugs).
@@ -1358,6 +1360,10 @@ defmodule VutuvWeb.Router do
     # The ad review dashboard: every booked ad is approved here before it
     # serves (see Vutuv.Ads.approve_ad/2). :show is the per-ad detail page.
     get("/ads", AdController, :index)
+    # Discount codes, before /ads/:id so "discounts" is never taken for an id.
+    get("/ads/discounts", DiscountCodeController, :index)
+    post("/ads/discounts", DiscountCodeController, :create)
+    delete("/ads/discounts/:id", DiscountCodeController, :delete)
     get("/ads/:id", AdController, :show)
     post("/ads/:id/approve", AdController, :approve)
     post("/ads/:id/reject", AdController, :reject)

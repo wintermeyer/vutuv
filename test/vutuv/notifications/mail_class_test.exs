@@ -39,6 +39,7 @@ defmodule Vutuv.Notifications.MailClassTest do
     # A booker's cancellation, to the operator: critical for the same reason,
     # an invoice may already be on its way.
     {:ad_cancellation_email, :critical},
+    {:ad_withdrawal_email, :critical},
     {:ad_booked_email, :transactional},
     {:ad_approved_email, :transactional},
     {:ad_rejected_email, :transactional},
@@ -288,6 +289,9 @@ defmodule Vutuv.Notifications.MailClassTest do
 
   defp build_mail(:ad_cancellation_email),
     do: Emailer.ad_cancellation_email(build(:ad), user())
+
+  defp build_mail(:ad_withdrawal_email),
+    do: Emailer.ad_withdrawal_email(build(:ad), user())
 
   defp build_mail(:ad_booked_email), do: Emailer.ad_booked_email(user(), @address, build(:ad))
 

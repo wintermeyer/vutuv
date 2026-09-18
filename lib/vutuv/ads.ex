@@ -28,6 +28,7 @@ defmodule Vutuv.Ads do
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
   alias Vutuv.Ads.Creative
+  alias Vutuv.Ads.Discounts
   alias Vutuv.Ads.Sighting
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
@@ -214,7 +215,33 @@ defmodule Vutuv.Ads do
   def book_ad(user, attrs, days \\ 1)
 
   def book_ad(user, attrs, days) do
-    book(user, invoice_email(attrs, user), days)
+    attrs = invoice_email(attrs, user)
+
+    # The discount is re-checked here and nowhere else decides it: the wizard's
+    # own check is what the member is SHOWN, and a shown price a tampered form
+    # can set is not a price. A code that has expired, been used or never
+    # existed simply books at the list price rather than failing the booking -
+    # nobody loses their week over a typo in a voucher.
+    case Discounts.check(attrs["discount_code"], user, block_price_cents(days) || @price_cents) do
+      {:ok, code, cents_off} -> book_with_discount(user, attrs, days, code, cents_off)
+      {:error, _reason} -> book(user, attrs, days)
+    end
+  end
+
+  defp book_with_discount(user, attrs, days, code, cents_off) do
+    attrs = Map.put(attrs, "discount_code_id", code.id)
+
+    case book(user, attrs, days, cents_off) do
+      {:ok, ad} ->
+        # The index on (code, member) is what decides a race between two tabs,
+        # so a refusal here means the other tab won and this booking simply
+        # keeps the list price it was already stamped with.
+        Discounts.redeem(code, user, ad, cents_off)
+        {:ok, ad}
+
+      error ->
+        error
+    end
   end
 
   # Which address the invoice goes to, checked against the member's own list -
@@ -229,15 +256,17 @@ defmodule Vutuv.Ads do
     Map.put(attrs, "invoice_email", if(chosen in owned, do: chosen, else: List.first(owned)))
   end
 
-  defp book(user, attrs, 1) do
-    %Ad{user_id: user.id, price_cents: @price_cents}
+  defp book(user, attrs, days, cents_off \\ 0)
+
+  defp book(user, attrs, 1, cents_off) do
+    %Ad{user_id: user.id, price_cents: @price_cents, discount_cents: cents_off}
     |> Ad.changeset(attrs)
     |> Repo.insert()
     |> announce_booking(user)
   end
 
-  defp book(user, attrs, days) when is_integer(days) do
-    case block_changesets(user, attrs, days) do
+  defp book(user, attrs, days, cents_off) when is_integer(days) do
+    case block_changesets(user, attrs, days, cents_off) do
       {:ok, changesets} -> changesets |> insert_block() |> announce_booking(user)
       {:error, changeset} -> {:error, changeset}
     end
@@ -246,17 +275,26 @@ defmodule Vutuv.Ads do
   # One changeset per day of the block, all carrying the same group and the
   # same text. The first day is the one the form collected, so it is the one
   # that reports a length or a window error back to the field.
-  defp block_changesets(user, attrs, days) do
+  defp block_changesets(user, attrs, days, cents_off) do
     with {:ok, total} <- block_total(days),
          {:ok, first} <- first_day(attrs, days) do
       group_id = UUIDv7.generate()
+      # The discount is split over the days the same way the price is, so the
+      # shares of both add up to what the invoice says.
+      offs = share_cents(cents_off, days)
 
       {:ok,
        total
        |> share_cents(days)
+       |> Enum.zip(offs)
        |> Enum.with_index()
-       |> Enum.map(fn {cents, offset} ->
-         %Ad{user_id: user.id, price_cents: cents, group_id: group_id}
+       |> Enum.map(fn {{cents, off}, offset} ->
+         %Ad{
+           user_id: user.id,
+           price_cents: cents,
+           discount_cents: off,
+           group_id: group_id
+         }
          |> Ad.changeset(%{attrs | "day" => Date.to_iso8601(Date.add(first, offset))})
        end)}
     end
@@ -478,6 +516,8 @@ defmodule Vutuv.Ads do
              rejected_by_id: admin.id,
              rejection_reason: checked.rejection_reason
            ) do
+      # Nothing ran, so whatever code paid for it is free again.
+      Discounts.release_for(rejected)
       tell_booker(rejected, &Emailer.ad_rejected_email/3)
       {:ok, rejected}
     end
@@ -493,6 +533,11 @@ defmodule Vutuv.Ads do
       when is_binary(user_id) do
     with {:ok, cancelled} <-
            move(ad, pending(), cancelled_at: DateTime.utc_now(:second), cancelled_by_id: user_id) do
+      # Cancelled before approval: nothing ran, so the code is free again. The
+      # withdrawal path deliberately does NOT do this - there the member had
+      # what they paid for.
+      Discounts.release_for(cancelled)
+
       cancelled
       |> Emailer.ad_cancellation_email(booker)
       |> Emailer.deliver()
@@ -504,6 +549,51 @@ defmodule Vutuv.Ads do
   def cancel_booking(%Ad{}, %User{}), do: {:error, :not_found}
 
   @doc """
+  The booker takes an ad off the site that is already approved, and possibly
+  already running: from today onwards it stops appearing, and there is **no
+  money back** — it was approved, the slot was held, and an invoice may already
+  be written.
+
+  Deliberately a second function rather than a wider `cancel_booking/2`. The two
+  are one gesture and opposite bargains: one is free because nothing was
+  promised yet, the other costs the whole booking. A single function with a
+  branch inside it would let a caller reach the expensive one by accident.
+
+  Days of a block that have already run keep their history; only today and the
+  days after it are withdrawn, so the ad stops at once.
+  `{:error, :not_found}` for somebody else's booking, `{:error, :not_pending}`
+  for one that is over or already withdrawn.
+  """
+  def withdraw_booking(%Ad{user_id: user_id} = ad, %User{id: user_id} = booker)
+      when is_binary(user_id) do
+    # Approved only: before that the free `cancel_booking/2` is the way out, and
+    # reaching the expensive act through this one would cost the member money
+    # they never had to pay.
+    from_today =
+      from(a in standing(), where: a.day >= ^today() and not is_nil(a.approved_at))
+
+    with {:ok, withdrawn} <-
+           move(ad, from_today, cancelled_at: DateTime.utc_now(:second), cancelled_by_id: user_id) do
+      withdrawn
+      |> Emailer.ad_withdrawal_email(booker)
+      |> Emailer.deliver()
+
+      {:ok, withdrawn}
+    end
+  end
+
+  def withdraw_booking(%Ad{}, %User{}), do: {:error, :not_found}
+
+  @doc """
+  Whether this booking may still be taken off the site by its booker: approved,
+  and its last day is today or later. Before approval `cancel_booking/2` is the
+  free way out instead.
+  """
+  def withdrawable?(%Ad{} = ad) do
+    Ad.status(ad) == :approved and Date.compare(purchase(ad).last_day, today()) != :lt
+  end
+
+  @doc """
   An admin withdraws a booking that has not run yet, approved or not (on the
   booker's request, say), and the booker is told. The day is free again.
   """
@@ -512,6 +602,10 @@ defmodule Vutuv.Ads do
 
     with {:ok, cancelled} <-
            move(ad, upcoming, cancelled_at: DateTime.utc_now(:second), cancelled_by_id: admin.id) do
+      # The code comes back only where nothing ran at all; a booking whose first
+      # day has been and gone was had, whoever ends it.
+      if Date.compare(cancelled.day, today()) == :gt, do: Discounts.release_for(cancelled)
+
       tell_booker(cancelled, &Emailer.ad_cancelled_email/3)
       {:ok, cancelled}
     end
