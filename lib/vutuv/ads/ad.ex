@@ -63,6 +63,23 @@ defmodule Vutuv.Ads.Ad do
 
   def title_max_length, do: @title_max_length
   def body_max_length, do: @body_max_length
+  def url_max_length, do: @url_max_length
+
+  @doc """
+  The three lines an ad is made of, validated. Shared with
+  `Vutuv.Ads.Creative`, which is the same text saved for re-use: a member who
+  saves an ad and then cannot book it, or the other way round, would have met
+  two different sets of rules.
+  """
+  def validate_text(changeset) do
+    changeset
+    |> ChangesetHelpers.trim_fields([:title, :body, :url])
+    |> validate_required([:title, :body, :url])
+    |> validate_length(:title, max: @title_max_length)
+    |> validate_length(:body, max: @body_max_length)
+    |> validate_length(:url, max: @url_max_length)
+    |> ChangesetHelpers.validate_url(:url)
+  end
 
   @doc """
   Where a booking stands: `:pending` until an admin decides, then `:approved`
@@ -109,22 +126,15 @@ defmodule Vutuv.Ads.Ad do
       :billing_country,
       :vat_id
     ])
-    |> ChangesetHelpers.trim_fields([:title, :body, :url])
+    |> validate_text()
     |> validate_required([
       :day,
-      :title,
-      :body,
-      :url,
       :billing_name,
       :billing_street,
       :billing_zip_code,
       :billing_city,
       :billing_country
     ])
-    |> validate_length(:title, max: @title_max_length)
-    |> validate_length(:body, max: @body_max_length)
-    |> validate_length(:url, max: @url_max_length)
-    |> ChangesetHelpers.validate_url(:url)
     # The billing fields are free-text varchar(255) columns: an oversized value
     # must be a changeset error, never a raised Postgres 22001 on booking.
     |> validate_length(:billing_name, max: 255)

@@ -9,40 +9,13 @@ defmodule VutuvWeb.AdHTML do
 
   embed_templates("../templates/ad/*")
 
-  # A length-capped text field of the booking form with its live counter
-  # (`VutuvWeb.UI.char_count/1`); the changeset holds the limit.
-  attr(:form, :any, required: true)
-  attr(:field, :atom, required: true)
-  attr(:label, :string, required: true)
-  attr(:max, :integer, required: true)
-  slot(:hint, required: true)
-
-  defp counted_field(assigns) do
-    ~H"""
-    <.editform_field form={@form} field={@field}>
-      <div data-char-counter>
-        {label(@form, @field, @label)}
-        {text_input(
-          @form,
-          @field,
-          [autocomplete: "off", data: [char_count_input: true]] ++ err_attrs(@form, @field)
-        )}
-        <div class="flex items-baseline justify-between gap-3">
-          <p class="editform__hint">{render_slot(@hint)}</p>
-          <.char_count value={Phoenix.HTML.Form.input_value(@form, @field)} max={@max} />
-        </div>
-        {error_tag(@form, @field)}
-      </div>
-    </.editform_field>
-    """
-  end
-
   @doc """
-  The availability calendar of the booking form: one grid per month of the
-  booking window (`Vutuv.Ads.first_bookable_day/0` to `last_bookable_day/0`),
-  Monday-first, each day tagged `:free`, `:booked` or `:unavailable` (outside
-  the window). The template renders free days as radio buttons - the day is
-  picked on the calendar, not typed.
+  The availability calendar of the booking wizard: one grid per month of the
+  booking window (`Vutuv.Ads.first_bookable_day/0` to `last_bookable_day/0`,
+  this month and the next three), Monday-first, each day tagged `:free`,
+  `:booked` or `:unavailable` (outside the window). `VutuvWeb.AdBookingLive`
+  decides which free days may START the chosen block; this only says what is
+  taken.
   """
   def calendar_months do
     today = Ads.today()

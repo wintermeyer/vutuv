@@ -1063,15 +1063,10 @@ defmodule VutuvWeb.Router do
     # controller). See Vutuv.Ads; admin approval lives under /admin/ads.
     # Under /system/ like every site page, so no handle is burnt for it.
     get("/system/ads", AdController, :index)
-    get("/system/ads/new", AdController, :new)
-    # POST /system/ads/new is the "edit again" leg of the preview step: it
-    # re-renders the form with the submitted values; /system/ads/preview shows
-    # the ad as the card will render it before the binding POST /system/ads
-    # books it.
-    post("/system/ads/new", AdController, :new)
-    post("/system/ads/preview", AdController, :preview)
+    # Booking itself is the wizard `VutuvWeb.AdBookingLive` (live route in the
+    # live_session below): the ad is drawn as it is typed and the calendar works
+    # in the block being bought, neither of which a dead form can do.
     get("/system/ads/bookings", AdController, :bookings)
-    post("/system/ads", AdController, :create)
     # The booker withdraws a booking that still waits for approval.
     post("/system/ads/:id/cancel", AdController, :cancel)
 
@@ -1239,6 +1234,9 @@ defmodule VutuvWeb.Router do
       scope "/system/ads" do
         pipe_through([:noindex_pipe, :ads_enabled])
         live("/seen", AdsSeenLive, :index)
+
+        # The three-step booking wizard. Login is checked in the mount.
+        live("/new", AdBookingLive, :new)
       end
 
       # Job postings ("jobs" is a ReservedSlug). Auth is checked in the mounts.

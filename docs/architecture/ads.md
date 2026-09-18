@@ -76,10 +76,29 @@ would keep a one-day booking on show for months.
 
 ## Booking and review
 
-Booking is online at `/system/ads` → `/system/ads/new` (logged-in only): pick a free day (one
-ad/day, unique index), enter the invoice address, then title, sentence and link
-(must be family-friendly; live counters for the two limits, the changeset
-enforces them and accepts only an http(s) link to a public host).
+Booking is the three-step wizard `VutuvWeb.AdBookingLive` at `/system/ads/new`
+(logged-in only): **write the ad**, **pick when it runs**, **say where the
+invoice goes**. It is a LiveView because the one question a buyer has is what
+the thing will look like, and the card is drawn from what they are typing by
+the very component a profile and the feed use — the dead form it replaced
+answered that on a separate page, after everything else had been filled in.
+
+The text can be **saved and used again** (`ad_creatives`, `Vutuv.Ads.Creative`,
+at most `creative_cap/0` per member). Booking **copies** the text onto the
+`ads` rows rather than pointing at the saved one, so editing a saved ad can
+never rewrite an ad that is already running, already approved, or already on an
+invoice; a test pins that. Both meet the same rules, because
+`Vutuv.Ads.Ad.validate_text/1` is the one owner of them — a library that lets
+you save what the booking then refuses is the one thing it must not do.
+
+The calendar shows **this month and the next three**
+(`last_bookable_day/0`) and works in the unit being bought: with a week chosen,
+only a day with seven free days behind it is rendered as a control
+(`free_block?/3`), picking it marks all seven, and hovering marks them too,
+client-side (`assets/js/ad_calendar.js`, `.is-block-hover`). Changing the
+length **drops** a start it no longer fits rather than quietly booking a
+stretch nobody picked. A day taken while the invoice was being typed sends the
+member back to the calendar with it struck through, not to an error page.
 
 350 € net per day plus VAT (`ADS_VAT_PERCENT`, default the German 19 %; `0`
 drops the VAT line everywhere), payment by invoice: the booking mail (billing data + ad)

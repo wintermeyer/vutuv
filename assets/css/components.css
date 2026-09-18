@@ -3521,7 +3521,24 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   }
 }
 
+/* The booking calendar's hover preview (assets/js/ad_calendar.js): with a week
+   or a month chosen, the days the block would occupy light up under the
+   pointer. A tint rather than the picked block's filled brand, so what is
+   already chosen and what is merely being considered never read alike; the
+   picked days keep their own utilities and simply out-paint this. */
+[data-day].is-block-hover {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
 @media (prefers-color-scheme: dark) {
+  /* Built on brand-800, never brand-900, which is level with a slate-800 card
+     and would draw nothing (see the dark-tint rule in design.md). */
+  [data-day].is-block-hover {
+    background-color: color-mix(in srgb, #1e3a8a 60%, transparent);
+    color: #dbeafe;
+  }
+
   /* Slate-700: the outline has to read against the dark card it sits in
      (slate-900), not against the light one it was drawn for. */
   .skeleton {

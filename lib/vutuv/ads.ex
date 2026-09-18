@@ -26,6 +26,7 @@ defmodule Vutuv.Ads do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
+  alias Vutuv.Ads.Creative
   alias Vutuv.Ads.Sighting
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
@@ -40,10 +41,11 @@ defmodule Vutuv.Ads do
   # by an admin before it runs, and this is the room for that review.
   @approval_lead_days 3
 
-  # The booking window reaches to the end of next month, so the booking page
-  # shows availability as two full month calendars and bookings stay
-  # near-term. Widen by bumping this one knob (the calendar follows).
-  @booking_window_months 1
+  # The booking window reaches to the end of the month three out, so the
+  # booking calendar shows this month and the next three - room for a
+  # thirty-day block to start almost anywhere in it. Widen by bumping this one
+  # knob (the calendar follows).
+  @booking_window_months 3
 
   # At most one ad an hour per member.
   @hour 3600
@@ -52,6 +54,10 @@ defmodule Vutuv.Ads do
   # many the history page shows at a time.
   @sighting_days 90
   @seen_page 20
+
+  # How many ad texts one member may keep for re-use. A shortcut for booking
+  # again, not storage: past a screenful nobody finds their own ad in it.
+  @creative_cap 20
 
   # What a block of consecutive days costs, net, as a package price rather than
   # a percentage: a round figure is what gets quoted on the phone, and the
@@ -319,6 +325,64 @@ defmodule Vutuv.Ads do
 
   @doc "Changeset for the booking form."
   def change_ad(%Ad{} = ad, attrs \\ %{}), do: Ad.changeset(ad, attrs)
+
+  ## Saved ads (`Vutuv.Ads.Creative`)
+
+  @doc "A member's saved ad texts, the most recently touched first."
+  def list_creatives(user) do
+    Repo.all(
+      from(c in Creative,
+        where: c.user_id == ^user.id,
+        order_by: [desc: c.updated_at, desc: c.id]
+      )
+    )
+  end
+
+  @doc "One of this member's saved ads, or nil (also on a malformed id)."
+  def get_creative(user, id) do
+    UUIDv7.with_cast(id, fn id ->
+      Repo.one(from(c in Creative, where: c.id == ^id and c.user_id == ^user.id))
+    end)
+  end
+
+  @doc "Changeset for the save form."
+  def change_creative(%Creative{} = creative, attrs \\ %{}),
+    do: Creative.changeset(creative, attrs)
+
+  @doc """
+  Saves `attrs` as a new saved ad for `user`, or updates the one they are
+  editing. A member keeps at most `creative_cap/0` of them: this is a shortcut
+  for re-booking, not storage, and an unbounded list is one nobody can find
+  anything in.
+  """
+  def save_creative(user, attrs, creative \\ nil)
+
+  def save_creative(user, attrs, nil) do
+    if length(list_creatives(user)) >= @creative_cap do
+      {:error, :too_many}
+    else
+      %Creative{user_id: user.id}
+      |> Creative.changeset(attrs)
+      |> Repo.insert()
+    end
+  end
+
+  def save_creative(_user, attrs, %Creative{} = creative) do
+    creative
+    |> Creative.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc "How many saved ads one member may keep."
+  def creative_cap, do: @creative_cap
+
+  @doc "Forgets a saved ad. Booked ads carry their own copy and are untouched."
+  def delete_creative(user, id) do
+    case get_creative(user, id) do
+      nil -> {:error, :not_found}
+      creative -> Repo.delete(creative)
+    end
+  end
 
   @doc """
   The check-before-buying step: validates `attrs` like `book_ad/2` would

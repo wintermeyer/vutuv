@@ -587,9 +587,13 @@ defmodule Vutuv.AdsTest do
   end
 
   describe "the booking window" do
-    test "ends with next month (the calendar's last grid)" do
-      expected = Ads.today() |> Date.shift(month: 1) |> Date.end_of_month()
+    test "ends with the month three out, so the calendar shows four" do
+      expected = Ads.today() |> Date.shift(month: 3) |> Date.end_of_month()
       assert Ads.last_bookable_day() == expected
+
+      # A thirty-day block has to fit inside it wherever it starts, which is
+      # what the three months are for.
+      assert Date.diff(expected, Ads.first_bookable_day()) >= 30
     end
 
     test "booked_days/0 is the set of taken days within the window" do

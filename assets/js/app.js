@@ -63,6 +63,7 @@ import { PullToReveal } from "./pull_to_reveal"
 // The daily text ad's card on a profile and in the feed: its two-minute
 // lifetime and the day its ✕ closed (see ad_slot.js).
 import { AdSlot } from "./ad_slot"
+import { AdCalendar } from "./ad_calendar"
 // The card behind a `@user@host` mention in a post: who that is, and a Follow
 // button, instead of leaving the site for their server (self-contained; its
 // panel lives on <body>, outside every LiveView root. See mention_card.js).
@@ -1147,6 +1148,7 @@ const Hooks = {
   NewMarks,
   PullToReveal,
   AdSlot,
+  AdCalendar,
   LocalTime: {
     mounted() {
       localizeTime(this.el)
