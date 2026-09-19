@@ -17,7 +17,6 @@ defmodule VutuvWeb.RegistrationLiveTest do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
-  alias Vutuv.Tags
 
   @moduletag :capture_log
 
@@ -167,7 +166,11 @@ defmodule VutuvWeb.RegistrationLiveTest do
       {:ok, view, _html} = open()
       html = settings_html(view)
 
-      assert html =~ "Allow others to view your email address"
+      # The address box names the address itself (Stefan, 2026-09-19): it is the
+      # one box whose consequence a member cannot picture without seeing WHICH
+      # address it means.
+      assert html =~ "The email address <strong"
+      assert html =~ "egon@example.com</strong> is visible on my profile."
       assert html =~ "Allow search engines to index your profile"
       assert html =~ "Allow AI agents and LLMs to use your profile"
       refute html =~ "Prevent search engines from indexing your profile"
@@ -312,7 +315,7 @@ defmodule VutuvWeb.RegistrationLiveTest do
       assert html =~ "3"
     end
 
-    test "a tapped suggestion becomes a chip and the reach appears" do
+    test "a tapped suggestion becomes a badge in the field" do
       tag = tag_with_members("Linux", 2)
 
       {:ok, view, _html} = open()
@@ -321,29 +324,13 @@ defmodule VutuvWeb.RegistrationLiveTest do
       html = render_click(view, "add_tag", %{"name" => tag.name})
 
       assert html =~ ~s(name="user[tag_list]" value="#{tag.name}")
-      assert has_element?(view, "#signup-reach")
-    end
-
-    test "the reach counts a member once, however many of the topics they carry" do
-      elixir = unique_tag_name("Elixir")
-      linux = unique_tag_name("Linux")
-      elixir_tag = insert(:tag, name: elixir, slug: Vutuv.SlugHelpers.tagify(elixir))
-      linux_tag = insert(:tag, name: linux, slug: Vutuv.SlugHelpers.tagify(linux))
-
-      both = insert(:activated_user)
-      insert(:user_tag, user: both, tag: elixir_tag)
-      insert(:user_tag, user: both, tag: linux_tag)
-
-      {:ok, view, _html} = open()
-      view = walk_to_topics(view)
-
-      render_click(view, "add_tag", %{"name" => elixir})
-      render_click(view, "add_tag", %{"name" => linux})
-
-      # Two chips of one member each, one person behind them. A form may not
-      # promise a reach the click cannot deliver.
-      assert render(view) =~ "1"
-      assert Tags.member_reach_by_name([elixir, linux]) == 1
+      # Inside the field, not above it: the badge is a pill in the box the
+      # cursor is in.
+      assert [_] =
+               html
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query(".tag-input__box .tag-input__pill")
+               |> Enum.to_list()
     end
 
     # Typing the comma is what finishes a tag, with no button pressed: the badge

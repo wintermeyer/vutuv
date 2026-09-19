@@ -27,12 +27,12 @@ defmodule VutuvWeb.RegistrationLive do
       be filled, and one LiveView re-renders would be blanked again. Without it
       a new account silently keeps Berlin time.
 
-  The number beside each topic is the point of the third step. `Vutuv.Tags`
-  answers both halves: `member_counts_by_name/1` per topic for the chips, and
-  `member_reach_by_name/1` for the line under the selection, which is a
-  `DISTINCT` over members rather than the sum of the chips — one member holding
-  two of the topics is two chips and one person, and a form may not promise
-  reach it cannot deliver. The suggestions are loaded when step 3 is first
+  The number beside each tag is the point of the third step, and it comes from
+  `Vutuv.Tags.member_counts_by_name/1`. The sum of the selection was shown under
+  it for a day and taken out again (Stefan, 2026-09-19); if it ever comes back,
+  it must not be the chips added up — one member holding two of the tags is two
+  chips and one person — so it needs its own `DISTINCT`, which is what
+  `member_reach_by_name/1` was. The suggestions are loaded when step 3 is first
   reached, never on mount: `/` is the page every crawler gets, and the post wall
   that used to open a socket here came out again for what it cost
   (`test/vutuv_web/landing_page_test.exs`).
@@ -74,7 +74,6 @@ defmodule VutuvWeb.RegistrationLive do
      |> assign(:step, 1)
      |> assign(:tags, [])
      |> assign(:tag_counts, %{})
-     |> assign(:reach, 0)
      |> assign(:suggestions, [])
      |> assign(:errors, [])
      |> assign(:fields, default_fields())
@@ -302,7 +301,6 @@ defmodule VutuvWeb.RegistrationLive do
     socket
     |> assign(:tags, tags)
     |> assign(:tag_counts, Map.new(Tags.member_counts_by_name(tags)))
-    |> assign(:reach, Tags.member_reach_by_name(tags))
   end
 
   defp advance(socket) do
@@ -487,7 +485,6 @@ defmodule VutuvWeb.RegistrationLive do
           :if={@step == 3}
           tags={@tags}
           tag_counts={@tag_counts}
-          reach={@reach}
           suggestions={@suggestions}
           tag_errors={@tag_errors}
           typed={@fields["typed"]}
@@ -693,7 +690,25 @@ defmodule VutuvWeb.RegistrationLive do
               checked={@fields["email_public"]}
               class={checkbox_class()}
             />
-            <span>{gettext("Allow others to view your email address")}</span>
+            <%!-- The address itself, because "your email address" is the one
+                  box here whose consequence a member cannot picture without
+                  seeing WHICH address it means — they typed it one screen ago
+                  and may well have two. Split on a marker rather than
+                  interpolated, so the address can be set in bold where the
+                  sentence puts it, in either language. It falls back to the
+                  plain wording if the field is somehow empty, which step 1's
+                  validation should already have prevented. --%>
+            <span :if={@fields["email"] in [nil, ""]}>
+              {gettext("Allow others to view your email address")}
+            </span>
+            <span :if={@fields["email"] not in [nil, ""]}>
+              <% {pre, post} =
+                split_marker(
+                  gettext("The email address {email} is visible on my profile."),
+                  "{email}"
+                ) %>
+              {pre}<strong class="font-semibold">{@fields["email"]}</strong>{post}
+            </span>
           </label>
           <label class={@check_class}>
             <input
@@ -757,7 +772,6 @@ defmodule VutuvWeb.RegistrationLive do
 
   attr(:tags, :list, required: true)
   attr(:tag_counts, :map, required: true)
-  attr(:reach, :integer, required: true)
   attr(:suggestions, :list, required: true)
   attr(:tag_errors, :list, required: true)
   attr(:typed, :string, required: true)
@@ -775,74 +789,45 @@ defmodule VutuvWeb.RegistrationLive do
         </p>
       </div>
 
-      <%!-- The reach, and the reason this step is worth a screen of its own: it
-            is what a third topic buys, said before the button rather than after
-            the account exists. A DISTINCT over members, so it never promises
-            more than the click delivers. --%>
-      <div
-        :if={@reach > 0}
-        id="signup-reach"
-        class="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3.5 dark:border-brand-800 dark:bg-brand-800/25"
-      >
-        <div class="flex shrink-0" aria-hidden="true">
-          <span class="h-7 w-7 rounded-full border-2 border-white bg-brand-300 dark:border-slate-900"></span>
-          <span class="-ml-2.5 h-7 w-7 rounded-full border-2 border-white bg-brand-400 dark:border-slate-900"></span>
-          <span class="-ml-2.5 h-7 w-7 rounded-full border-2 border-white bg-brand-500 dark:border-slate-900"></span>
-        </div>
-        <%!-- The number is rendered outside the gettext call: `ngettext/3` binds
-              `%{count}` to the raw integer and a `count:` binding does not
-              override it, so a formatted figure needs its own placeholder. --%>
-        <p class="text-sm text-brand-800 dark:text-brand-100">
-          {gettext("This makes you visible to %{formatted} members.",
-            formatted: delimited_count(@reach)
-          )}
-        </p>
-      </div>
-
       <div>
         <label for="signup-topic" class={@label_class}>{gettext("Your tags")}</label>
-        <div class="flex gap-2">
-          <div class={["min-w-0 flex-1", @tag_errors != [] && "tag-input--error"]}>
-            <div class="tag-input__box">
-              <span :for={name <- @tags} class="tag-input__pill">
-                <span class="tag-input__name">{name}</span>
-                <span
-                  :if={count_of(@tag_counts, name) > 0}
-                  class="rounded-full bg-brand-100 px-1.5 text-xs font-semibold tabular-nums text-brand-700 dark:bg-brand-800 dark:text-brand-100"
-                >
-                  {compact_count(count_of(@tag_counts, name))}
-                </span>
-                <button
-                  type="button"
-                  class="tag-input__remove"
-                  phx-click="remove_tag"
-                  phx-value-name={name}
-                >
-                  <span aria-hidden="true">&times;</span>
-                  <span class="sr-only">{gettext("Remove")}</span>
-                </button>
+        <%!-- No button beside it: the field names both ways in — Enter in its
+              placeholder, the comma in the line below — and the shared pill box
+              has none anywhere else on the site either. --%>
+        <div class={@tag_errors != [] && "tag-input--error"}>
+          <div class="tag-input__box">
+            <span :for={name <- @tags} class="tag-input__pill">
+              <span class="tag-input__name">{name}</span>
+              <span
+                :if={count_of(@tag_counts, name) > 0}
+                class="rounded-full bg-brand-100 px-1.5 text-xs font-semibold tabular-nums text-brand-700 dark:bg-brand-800 dark:text-brand-100"
+              >
+                {compact_count(count_of(@tag_counts, name))}
               </span>
-              <input
-                type="text"
-                id="signup-topic"
-                phx-hook="TagComma"
-                name="step[typed]"
-                value={@typed}
-                class="tag-input__entry"
-                autocomplete="off"
-                aria-invalid={@tag_errors != [] && "true"}
-                placeholder={gettext("Type a tag, then Enter")}
-                phx-keydown="add_typed"
-                phx-key="Enter"
-              />
-            </div>
+              <button
+                type="button"
+                class="tag-input__remove"
+                phx-click="remove_tag"
+                phx-value-name={name}
+              >
+                <span aria-hidden="true">&times;</span>
+                <span class="sr-only">{gettext("Remove")}</span>
+              </button>
+            </span>
+            <input
+              type="text"
+              id="signup-topic"
+              phx-hook="TagComma"
+              name="step[typed]"
+              value={@typed}
+              class="tag-input__entry"
+              autocomplete="off"
+              aria-invalid={@tag_errors != [] && "true"}
+              placeholder={gettext("Type a tag, then Enter")}
+              phx-keydown="add_typed"
+              phx-key="Enter"
+            />
           </div>
-          <%!-- Just the verb: what is being added is the thing the cursor is
-                already in, and the shared "Add" msgid is translated "Eintrag
-                hinzufügen" for the profile's lists. --%>
-          <.button type="button" variant="secondary" phx-click="add_typed" class="shrink-0">
-            {gettext("Add tag")}
-          </.button>
         </div>
         <p :if={@tag_errors != []} class="mt-1 text-sm text-rose-700 dark:text-rose-300">
           {Enum.join(messages(@tag_errors), " ")}
