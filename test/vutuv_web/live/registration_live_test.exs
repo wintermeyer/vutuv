@@ -346,6 +346,39 @@ defmodule VutuvWeb.RegistrationLiveTest do
       assert Tags.member_reach_by_name([elixir, linux]) == 1
     end
 
+    # Typing the comma is what finishes a tag, with no button pressed: the badge
+    # appears as it is typed and whatever follows stays in the field. A field
+    # that keeps "Hund," as text until something else happens reads as broken.
+    test "a comma turns what was typed into a badge" do
+      {:ok, view, _html} = open()
+      view = walk_to_topics(view)
+
+      html = render_change(view, "validate", %{"step" => %{"typed" => "Hund,"}})
+
+      assert html =~ ~s(name="user[tag_list]" value="Hund")
+      # And the field is empty again, ready for the next one.
+      assert [""] =
+               html
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query("#signup-topic")
+               |> LazyHTML.attribute("value")
+    end
+
+    test "what follows the comma stays in the field" do
+      {:ok, view, _html} = open()
+      view = walk_to_topics(view)
+
+      html = render_change(view, "validate", %{"step" => %{"typed" => "Hund, Kat"}})
+
+      assert html =~ ~s(name="user[tag_list]" value="Hund")
+
+      assert ["Kat"] =
+               html
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query("#signup-topic")
+               |> LazyHTML.attribute("value")
+    end
+
     test "a typed line of topics becomes one chip per topic" do
       {:ok, view, _html} = open()
       view = walk_to_topics(view)

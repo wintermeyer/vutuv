@@ -183,7 +183,7 @@ defmodule VutuvWeb.RegistrationLive do
 
   @impl true
   def handle_event("validate", params, socket) do
-    {:noreply, socket |> merge_fields(params) |> assign(:errors, [])}
+    {:noreply, socket |> merge_fields(params) |> absorb_finished_tags() |> assign(:errors, [])}
   end
 
   @impl true
@@ -221,17 +221,39 @@ defmodule VutuvWeb.RegistrationLive do
   def handle_event("add_typed", params, socket) do
     typed = params["value"] || socket.assigns.fields["typed"] || ""
     added = Tags.parse_tag_names(typed)
+    # What the hook left standing in the field, or nothing when Enter or the
+    # button got here (both finish the whole field).
+    rest = params["rest"] || ""
 
     {:noreply,
      socket
      |> put_tags(socket.assigns.tags ++ added)
-     |> assign(:fields, Map.put(socket.assigns.fields, "typed", ""))
+     |> assign(:fields, Map.put(socket.assigns.fields, "typed", rest))
      |> assign(:errors, [])}
   end
 
   @impl true
   def handle_event("remove_tag", %{"name" => name}, socket) do
     {:noreply, put_tags(socket, List.delete(socket.assigns.tags, name))}
+  end
+
+  # A comma finishes a tag, the way the shared pill box does it on every other
+  # form: the badge appears as the comma is typed and whatever follows stays in
+  # the field. Without this the field keeps "Hund," as text and nothing happens
+  # until a button is pressed, which is exactly what it looks like when a field
+  # is broken.
+  defp absorb_finished_tags(socket) do
+    case String.split(socket.assigns.fields["typed"] || "", ",") do
+      [_nothing_finished] ->
+        socket
+
+      parts ->
+        {finished, [rest]} = Enum.split(parts, -1)
+
+        socket
+        |> put_tags(socket.assigns.tags ++ Tags.parse_tag_names(Enum.join(finished, ",")))
+        |> assign(:fields, Map.put(socket.assigns.fields, "typed", String.trim_leading(rest)))
+    end
   end
 
   defp merge_fields(socket, %{"step" => params}) when is_map(params) do
@@ -561,7 +583,10 @@ defmodule VutuvWeb.RegistrationLive do
           {gettext("Create your free account")}
         </h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {gettext("Three answers, then the account is yours.")}
+          <%!-- Not "three answers and you are done": two more steps follow, and
+                a promise the next screen breaks is worse than no promise. What
+                is true and worth saying on the first screen is the price. --%>
+          {gettext("Your account is free.")}
         </p>
       </div>
 
@@ -630,7 +655,11 @@ defmodule VutuvWeb.RegistrationLive do
           {gettext("A few settings")}
         </h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {gettext("Everything is preset and can be changed at any time.")}
+          <%!-- The path is named rather than linked: a visitor with no account
+                yet cannot open it, and a dead link on the one page that is
+                supposed to make joining easy is worse than a word. It is the
+                same on every installation, so it needs no seam. --%>
+          {gettext("Everything can be changed later under /settings.")}
         </p>
       </div>
 
@@ -742,7 +771,7 @@ defmodule VutuvWeb.RegistrationLive do
           {gettext("What are you interested in?")}
         </h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {gettext("Three topics are enough. They decide who finds you and what your feed shows.")}
+          {gettext("Three tags are enough. They decide who finds you and what your feed shows.")}
         </p>
       </div>
 
@@ -755,10 +784,13 @@ defmodule VutuvWeb.RegistrationLive do
           class="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-brand-600 bg-brand-100 px-3 text-sm font-semibold text-brand-700 hover:bg-brand-200 dark:border-brand-400 dark:bg-brand-800/60 dark:text-brand-100"
         >
           {name}
-          <span :if={count_of(@tag_counts, name) > 0} class="font-normal">
+          <span
+            :if={count_of(@tag_counts, name) > 0}
+            class="rounded-full bg-brand-200 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-brand-800 dark:bg-brand-700 dark:text-brand-100"
+          >
             {compact_count(count_of(@tag_counts, name))}
           </span>
-          <span aria-hidden="true">&times;</span>
+          <span aria-hidden="true" class="text-base leading-none">&times;</span>
           <span class="sr-only">{gettext("Remove")}</span>
         </button>
       </div>
@@ -788,17 +820,18 @@ defmodule VutuvWeb.RegistrationLive do
       </div>
 
       <div>
-        <label for="signup-topic" class={@label_class}>{gettext("Your topics")}</label>
+        <label for="signup-topic" class={@label_class}>{gettext("Your tags")}</label>
         <div class="flex gap-2">
           <input
             type="text"
             id="signup-topic"
+            phx-hook="TagComma"
             name="step[typed]"
             value={@typed}
             class={input_class(@tag_errors != [])}
             autocomplete="off"
             aria-invalid={@tag_errors != [] && "true"}
-            placeholder={gettext("Type a topic, then Enter")}
+            placeholder={gettext("Type a tag, then Enter")}
             phx-keydown="add_typed"
             phx-key="Enter"
           />
@@ -806,7 +839,7 @@ defmodule VutuvWeb.RegistrationLive do
                 "Eintrag hinzufügen" for the profile's lists, which reads as
                 adding a record rather than a topic. --%>
           <.button type="button" variant="secondary" phx-click="add_typed" class="shrink-0">
-            {gettext("Add topic")}
+            {gettext("Add tag")}
           </.button>
         </div>
         <p :if={@tag_errors != []} class="mt-1 text-sm text-rose-700 dark:text-rose-300">
@@ -828,7 +861,9 @@ defmodule VutuvWeb.RegistrationLive do
             class="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:border-brand-600 hover:text-brand-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-brand-400 dark:hover:text-brand-300"
           >
             {name}
-            <span class="text-slate-500 dark:text-slate-400">{compact_count(count)}</span>
+            <span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              {compact_count(count)}
+            </span>
           </button>
         </div>
       </div>

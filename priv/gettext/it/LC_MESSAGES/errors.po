@@ -210,106 +210,106 @@ msgstr "non può essere solo un link. Descriviti in poche parole."
 msgid "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
 msgstr "\"%{tag}\" è un indirizzo web, non un tag. Descriviti a parole."
 
-#: lib/vutuv_web/views/error_helpers.ex:143
+#: lib/vutuv_web/views/error_helpers.ex:148
 #, elixir-autogen, elixir-format
 msgid "must not be only punctuation"
 msgstr "non può essere composto solo da segni di punteggiatura"
 
-#: lib/vutuv_web/views/error_helpers.ex:144
+#: lib/vutuv_web/views/error_helpers.ex:149
 #, elixir-autogen, elixir-format
 msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr "\"%{tag}\" è solo punteggiatura, non un tag."
 
-#: lib/vutuv_web/views/error_helpers.ex:173
+#: lib/vutuv_web/views/error_helpers.ex:178
 #, elixir-autogen, elixir-format
 msgid "\"%{uri}\" is not a valid https account address."
 msgstr "\"%{uri}\" non è un indirizzo https valido per un account."
 
-#: lib/vutuv_web/views/error_helpers.ex:172
+#: lib/vutuv_web/views/error_helpers.ex:177
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr "Indica al massimo %{max} account."
 
-#: lib/vutuv_web/views/error_helpers.ex:141
+#: lib/vutuv_web/views/error_helpers.ex:146
 #, elixir-autogen, elixir-format
 msgid "must spell out how the name sounds"
 msgstr "deve indicare come si pronuncia il nome"
 
-#: lib/vutuv_web/views/error_helpers.ex:165
+#: lib/vutuv_web/views/error_helpers.ex:170
 #, elixir-autogen, elixir-format
 msgid "Please use at most %{max} tags."
 msgstr "Usa al massimo %{max} tag."
 
-#: lib/vutuv_web/views/error_helpers.ex:175
+#: lib/vutuv_web/views/error_helpers.ex:180
 #, elixir-autogen, elixir-format
 msgid "Enter your Signal link, it starts with https://signal.me/#"
 msgstr "Inserisci il tuo link Signal: inizia con https://signal.me/#"
 
-#: lib/vutuv_web/views/error_helpers.ex:167
+#: lib/vutuv_web/views/error_helpers.ex:172
 #, elixir-autogen, elixir-format
 msgid "We allow at most %{max} accounts per post. Please remove some mentions."
 msgstr ""
 "Sono ammessi al massimo %{max} account per post. Rimuovi qualche menzione."
 
-#: lib/vutuv_web/views/error_helpers.ex:178
+#: lib/vutuv_web/views/error_helpers.ex:183
 #, elixir-autogen, elixir-format
 msgid "Enter your Bluesky handle, e.g. name.bsky.social"
 msgstr "Inserisci il tuo handle Bluesky, ad esempio nome.bsky.social"
 
-#: lib/vutuv_web/views/error_helpers.ex:191
+#: lib/vutuv_web/views/error_helpers.ex:196
 #, elixir-autogen, elixir-format
 msgid "Enter your Codeberg username, not a full URL with extra path segments"
 msgstr ""
 "Inserisci il tuo nome utente Codeberg, non un URL completo con altri "
 "segmenti di percorso"
 
-#: lib/vutuv_web/views/error_helpers.ex:187
+#: lib/vutuv_web/views/error_helpers.ex:192
 #, elixir-autogen, elixir-format
 msgid "Enter your GitHub username, not a full URL with extra path segments"
 msgstr ""
 "Inserisci il tuo nome utente GitHub, non un URL completo con altri segmenti "
 "di percorso"
 
-#: lib/vutuv_web/views/error_helpers.ex:183
+#: lib/vutuv_web/views/error_helpers.ex:188
 #, elixir-autogen, elixir-format
 msgid "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
 msgstr ""
 "Inserisci il tuo nome utente GitLab, ad esempio gitlab.com/nomeutente (non "
 "un link ID /-/u/)"
 
-#: lib/vutuv_web/views/error_helpers.ex:177
+#: lib/vutuv_web/views/error_helpers.ex:182
 #, elixir-autogen, elixir-format
 msgid "Enter your full Mastodon handle, e.g. @user@instance.social"
 msgstr "Inserisci l'handle Mastodon completo, ad esempio @utente@istanza.social"
 
-#: lib/vutuv_web/views/error_helpers.ex:179
+#: lib/vutuv_web/views/error_helpers.ex:184
 #, elixir-autogen, elixir-format
 msgid "Enter your username and your instance, e.g. name@git.example.com"
 msgstr ""
 "Inserisci il tuo nome utente e la tua istanza, ad esempio "
 "nome@git.esempio.com"
 
-#: lib/vutuv_web/views/error_helpers.ex:195
+#: lib/vutuv_web/views/error_helpers.ex:200
 #, elixir-autogen, elixir-format
 msgid "Invalid account name"
 msgstr "Nome account non valido"
 
-#: lib/vutuv_web/views/error_helpers.ex:196
+#: lib/vutuv_web/views/error_helpers.ex:201
 #, elixir-autogen, elixir-format
 msgid "Someone has already claimed this account"
 msgstr "Questo account è già stato rivendicato da qualcun altro"
 
-#: lib/vutuv_web/views/error_helpers.ex:203
+#: lib/vutuv_web/views/error_helpers.ex:208
 #, elixir-autogen, elixir-format
 msgid "That instance did not answer. Please try again in a moment."
 msgstr "L'istanza non ha risposto. Riprova tra poco."
 
-#: lib/vutuv_web/views/error_helpers.ex:204
+#: lib/vutuv_web/views/error_helpers.ex:209
 #, elixir-autogen, elixir-format
 msgid "Too many checks for now. Please try again later."
 msgstr "Per ora troppi controlli. Riprova più tardi."
 
-#: lib/vutuv_web/views/error_helpers.ex:199
+#: lib/vutuv_web/views/error_helpers.ex:204
 #, elixir-autogen, elixir-format
 msgid "We could not find this account on that instance. Please check the address."
 msgstr ""
@@ -320,57 +320,57 @@ msgstr ""
 msgid "Only one email address can be given at sign-up."
 msgstr "Alla registrazione puoi indicare un solo indirizzo e-mail."
 
-#: lib/vutuv_web/views/error_helpers.ex:152
+#: lib/vutuv_web/views/error_helpers.ex:157
 #, elixir-autogen, elixir-format
 msgid "Please confirm that you are making this claim in good faith."
 msgstr "Conferma di presentare questa segnalazione in buona fede."
 
-#: lib/vutuv_web/views/error_helpers.ex:146
+#: lib/vutuv_web/views/error_helpers.ex:151
 #, elixir-autogen, elixir-format
 msgid "Please pick a category."
 msgstr "Scegli una categoria."
 
-#: lib/vutuv_web/views/error_helpers.ex:148
+#: lib/vutuv_web/views/error_helpers.ex:153
 #, elixir-autogen, elixir-format
 msgid "Please tell us which work it is and where the original can be seen."
 msgstr "Indica di quale opera si tratta e dove si può vedere l'originale."
 
-#: lib/vutuv_web/views/error_helpers.ex:147
+#: lib/vutuv_web/views/error_helpers.ex:152
 #, elixir-autogen, elixir-format
 msgid "Your note is too long."
 msgstr "La tua nota è troppo lunga."
 
-#: lib/vutuv_web/views/error_helpers.ex:155
+#: lib/vutuv_web/views/error_helpers.ex:160
 #, elixir-autogen, elixir-format
 msgid "Please give us an email address."
 msgstr "Indica un indirizzo e-mail."
 
-#: lib/vutuv_web/views/error_helpers.ex:159
+#: lib/vutuv_web/views/error_helpers.ex:164
 #, elixir-autogen, elixir-format
 msgid "Please tell us what is wrong with this content, in your own words."
 msgstr "Spiega con parole tue che cosa non va in questo contenuto."
 
-#: lib/vutuv_web/views/error_helpers.ex:154
+#: lib/vutuv_web/views/error_helpers.ex:159
 #, elixir-autogen, elixir-format
 msgid "Please tell us your name."
 msgstr "Dicci il tuo nome."
 
-#: lib/vutuv_web/views/error_helpers.ex:157
+#: lib/vutuv_web/views/error_helpers.ex:162
 #, elixir-autogen, elixir-format
 msgid "That address is too long."
 msgstr "Questo indirizzo è troppo lungo."
 
-#: lib/vutuv_web/views/error_helpers.ex:156
+#: lib/vutuv_web/views/error_helpers.ex:161
 #, elixir-autogen, elixir-format
 msgid "That does not look like an email address."
 msgstr "Questo non sembra un indirizzo e-mail."
 
-#: lib/vutuv_web/views/error_helpers.ex:163
+#: lib/vutuv_web/views/error_helpers.ex:168
 #, elixir-autogen, elixir-format
 msgid "You already reported this."
 msgstr "Hai già segnalato questo contenuto."
 
-#: lib/vutuv_web/views/error_helpers.ex:158
+#: lib/vutuv_web/views/error_helpers.ex:163
 #, elixir-autogen, elixir-format
 msgid "Your name is too long."
 msgstr "Il tuo nome è troppo lungo."
@@ -386,3 +386,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "That file is larger than %{limit}. Please upload a smaller one."
 msgstr "Questo file è più grande di %{limit}. Caricane uno più piccolo."
+
+#: lib/vutuv_web/views/error_helpers.ex:144
+#, elixir-autogen, elixir-format
+msgid "First name or last name or nickname must be present"
+msgstr ""

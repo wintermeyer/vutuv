@@ -137,6 +137,11 @@ defmodule VutuvWeb.ErrorHelpers do
         "errors",
         "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
       ),
+      # Vutuv.Accounts.User, the "give us a name" rule. It rode on unnoticed in
+      # English for as long as it only ever showed as a small line under a
+      # field; the three-step sign-up puts it in a banner, where a German page
+      # saying it in English is impossible to miss.
+      dgettext_noop("errors", "First name or last name or nickname must be present"),
       # Vutuv.Accounts.User, the spoken-name hint (issue #1112).
       dgettext_noop("errors", "must spell out how the name sounds"),
       # Vutuv.Tags.Tag, a name of punctuation only.
