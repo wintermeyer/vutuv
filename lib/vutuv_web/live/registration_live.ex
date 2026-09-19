@@ -654,8 +654,13 @@ defmodule VutuvWeb.RegistrationLive do
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
           <%!-- Named, not linked: nobody here has an account yet, so the
                 link would lead to a login wall. The address comes from the
-                endpoint, so another installation reads its own. --%>
-          {gettext("Everything can be changed later at %{url}.", url: url(~p"/settings"))}
+                endpoint, so another installation reads its own.
+
+                No full stop after it, deliberately: a sentence ending on a URL
+                hands the reader a period they cannot tell from the address
+                (Stefan, 2026-09-19). Grammar loses to the thing people have to
+                be able to copy. --%>
+          {gettext("Everything can be changed later at %{url}", url: url(~p"/settings"))}
         </p>
       </div>
 
