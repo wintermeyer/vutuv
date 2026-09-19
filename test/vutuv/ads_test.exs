@@ -57,7 +57,12 @@ defmodule Vutuv.AdsTest do
         do: from(a in Ad, where: a.group_id == ^ad.group_id),
         else: from(a in Ad, where: a.id == ^ad.id)
 
-    for row <- Repo.all(scope) do
+    # Earliest day first, and the order is load-bearing: a block shifted back by
+    # less than its own length moves each row onto a day the block still holds,
+    # so moving a later row first hits `ads_day_index` (23505). Without the
+    # `order_by` Postgres answers in whatever order it likes - which was
+    # insertion order here for weeks and something else on CI.
+    for row <- Repo.all(from(a in scope, order_by: [asc: a.day])) do
       Repo.update_all(from(a in Ad, where: a.id == ^row.id),
         set: [day: Date.add(row.day, -days)]
       )
