@@ -580,10 +580,12 @@ defmodule VutuvWeb.RegistrationLive do
           {gettext("Create your free account")}
         </h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          <%!-- Not "three answers and you are done": two more steps follow, and
-                a promise the next screen breaks is worse than no promise. What
-                is true and worth saying on the first screen is the price. --%>
-          {gettext("Your account is free.")}
+          <%!-- Not "three answers and you are done": two more steps follow,
+                and a promise the next screen breaks is worse than no promise.
+                What the first screen can say is the price and roughly what it
+                costs in time — a minute is an estimate anybody reads as one,
+                where a step count would have been checkable and wrong. --%>
+          {gettext("Your free account, in 60 seconds.")}
         </p>
       </div>
 
@@ -786,12 +788,12 @@ defmodule VutuvWeb.RegistrationLive do
     ~H"""
     <div class="space-y-4">
       <div>
+        <%!-- No subtitle: how many are still missing is what the red line under
+              the field says, and saying it twice on one short screen is worse
+              than saying it once. --%>
         <h2 class="text-xl font-bold text-slate-900 dark:text-white">
           {gettext("What are you interested in?")}
         </h2>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {gettext("Three tags are enough.")}
-        </p>
       </div>
 
       <div>
