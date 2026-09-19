@@ -272,6 +272,40 @@ defmodule Vutuv.AdsTest do
       assert email.subject =~ Calendar.strftime(ad.day, "%d.%m.%Y")
     end
 
+    test "the operator mail lists everything still waiting, not only the new one" do
+      day = fn n -> Date.to_iso8601(Date.add(Ads.today(), n)) end
+
+      # A week booked first but running later, so neither insertion order nor
+      # the grouping key's own order puts the queue right - only the sort does.
+      {:ok, _} =
+        Ads.book_ad(booker(), %{@valid_attrs | "day" => day.(20), "title" => "Frühe Woche"}, 7)
+
+      # An ad already through the review must not clutter the queue.
+      {:ok, approved} = Ads.book_ad(booker(), %{@valid_attrs | "day" => day.(5)})
+      {:ok, _} = Ads.approve_ad(approved, admin())
+      flush_emails()
+
+      {:ok, _} =
+        Ads.book_ad(booker(), %{@valid_attrs | "day" => day.(40), "title" => "Einzeltag"})
+
+      assert [email] = mails_to(flush_emails(), @operator)
+      assert email.text_body =~ "Frühe Woche"
+      assert email.text_body =~ "Einzeltag"
+      refute email.text_body =~ @valid_attrs["title"]
+      assert email.html_body =~ "Frühe Woche"
+
+      # As purchases, so the booked week is one line naming its whole stretch.
+      assert email.text_body =~
+               "#{Calendar.strftime(Date.add(Ads.today(), 20), "%d.%m.%Y")} bis " <>
+                 Calendar.strftime(Date.add(Ads.today(), 26), "%d.%m.%Y")
+
+      assert [first, second] =
+               for(line <- String.split(email.text_body, "\n"), line =~ ~r/^ {2}\d/, do: line)
+
+      assert first =~ "Frühe Woche"
+      assert second =~ "Einzeltag"
+    end
+
     test "a day can only be booked once" do
       assert {:ok, _ad} = Ads.book_ad(booker(), @valid_attrs)
       flush_emails()

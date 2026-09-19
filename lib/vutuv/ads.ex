@@ -680,6 +680,32 @@ defmodule Vutuv.Ads do
     |> Enum.sort_by(& &1.ad.day, {:desc, Date})
   end
 
+  @doc """
+  Everything still waiting for an admin, soonest first, as purchases rather
+  than rows — a booked week is one thing to look at, not seven.
+
+  The operator's booking mail carries this, so the notice that one ad arrived
+  also says what else is outstanding: an admin who reads it away is otherwise
+  told nothing about the four bookings that came in while they were away.
+  """
+  def pending_purchases do
+    from(a in pending(), where: a.day >= ^today(), preload: [:user])
+    |> Repo.all()
+    |> Enum.group_by(&purchase_key/1)
+    |> Enum.map(fn {_key, ads} ->
+      sorted = Enum.sort_by(ads, & &1.day, Date)
+
+      %{
+        ad: hd(sorted),
+        days: length(sorted),
+        first_day: hd(sorted).day,
+        last_day: List.last(sorted).day,
+        price_cents: Enum.sum(Enum.map(sorted, & &1.price_cents))
+      }
+    end)
+    |> Enum.sort_by(& &1.first_day, Date)
+  end
+
   # A block counts as one purchase; a single day is its own.
   defp purchase_key(%Ad{group_id: nil, id: id}), do: {:ad, id}
   defp purchase_key(%Ad{group_id: group_id}), do: {:group, group_id}

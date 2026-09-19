@@ -191,7 +191,12 @@ unique index on `day` covers only the standing bookings
 (`rejected_at IS NULL AND cancelled_at IS NULL`), and every "is this day
 taken" question goes through the same query. The mails to the booker come in
 their language (`ad_booked`, `ad_approved`, `ad_rejected`, `ad_cancelled`);
-the operator's two (`ad_booking`, `ad_cancellation`) are German.
+the operator's three (`ad_booking`, `ad_cancellation`, `ad_withdrawal`) are
+German. The booking notice ends with **everything still waiting for approval**
+(`pending_purchases/0`, soonest first, one line per purchase rather than per
+day): the mail that says one ad arrived is then also the only place that says
+what else is outstanding, so an admin who reads one away still knows what came
+in while they were gone.
 
 The review dashboard lives at `/admin/ads` (with a pending badge on the admin
 panel), the booker's view at `/system/ads/bookings`, and the earliest bookable

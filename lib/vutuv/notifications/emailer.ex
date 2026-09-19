@@ -800,7 +800,10 @@ defmodule Vutuv.Notifications.Emailer do
     # The invoice is written from this mail, so it names the purchase: the whole
     # stretch of days and the price of the block, never one row's share.
     purchase = Ads.purchase(ad)
-    period = ad_period(purchase, "DE")
+    # This notice is German whatever the installation's default locale is, and
+    # `ad_period/2` says "bis" through gettext - so pin the locale rather than
+    # inherit the sending Task's, which is how a German subject once said "to".
+    period = in_locale("de", fn -> ad_period(purchase, "DE") end)
 
     base_email()
     # Critical for the same reason a PIN is: a booking the member just paid for
@@ -816,11 +819,29 @@ defmodule Vutuv.Notifications.Emailer do
       billing_address: billing_address(ad),
       period: period,
       days: purchase.days,
+      # Everything still waiting, this booking included: the mail that says one
+      # arrived is also the only place that says what else is outstanding.
+      pending: pending_lines(),
       price: format_euro_cents(purchase.price_cents),
       vat_percent: Ads.vat_percent(),
       gross: format_euro_cents(Ads.gross_cents(purchase.price_cents)),
       url: public_url()
     })
+  end
+
+  # The review queue as the operator reads it, formatted here so both bodies
+  # only print it. The operator notices are fixed German, so the date pattern is
+  # too: nobody but this installation's operator ever receives them.
+  defp pending_lines do
+    in_locale("de", fn ->
+      Enum.map(Ads.pending_purchases(), fn purchase ->
+        %{
+          period: ad_period(purchase, "DE"),
+          title: purchase.ad.title,
+          username: purchase.ad.user && purchase.ad.user.username
+        }
+      end)
+    end)
   end
 
   # The invoice address block, optional lines (organization, VAT id) folded away.

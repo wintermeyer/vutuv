@@ -1,7 +1,7 @@
 Neue Anzeigenbuchung auf vutuv
 ==============================
 
-Tage:   <%= @period %> (<%= @days %> Tage)
+Tage:   <%= @period %><%= if @days > 1, do: " (#{@days} Tage)" %>
 Preis:  <%= @price %> EUR (netto), Zahlung per Rechnung
 MwSt.:  <%= @vat_percent %> % -> <%= @gross %> EUR brutto
 
@@ -21,5 +21,9 @@ Link:  <%= @ad.url %>
 Die Anzeige ist noch NICHT freigeschaltet. Bitte prüfen (familienfreundlich?)
 und freischalten: <%= @url %>admin/ads
 
+Wartet insgesamt auf Freischaltung
+----------------------------------
+<%= for p <- @pending do %>  <%= p.period %>: <%= p.title %><%= if p.username do %> (@<%= p.username %>)<% end %>
+<% end %>
 Die Rechnung wird manuell erstellt und versendet. Die Ausspielung am
 gebuchten Tag erfolgt nach der Freischaltung automatisch.

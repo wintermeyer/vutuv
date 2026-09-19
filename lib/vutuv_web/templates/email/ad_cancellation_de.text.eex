@@ -1,7 +1,7 @@
 Stornierung einer Anzeigenbuchung
 =================================
 
-Tage:   <%= @period %> (<%= @days %> Tage)
+Tage:   <%= @period %><%= if @days > 1, do: " (#{@days} Tage)" %>
 Preis:  <%= @price %> EUR (netto)
 MwSt.:  <%= @vat_percent %> % -> <%= @gross %> EUR brutto
 
