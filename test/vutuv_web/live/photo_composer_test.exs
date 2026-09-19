@@ -155,6 +155,60 @@ defmodule VutuvWeb.PhotoComposerTest do
     |> Repo.preload(:images)
   end
 
+  # One `file_input` per picture, deliberately. `Phoenix.LiveViewTest`'s
+  # upload client stops the moment one of *its* entries is consumed, and its
+  # channels go with it, so a single input can carry exactly one completed
+  # upload — with three in one input the second `render_upload/3` exits with
+  # "no process". Three clients registered before any of them finishes give the
+  # server the same picture a real multi-pick does: three entries in the picked
+  # order, all in flight, finishing in another order.
+  defp start_image_upload(live, opts) do
+    name = Keyword.get(opts, :name, "photo-#{System.unique_integer([:positive])}.jpg")
+    content = Keyword.get(opts, :content) || jpeg(opts)
+    type = Keyword.get(opts, :type, "image/jpeg")
+
+    input =
+      file_input(live, "#composer-form", :images, [
+        %{name: name, content: content, type: type, size: byte_size(content)}
+      ])
+
+    render_upload(input, name, Keyword.get(opts, :percent, 10))
+    {name, input}
+  end
+
+  # The percentage is a **step**, not a target, and the batch already sent 10.
+  defp finish_image_upload({name, input}), do: render_upload(input, name, 90)
+
+  defp pending_by_width(user) do
+    import Ecto.Query
+
+    from(i in PostImage, where: i.user_id == ^user.id and is_nil(i.post_id))
+    |> Repo.all()
+    |> Map.new(&{&1.width, &1})
+  end
+
+  defp hidden_image_ids(live) do
+    ~r/<input\b[^>]*\bname="post\[image_ids\]\[\]"[^>]*>/
+    |> Regex.scan(render(live))
+    |> Enum.map(fn [tag] ->
+      case Regex.run(~r/\bvalue="([^"]+)"/, tag) do
+        [_, id] -> id
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp cancel_first_image_upload(live) do
+    html = render(live)
+    [button] = Regex.run(~r/<button\b[^>]*phx-click="cancel-upload"[^>]*>/, html)
+    [_, ref] = Regex.run(~r/phx-value-ref="([^"]+)"/, button)
+
+    live
+    |> element(~s(button[phx-click="cancel-upload"][phx-value-ref="#{ref}"]))
+    |> render_click()
+  end
+
   describe "a post without photos" do
     test "shows no photo controls at all", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
@@ -1200,6 +1254,356 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       # A nested second zone would steal the active state from the overlay.
       refute has_element?(live, "#composer-images[phx-drop-target]")
+    end
+  end
+
+  # Issue #2158. Three pictures in flight at once, finishing in the reverse of
+  # the order they were picked, which is what a batch with one big file among
+  # small ones does every time. The gallery must keep picker order, not
+  # upload-completion order, because the first photo is the cover.
+  describe "several pictures in flight at once (issue #2158)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      live = open_composer(conn)
+
+      inflight =
+        Map.new(
+          [{"hero.jpg", 90}, {"second.jpg", 80}, {"third.jpg", 70}],
+          fn {name, width} ->
+            {name, start_image_upload(live, name: name, width: width)}
+          end
+        )
+
+      {:ok, conn: conn, live: live, user: user, inflight: inflight}
+    end
+
+    test "the gallery keeps the order they were picked in", %{
+      live: live,
+      user: user,
+      inflight: inflight
+    } do
+      finish_image_upload(inflight["third.jpg"])
+      finish_image_upload(inflight["second.jpg"])
+      finish_image_upload(inflight["hero.jpg"])
+
+      by_width = pending_by_width(user)
+      hero = by_width[90]
+      second = by_width[80]
+      third = by_width[70]
+
+      assert hidden_image_ids(live) == [hero.id, second.id, third.id]
+      assert has_element?(live, ~s([data-photo-tile="#{hero.id}"] [data-cover-badge]))
+      refute has_element?(live, ~s([data-photo-tile="#{third.id}"] [data-cover-badge]))
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Three."}}) |> render_submit()
+
+      post = only_post(user)
+      assert Enum.map(post.images, & &1.id) == [hero.id, second.id, third.id]
+      assert Enum.map(post.images, & &1.position) == [0, 1, 2]
+    end
+
+    test "a later entry can finish on its first progress callback, with no extra validate", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_composer(recycle(conn))
+      hero = start_image_upload(live, name: "hero.jpg", width: 90)
+      second = start_image_upload(live, name: "second.jpg", width: 80)
+      # First sight of this ref is already 100% — automatic uploads do this
+      # when a small file is selected last.
+      start_image_upload(live, name: "third.jpg", width: 70, percent: 100)
+
+      finish_image_upload(second)
+      finish_image_upload(hero)
+
+      by_width = pending_by_width(user)
+
+      assert hidden_image_ids(live) == [by_width[90].id, by_width[80].id, by_width[70].id]
+      assert has_element?(live, ~s([data-photo-tile="#{by_width[90].id}"] [data-cover-badge]))
+    end
+
+    test "a picture picked afterwards goes behind the ones still climbing", %{
+      live: live,
+      user: user,
+      inflight: inflight
+    } do
+      start_image_upload(live, name: "later.jpg", width: 60, percent: 100)
+      finish_image_upload(inflight["hero.jpg"])
+      finish_image_upload(inflight["second.jpg"])
+
+      by_width = pending_by_width(user)
+
+      assert hidden_image_ids(live) == [by_width[90].id, by_width[80].id, by_width[60].id]
+    end
+
+    test "a later pick still follows a completed gallery", %{
+      live: live,
+      user: user,
+      inflight: inflight
+    } do
+      finish_image_upload(inflight["third.jpg"])
+      finish_image_upload(inflight["second.jpg"])
+      finish_image_upload(inflight["hero.jpg"])
+
+      start_image_upload(live, name: "later.jpg", width: 60, percent: 100)
+
+      by_width = pending_by_width(user)
+
+      assert hidden_image_ids(live) == [
+               by_width[90].id,
+               by_width[80].id,
+               by_width[70].id,
+               by_width[60].id
+             ]
+    end
+
+    test "a later pick still follows recovered draft photos", %{conn: conn, user: user} do
+      kept = pending_image!(user, width: 100)
+      also = pending_image!(user, width: 95)
+      live = open_composer(recycle(conn))
+
+      live
+      |> element("#composer-form")
+      |> render_change(%{"post" => %{"image_ids" => [kept.id, also.id]}})
+
+      start_image_upload(live, name: "later.jpg", width: 60, percent: 100)
+
+      later = pending_by_width(user)[60]
+      assert hidden_image_ids(live) == [kept.id, also.id, later.id]
+      assert has_element?(live, ~s([data-photo-tile="#{kept.id}"] [data-cover-badge]))
+    end
+  end
+
+  describe "picker order after a reorder or swap (issue #2158)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user, live: open_composer(conn)}
+    end
+
+    test "an explicit reorder and a later upload keep the chosen cover", %{
+      live: live,
+      user: user
+    } do
+      first = upload_photo!(live, user, width: 90)
+      second = upload_photo!(live, user, width: 80)
+
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-reorder", %{"order" => [second.id, first.id]})
+
+      start_image_upload(live, name: "later.jpg", width: 70, percent: 100)
+      later = pending_by_width(user)[70]
+
+      inflight =
+        Map.new(
+          [{"batch-a.jpg", 60}, {"batch-b.jpg", 50}],
+          fn {name, width} ->
+            {name, start_image_upload(live, name: name, width: width)}
+          end
+        )
+
+      finish_image_upload(inflight["batch-b.jpg"])
+      finish_image_upload(inflight["batch-a.jpg"])
+
+      by_width = pending_by_width(user)
+
+      assert hidden_image_ids(live) == [
+               second.id,
+               first.id,
+               later.id,
+               by_width[60].id,
+               by_width[50].id
+             ]
+
+      assert has_element?(live, ~s([data-photo-tile="#{second.id}"] [data-cover-badge]))
+    end
+
+    test "a swap and a later upload keep the chosen cover", %{live: live, user: user} do
+      first = upload_photo!(live, user, width: 90)
+      second = upload_photo!(live, user, width: 80)
+
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-swap", %{"from" => first.id, "to" => second.id})
+
+      start_image_upload(live, name: "later.jpg", width: 70, percent: 100)
+
+      assert hidden_image_ids(live) == [second.id, first.id, pending_by_width(user)[70].id]
+      assert has_element?(live, ~s([data-photo-tile="#{second.id}"] [data-cover-badge]))
+    end
+  end
+
+  describe "abandoned, failed and removed photos leave the rest in picker order (issue #2158)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user, live: open_composer(conn)}
+    end
+
+    test "cancelling an early pending upload does not block the rest", %{
+      live: live,
+      user: user
+    } do
+      inflight =
+        Map.new(
+          [{"hero.jpg", 90}, {"second.jpg", 80}, {"third.jpg", 70}],
+          fn {name, width} ->
+            {name, start_image_upload(live, name: name, width: width)}
+          end
+        )
+
+      cancel_first_image_upload(live)
+      finish_image_upload(inflight["third.jpg"])
+      finish_image_upload(inflight["second.jpg"])
+
+      by_width = pending_by_width(user)
+
+      assert hidden_image_ids(live) == [by_width[80].id, by_width[70].id]
+      refute Map.has_key?(by_width, 90)
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Two."}}) |> render_submit()
+
+      post = only_post(user)
+      assert Enum.map(post.images, & &1.id) == [by_width[80].id, by_width[70].id]
+    end
+
+    test "a payload that cannot be processed is dropped without taking a slot", %{
+      live: live,
+      user: user
+    } do
+      hero = start_image_upload(live, name: "hero.jpg", width: 90)
+      bad = start_image_upload(live, name: "bad.jpg", content: "not a jpeg")
+      third = start_image_upload(live, name: "third.jpg", width: 70)
+
+      finish_image_upload(bad)
+      assert render(live) =~ "That file could not be processed."
+
+      finish_image_upload(third)
+      finish_image_upload(hero)
+
+      by_width = pending_by_width(user)
+
+      assert hidden_image_ids(live) == [by_width[90].id, by_width[70].id]
+      refute Map.has_key?(by_width, 80)
+    end
+
+    test "removing a completed photo does not bring it back when another lands", %{
+      live: live,
+      user: user
+    } do
+      first = upload_photo!(live, user, width: 90)
+      second = upload_photo!(live, user, width: 80)
+      later = start_image_upload(live, name: "later.jpg", width: 70)
+
+      live
+      |> element(~s(button[phx-click="remove-image"][phx-value-id="#{first.id}"]))
+      |> render_click()
+
+      finish_image_upload(later)
+
+      assert hidden_image_ids(live) == [second.id, pending_by_width(user)[70].id]
+      refute has_element?(live, ~s([data-photo-tile="#{first.id}"]))
+    end
+
+    test "a refused file type still errors and does not take a gallery slot", %{
+      live: live,
+      user: user
+    } do
+      hero = start_image_upload(live, name: "hero.jpg", width: 90)
+
+      bad =
+        file_input(live, "#composer-form", :images, [
+          %{name: "notes.pdf", content: "%PDF-1.4", type: "application/pdf", size: 8}
+        ])
+
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(bad, "notes.pdf")
+
+      finish_image_upload(hero)
+      hero_row = pending_by_width(user)[90]
+
+      assert hidden_image_ids(live) == [hero_row.id]
+    end
+
+    test "the per-post cap still refuses a photo past the limit", %{live: live, user: user} do
+      prev = Application.fetch_env!(:vutuv, :post_images)
+      Application.put_env(:vutuv, :post_images, Keyword.put(prev, :max_per_post, 1))
+      on_exit(fn -> Application.put_env(:vutuv, :post_images, prev) end)
+
+      first = upload_photo!(live, user, width: 90)
+      start_image_upload(live, name: "overflow.jpg", width: 80, percent: 100)
+
+      assert hidden_image_ids(live) == [first.id]
+      assert render(live) =~ "No more than"
+      refute Map.has_key?(pending_by_width(user), 80)
+    end
+  end
+
+  describe "discard, undo and a fresh composition (issue #2158)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user, live: open_composer(conn)}
+    end
+
+    test "undo restores the picker order, and a later post starts empty", %{
+      live: live,
+      user: user
+    } do
+      inflight =
+        Map.new(
+          [{"hero.jpg", 90}, {"second.jpg", 80}],
+          fn {name, width} ->
+            {name, start_image_upload(live, name: name, width: width)}
+          end
+        )
+
+      finish_image_upload(inflight["second.jpg"])
+      finish_image_upload(inflight["hero.jpg"])
+
+      by_width = pending_by_width(user)
+      hero = by_width[90]
+      second = by_width[80]
+
+      live |> element("#composer-discard") |> render_click()
+      live |> element("#open-composer") |> render_click()
+      refute has_element?(live, "[data-photo-tile]")
+
+      live |> element("[data-undo-discard]") |> render_click()
+      assert hidden_image_ids(live) == [hero.id, second.id]
+      assert has_element?(live, ~s([data-photo-tile="#{hero.id}"] [data-cover-badge]))
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Kept."}}) |> render_submit()
+
+      post = only_post(user)
+      assert Enum.map(post.images, & &1.id) == [hero.id, second.id]
+      assert Enum.map(post.images, & &1.position) == [0, 1]
+
+      if has_element?(live, "#composer-panel.hidden") do
+        live |> element("#open-composer") |> render_click()
+      end
+
+      refute has_element?(live, "[data-photo-tile]")
+      fresh = upload_photo!(live, user, width: 50)
+      assert hidden_image_ids(live) == [fresh.id]
+    end
+
+    test "a stored draft comes back in picker order", %{conn: conn, live: live, user: user} do
+      inflight =
+        Map.new(
+          [{"hero.jpg", 90}, {"second.jpg", 80}, {"third.jpg", 70}],
+          fn {name, width} ->
+            {name, start_image_upload(live, name: name, width: width)}
+          end
+        )
+
+      finish_image_upload(inflight["third.jpg"])
+      finish_image_upload(inflight["second.jpg"])
+      finish_image_upload(inflight["hero.jpg"])
+
+      by_width = pending_by_width(user)
+
+      {:ok, reloaded, _html} = live(recycle(conn), ~p"/feed")
+
+      assert hidden_image_ids(reloaded) == [by_width[90].id, by_width[80].id, by_width[70].id]
+      assert has_element?(reloaded, ~s([data-photo-tile="#{by_width[90].id}"] [data-cover-badge]))
     end
   end
 

@@ -194,7 +194,10 @@ defmodule VutuvWeb.PostLive.Composer do
     # after a reconnect: it holds no data of its own, only a view of assigns.
     |> assign(:gallery_open?, false)
     |> assign(:tags_value, tags_value(post))
-    |> assign(:images, images)
+    # Picker order for in-flight and completed photos (issue #2158). Seeded
+    # from the rows this composer already holds; pending upload refs join it
+    # the first time `handle_progress/3` sees them.
+    |> assign_images(images)
     # The clip (issue #1907): an edited post's own, read-only but for its alt
     # text; a new post's arrives through the upload below.
     |> assign(:video, post_video(post))
@@ -396,7 +399,7 @@ defmodule VutuvWeb.PostLive.Composer do
       socket
       |> assign(:body, draft.body)
       |> assign(:tags_value, draft.tags)
-      |> assign(:images, images)
+      |> assign_images(images)
       # Same re-check for the clip: the author's own, still unattached.
       |> assign_video(Videos.pending_video(assigns.current_user, draft.video_id))
       |> assign(:photos, photo_state_from_draft(draft, images))
@@ -612,19 +615,152 @@ defmodule VutuvWeb.PostLive.Composer do
     end
   end
 
-  # Trades the positions of two photos (the bento preview's tap-tap swap).
-  # Unknown ids leave the list untouched — a tile can go stale between taps.
-  defp swap_images(images, first_id, second_id) do
-    first = Enum.find_index(images, &(&1.id == first_id))
-    second = Enum.find_index(images, &(&1.id == second_id))
+  # Picker order for in-flight and completed photos (issue #2158).
+  #
+  # Photos go up in parallel and the gallery used to append each as it landed,
+  # which is the order their sizes decide rather than the order they were
+  # picked: a small photo selected last became the cover. `@uploads.images.entries`
+  # **is** the file picker's order, and it stays that order until an entry is
+  # consumed — which only `handle_progress/3` does, and only after
+  # `note_image_order/1` has run. Completed ids stay when consumed refs leave
+  # the list; only abandoned pending reservations (cancelled, rejected, failed)
+  # and explicitly removed images are dropped. `assigns.images` is the completed
+  # rows projected from this list, so rendering, hidden ids, drafts and save
+  # keep working unchanged.
 
-    if first && second do
-      images
-      |> List.replace_at(first, Enum.at(images, second))
-      |> List.replace_at(second, Enum.at(images, first))
+  defp assign_images(socket, images) do
+    socket
+    |> assign(:images, images)
+    |> assign(:image_order, Enum.map(images, &{:id, &1.id}))
+  end
+
+  defp put_image_order(socket, order) do
+    put_image_order(socket, order, socket.assigns.images)
+  end
+
+  defp put_image_order(socket, order, images_or_by_id) do
+    socket
+    |> assign(:image_order, order)
+    |> assign(:images, project_images(order, images_or_by_id))
+  end
+
+  defp project_images(order, images) when is_list(images) do
+    project_images(order, Map.new(images, &{&1.id, &1}))
+  end
+
+  defp project_images(order, by_id) when is_map(by_id) do
+    Enum.flat_map(order, fn
+      {:id, id} -> List.wrap(Map.get(by_id, id))
+      {:ref, _ref} -> []
+    end)
+  end
+
+  # The order the member picked, written down the first time each file is seen.
+  # Automatic uploads mean the first progress callback may already report a
+  # finished entry, so this runs before `done?` is checked and before any
+  # entry is consumed. New refs append behind existing reservations.
+  defp note_image_order(socket) do
+    upload = socket.assigns.uploads.images
+
+    refs =
+      upload.entries
+      |> Enum.reject(&(upload_errors(upload, &1) != []))
+      |> Enum.map(& &1.ref)
+
+    live = MapSet.new(refs)
+
+    kept =
+      Enum.filter(socket.assigns.image_order, fn
+        {:id, _id} -> true
+        {:ref, ref} -> MapSet.member?(live, ref)
+      end)
+
+    known = MapSet.new(for {:ref, ref} <- kept, do: ref)
+
+    newcomers =
+      refs
+      |> Enum.reject(&MapSet.member?(known, &1))
+      |> Enum.map(&{:ref, &1})
+
+    assign(socket, :image_order, kept ++ newcomers)
+  end
+
+  defp complete_image_upload(socket, ref, image) do
+    {order, found?} =
+      Enum.map_reduce(socket.assigns.image_order, false, fn
+        {:ref, ^ref}, _found? -> {{:id, image.id}, true}
+        other, found? -> {other, found?}
+      end)
+
+    order = if found?, do: order, else: order ++ [{:id, image.id}]
+
+    by_id =
+      socket.assigns.images
+      |> Map.new(&{&1.id, &1})
+      |> Map.put(image.id, image)
+
+    put_image_order(socket, order, by_id)
+  end
+
+  defp drop_pending_image_ref(socket, ref) do
+    assign(
+      socket,
+      :image_order,
+      Enum.reject(socket.assigns.image_order, fn
+        {:ref, ^ref} -> true
+        _other -> false
+      end)
+    )
+  end
+
+  # An explicit reorder permutes only the completed slots, leaving pending
+  # selections anchored. Unknown ids are skipped; completed photos the order
+  # does not name keep their place at the end of the completed queue, so a
+  # stale hook payload cannot drop a photo from the post.
+  defp permute_completed_order(order, requested) do
+    present = MapSet.new(for {:id, id} <- order, do: id)
+    named = Enum.filter(requested, &MapSet.member?(present, &1))
+    named_set = MapSet.new(named)
+    missing = for {:id, id} <- order, not MapSet.member?(named_set, id), do: id
+
+    {permuted, _unused} =
+      Enum.map_reduce(order, named ++ missing, fn
+        {:ref, ref}, queue ->
+          {{:ref, ref}, queue}
+
+        {:id, _id}, [next | rest] ->
+          {{:id, next}, rest}
+
+        {:id, id}, [] ->
+          {{:id, id}, []}
+      end)
+
+    permuted
+  end
+
+  # Trades the positions of two completed photos (the bento preview's tap-tap
+  # swap). Pending reservations stay where they are; unknown ids leave the
+  # list untouched — a tile can go stale between taps.
+  defp swap_completed_order(order, first_id, second_id) do
+    ids = for {:id, id} <- order, do: id
+
+    if first_id in ids and second_id in ids do
+      Enum.map(order, fn
+        {:id, ^first_id} -> {:id, second_id}
+        {:id, ^second_id} -> {:id, first_id}
+        other -> other
+      end)
     else
-      images
+      order
     end
+  end
+
+  # In-flight picks must not land on the next composition after a save or a
+  # discard: their refs are not part of a draft or a stash.
+  defp cancel_image_uploads(socket) do
+    Enum.reduce(socket.assigns.uploads.images.entries, socket, fn entry, acc ->
+      cancel_upload(acc, :images, entry.ref)
+    end)
   end
 
   ## The post-wide download answer (issue #1104 follow-up)
@@ -874,7 +1010,7 @@ defmodule VutuvWeb.PostLive.Composer do
       when is_binary(from) and is_binary(to) and from != to do
     {:noreply,
      socket
-     |> assign(:images, swap_images(socket.assigns.images, from, to))
+     |> put_image_order(swap_completed_order(socket.assigns.image_order, from, to))
      |> schedule_draft_save()}
   end
 
@@ -950,11 +1086,10 @@ defmodule VutuvWeb.PostLive.Composer do
   # no second control). Ids are looked up rather than trusted: an order naming
   # an unknown id must not be able to drop photos from the post.
   def handle_event("photo-reorder", %{"order" => order}, socket) when is_list(order) do
-    by_id = Map.new(socket.assigns.images, &{&1.id, &1})
-    reordered = Enum.flat_map(order, fn id -> List.wrap(by_id[id]) end)
-    missing = Enum.reject(socket.assigns.images, &(&1.id in order))
-
-    {:noreply, socket |> assign(:images, reordered ++ missing) |> schedule_draft_save()}
+    {:noreply,
+     socket
+     |> put_image_order(permute_completed_order(socket.assigns.image_order, order))
+     |> schedule_draft_save()}
   end
 
   # (`mosaic-swap` was the preview's tap-tap swap — first tap marks a photo,
@@ -1007,7 +1142,12 @@ defmodule VutuvWeb.PostLive.Composer do
 
         {:noreply,
          socket
-         |> assign(:images, Enum.reject(socket.assigns.images, &(&1.id == id)))
+         |> put_image_order(
+           Enum.reject(socket.assigns.image_order, fn
+             {:id, ^id} -> true
+             _other -> false
+           end)
+         )
          |> update(:photos, &Map.delete(&1, id))
          |> assign(
            :open_photo,
@@ -1018,7 +1158,7 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   def handle_event("cancel-upload", %{"ref" => ref}, socket) do
-    {:noreply, cancel_upload(socket, :images, ref)}
+    {:noreply, socket |> cancel_upload(:images, ref) |> drop_pending_image_ref(ref)}
   end
 
   def handle_event("cancel-video-upload", %{"ref" => ref}, socket) do
@@ -1313,8 +1453,9 @@ defmodule VutuvWeb.PostLive.Composer do
             Enum.reject(current, &(&1.id in ids))
 
         socket
-        |> assign(:images, ordered)
+        |> assign_images(ordered)
         |> assign(:photos, Map.merge(photo_state(adopted), socket.assigns.photos))
+        |> note_image_order()
     end
   end
 
@@ -1465,7 +1606,7 @@ defmodule VutuvWeb.PostLive.Composer do
     # reset and the original "Discard draft" use).
     |> update(:editor_seed, &(&1 + 1))
     |> assign(:tags_value, stash.tags_value)
-    |> assign(:images, stash.images)
+    |> assign_images(stash.images)
     |> assign_video(stash.video)
     |> assign(:photos, stash.photos)
     |> assign(:layout, stash.layout)
@@ -1486,7 +1627,8 @@ defmodule VutuvWeb.PostLive.Composer do
     # The one moment the editor must let go of what it holds.
     |> update(:editor_seed, &(&1 + 1))
     |> assign(:tags_value, "")
-    |> assign(:images, [])
+    |> cancel_image_uploads()
+    |> assign_images([])
     |> assign_video(nil)
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
@@ -1579,9 +1721,16 @@ defmodule VutuvWeb.PostLive.Composer do
             "#{entry.client_name}: #{reason}"
           end)
 
-        rejected
-        |> Enum.reduce(socket, &cancel_upload(&2, name, &1.ref))
-        |> assign(:error, messages)
+        socket =
+          rejected
+          |> Enum.reduce(socket, &cancel_upload(&2, name, &1.ref))
+          |> assign(:error, messages)
+
+        if name == :images do
+          Enum.reduce(rejected, socket, &drop_pending_image_ref(&2, &1.ref))
+        else
+          socket
+        end
     end
   end
 
@@ -1681,6 +1830,10 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   defp handle_progress(:images, entry, socket) do
+    # Capture the whole picker list before consuming anyone: the first
+    # callback may already be a later, smaller file at 100%.
+    socket = note_image_order(socket)
+
     cond do
       not entry.done? ->
         {:noreply, socket}
@@ -1689,6 +1842,7 @@ defmodule VutuvWeb.PostLive.Composer do
         {:noreply,
          socket
          |> cancel_upload(:images, entry.ref)
+         |> drop_pending_image_ref(entry.ref)
          |> assign(
            :error,
            gettext("No more than %{max} images per post.", max: Posts.max_images_per_post())
@@ -1708,7 +1862,7 @@ defmodule VutuvWeb.PostLive.Composer do
             # prose (picker-chosen files just join the thumbnail row).
             {:noreply,
              socket
-             |> update(:images, &(&1 ++ [image]))
+             |> complete_image_upload(entry.ref, image)
              |> update(:photos, &Map.put(&1, image.id, photo_defaults(image)))
              |> push_event(
                "mde-image-uploaded",
@@ -1717,7 +1871,10 @@ defmodule VutuvWeb.PostLive.Composer do
              |> schedule_draft_save()}
 
           {:error, _reason} ->
-            {:noreply, assign(socket, :error, gettext("That file could not be processed."))}
+            {:noreply,
+             socket
+             |> drop_pending_image_ref(entry.ref)
+             |> assign(:error, gettext("That file could not be processed."))}
         end
     end
   end
