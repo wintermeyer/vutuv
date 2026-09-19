@@ -78,7 +78,7 @@ msgid "Addresses"
 msgstr "Indirizzi"
 
 #: lib/vutuv_web/components/ui.ex:1842
-#: lib/vutuv_web/live/registration_live.ex:902
+#: lib/vutuv_web/live/registration_live.ex:893
 #, elixir-autogen
 msgid "Already a member? Sign in here."
 msgstr "Sei già iscritto? Accedi qui."
@@ -347,7 +347,7 @@ msgid "Following"
 msgstr "Seguiti"
 
 #: lib/vutuv_web/live/admin/dashboard_live.ex:310
-#: lib/vutuv_web/live/registration_live.ex:671
+#: lib/vutuv_web/live/registration_live.ex:657
 #: lib/vutuv_web/templates/user/edit.html.heex:221
 #: lib/vutuv_web/views/account_event_text.ex:219
 #, elixir-autogen
@@ -679,7 +679,7 @@ msgstr "Cerca"
 msgid "Show"
 msgstr "Mostra"
 
-#: lib/vutuv_web/live/registration_live.ex:499
+#: lib/vutuv_web/live/registration_live.ex:489
 #, elixir-autogen
 msgid "Sign up for a free account"
 msgstr "Crea un account gratuito"
@@ -965,12 +965,12 @@ msgid "An email has been sent to your email address with instructions on how to 
 msgstr ""
 "Ti abbiamo inviato un'e-mail con le istruzioni per eliminare il tuo account."
 
-#: lib/vutuv_web/live/registration_live.ex:709
+#: lib/vutuv_web/live/registration_live.ex:695
 #, elixir-autogen
 msgid "Allow others to view your email address"
 msgstr "Consentire ad altri di vedere il mio indirizzo e-mail"
 
-#: lib/vutuv_web/live/registration_live.ex:881
+#: lib/vutuv_web/live/registration_live.ex:872
 #, elixir-autogen, elixir-format
 msgid "By creating an account you accept our {nutzungsbedingungen} and confirm that you have read our {datenschutz}."
 msgstr ""
@@ -1659,7 +1659,7 @@ msgid "Confirm account deletion"
 msgstr "Conferma l'eliminazione dell'account"
 
 #: lib/vutuv_web/controllers/page_controller.ex:218
-#: lib/vutuv_web/live/registration_live.ex:894
+#: lib/vutuv_web/live/registration_live.ex:885
 #: lib/vutuv_web/templates/layout/app.html.heex:113
 #: lib/vutuv_web/views/admin/legal_page_html.ex:11
 #, elixir-autogen, elixir-format
@@ -1667,7 +1667,7 @@ msgid "Datenschutzerklärung"
 msgstr "Informativa sulla privacy"
 
 #: lib/vutuv_web/controllers/page_controller.ex:224
-#: lib/vutuv_web/live/registration_live.ex:891
+#: lib/vutuv_web/live/registration_live.ex:882
 #: lib/vutuv_web/templates/layout/app.html.heex:114
 #: lib/vutuv_web/views/admin/legal_page_html.ex:12
 #, elixir-autogen, elixir-format
@@ -2259,7 +2259,6 @@ msgstr "Mostra meno"
 #: lib/vutuv_web/live/post_live/saved.ex:697
 #: lib/vutuv_web/live/post_rewrites_live.ex:376
 #: lib/vutuv_web/live/press_kit_live.ex:1090
-#: lib/vutuv_web/live/registration_live.ex:821
 #: lib/vutuv_web/templates/connection/index.html.heex:45
 #: lib/vutuv_web/views/settings_html.ex:386
 #, elixir-autogen, elixir-format
@@ -2677,7 +2676,7 @@ msgstr "Non è stato possibile inviare il messaggio."
 msgid "Too many new conversations. Please try again later."
 msgstr "Troppe nuove conversazioni. Riprova più tardi."
 
-#: lib/vutuv_web/live/registration_live.ex:580
+#: lib/vutuv_web/live/registration_live.ex:569
 #, elixir-autogen, elixir-format
 msgid "Create your free account"
 msgstr "Crea il tuo account gratuito"
@@ -2714,7 +2713,7 @@ msgstr "Bentornato"
 msgid "Founder of vutuv"
 msgstr "Fondatore di vutuv"
 
-#: lib/vutuv_web/live/registration_live.ex:727
+#: lib/vutuv_web/live/registration_live.ex:713
 #: lib/vutuv_web/templates/settings/privacy.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "Allow search engines to index your profile"
@@ -5274,7 +5273,7 @@ msgstr ""
 "vutuv invia qui buste JSON firmate via POST (vedi la documentazione sui "
 "webhook). Solo https://; http://localhost è ammesso in fase di sviluppo."
 
-#: lib/vutuv_web/live/registration_live.ex:736
+#: lib/vutuv_web/live/registration_live.ex:722
 #: lib/vutuv_web/templates/settings/privacy.html.heex:63
 #, elixir-autogen, elixir-format
 msgid "Allow AI agents and LLMs to use your profile"
@@ -5381,7 +5380,7 @@ msgstr "Navigazione"
 #: lib/vutuv_web/live/account_activity_live.ex:115
 #: lib/vutuv_web/live/fediverse_followers_live.ex:168
 #: lib/vutuv_web/live/fediverse_following_live.ex:276
-#: lib/vutuv_web/live/registration_live.ex:691
+#: lib/vutuv_web/live/registration_live.ex:677
 #: lib/vutuv_web/live/shell_live.ex:1635
 #: lib/vutuv_web/templates/email/confirm.html.heex:7
 #: lib/vutuv_web/templates/export/index.html.heex:11
@@ -8480,7 +8479,7 @@ msgstr "Troppe importazioni. Riprova tra poco."
 #: lib/vutuv_web/controllers/admin/pref_controller.ex:29
 #: lib/vutuv_web/controllers/admin/user_pref_controller.ex:46
 #: lib/vutuv_web/controllers/admin/user_pref_controller.ex:52
-#: lib/vutuv_web/live/registration_live.ex:564
+#: lib/vutuv_web/live/registration_live.ex:556
 #, elixir-autogen, elixir-format
 msgid "Please check the fields marked in red."
 msgstr "Controlla i campi contrassegnati in rosso."
@@ -9003,7 +9002,7 @@ msgid "Anonymize"
 msgstr "Rendi anonimo"
 
 #: lib/vutuv_web/live/cv_live.ex:167
-#: lib/vutuv_web/live/registration_live.ex:622
+#: lib/vutuv_web/live/registration_live.ex:611
 #, elixir-autogen, elixir-format
 msgid "Email address"
 msgstr "Indirizzo e-mail"
@@ -9982,14 +9981,14 @@ msgstr ""
 "profilo. Puoi reinserirla in qualsiasi momento."
 
 #: lib/vutuv_web/live/directory_search_live.ex:132
-#: lib/vutuv_web/live/registration_live.ex:594
+#: lib/vutuv_web/live/registration_live.ex:583
 #: lib/vutuv_web/views/account_event_text.ex:210
 #, elixir-autogen, elixir-format
 msgid "First name"
 msgstr "Nome"
 
 #: lib/vutuv_web/live/directory_search_live.ex:133
-#: lib/vutuv_web/live/registration_live.ex:607
+#: lib/vutuv_web/live/registration_live.ex:596
 #: lib/vutuv_web/views/account_event_text.ex:211
 #, elixir-autogen, elixir-format
 msgid "Last name"
@@ -10716,7 +10715,7 @@ msgstr ""
 msgid "PHP, JavaScript, Ruby on Rails"
 msgstr "PHP, JavaScript, Ruby on Rails"
 
-#: lib/vutuv_web/live/registration_live.ex:846
+#: lib/vutuv_web/live/registration_live.ex:837
 #: lib/vutuv_web/live/tag_new_live.ex:55
 #, elixir-autogen, elixir-format
 msgid "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
@@ -15203,7 +15202,7 @@ msgstr ""
 "Su vutuv non cambia nulla, e puoi disattivare tutto in qualsiasi momento."
 
 #: lib/vutuv_web/components/fediverse_components.ex:333
-#: lib/vutuv_web/live/registration_live.ex:746
+#: lib/vutuv_web/live/registration_live.ex:732
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:64
 #, elixir-autogen, elixir-format
 msgid "Take part in the Fediverse"
@@ -15342,7 +15341,7 @@ msgstr "(lascia vuoto se non scade)"
 msgid "(leave empty if this is current)"
 msgstr "(lascia vuoto se è ancora in corso)"
 
-#: lib/vutuv_web/live/registration_live.ex:672
+#: lib/vutuv_web/live/registration_live.ex:658
 #: lib/vutuv_web/templates/address/form_en.html.heex:25
 #: lib/vutuv_web/templates/address/form_generic.html.heex:30
 #: lib/vutuv_web/templates/job_reference/form_content.html.heex:18
@@ -17816,6 +17815,7 @@ msgid "Add another tag"
 msgstr "Aggiungi un altro tag"
 
 #: lib/vutuv_web/components/ui.ex:298
+#: lib/vutuv_web/live/registration_live.ex:811
 #, elixir-autogen, elixir-format
 msgid "Remove the tag %{name}"
 msgstr "Rimuovi il tag %{name}"
@@ -21953,7 +21953,7 @@ msgid "Confirm the follow on your own server."
 msgstr "Conferma il follow sul tuo server."
 
 #: lib/vutuv_web/components/welcome_components.ex:361
-#: lib/vutuv_web/live/registration_live.ex:496
+#: lib/vutuv_web/live/registration_live.ex:486
 #: lib/vutuv_web/views/outbound_html.ex:68
 #: lib/vutuv_web/views/outbound_html.ex:81
 #, elixir-autogen, elixir-format
@@ -23685,7 +23685,7 @@ msgstr "Chi vuoi seguire?"
 msgid "Your feed shows what the accounts you follow write. Here are a few to start with; you can unfollow any of them at any time."
 msgstr "Il tuo feed mostra quello che scrivono gli account che segui. Eccone alcuni per iniziare; puoi smettere di seguirli quando vuoi."
 
-#: lib/vutuv_web/live/registration_live.ex:749
+#: lib/vutuv_web/live/registration_live.ex:735
 #, elixir-autogen, elixir-format
 msgid "Your public posts then also appear on {mastodon}, for example."
 msgstr "I tuoi post pubblici compaiono poi anche su {mastodon}, per esempio."
@@ -27009,7 +27009,7 @@ msgstr "Una prenotazione approvata è vincolante e qui non può più essere annu
 
 #: lib/vutuv_web/live/ad_booking_live.ex:661
 #: lib/vutuv_web/live/ad_booking_live.ex:945
-#: lib/vutuv_web/live/registration_live.ex:508
+#: lib/vutuv_web/live/registration_live.ex:498
 #, elixir-autogen, elixir-format
 msgid "Back"
 msgstr "Indietro"
@@ -27636,52 +27636,57 @@ msgstr[1] "vista %{formatted} volte"
 msgid "vutuv shows a single, text-only ad per calendar day: discreet, beside the content on profiles and in the feed, in the style of classic text ads."
 msgstr "vutuv mostra una sola pubblicità di solo testo al giorno: discreta, accanto al contenuto sui profili e nel feed, nello stile delle classiche inserzioni testuali."
 
-#: lib/vutuv_web/live/registration_live.ex:654
+#: lib/vutuv_web/live/registration_live.ex:640
 #, elixir-autogen, elixir-format
 msgid "A few settings"
 msgstr "Qualche impostazione"
 
-#: lib/vutuv_web/live/registration_live.ex:637
+#: lib/vutuv_web/live/registration_live.ex:626
 #, elixir-autogen, elixir-format
 msgid "No password. We send you a PIN by email."
 msgstr "Nessuna password. Ti inviamo un PIN via e-mail."
 
-#: lib/vutuv_web/live/registration_live.ex:854
+#: lib/vutuv_web/live/registration_live.ex:845
 #, elixir-autogen, elixir-format
 msgid "Often chosen:"
 msgstr "Scelti spesso:"
 
-#: lib/vutuv_web/live/registration_live.ex:532
+#: lib/vutuv_web/live/registration_live.ex:522
 #, elixir-autogen, elixir-format
 msgid "Sign-up progress"
 msgstr "Avanzamento della registrazione"
 
-#: lib/vutuv_web/live/registration_live.ex:833
-#, elixir-autogen, elixir-format
-msgid "Type a tag, then Enter"
-msgstr "Scrivi un tag, poi Invio"
-
-#: lib/vutuv_web/live/registration_live.ex:795
+#: lib/vutuv_web/live/registration_live.ex:780
 #, elixir-autogen, elixir-format
 msgid "What are you interested in?"
 msgstr "Cosa ti interessa?"
 
-#: lib/vutuv_web/live/registration_live.ex:800
+#: lib/vutuv_web/live/registration_live.ex:790
 #, elixir-autogen, elixir-format
 msgid "Your tags"
 msgstr "I tuoi tag"
 
-#: lib/vutuv_web/live/registration_live.ex:714
+#: lib/vutuv_web/live/registration_live.ex:700
 #, elixir-autogen, elixir-format
 msgid "The email address {email} is visible on my profile."
 msgstr "L'indirizzo e-mail {email} è visibile sul mio profilo."
 
-#: lib/vutuv_web/live/registration_live.ex:665
+#: lib/vutuv_web/live/registration_live.ex:651
 #, elixir-autogen, elixir-format
 msgid "Everything can be changed later at %{url}"
 msgstr "Puoi cambiare tutto più tardi su %{url}"
 
-#: lib/vutuv_web/live/registration_live.ex:588
+#: lib/vutuv_web/live/registration_live.ex:577
 #, elixir-autogen, elixir-format
 msgid "Your free account, in 60 seconds."
 msgstr "Il tuo account gratuito in 60 secondi."
+
+#: lib/vutuv_web/live/registration_live.ex:907
+#, elixir-autogen, elixir-format
+msgid "Type a tag, then Enter"
+msgstr "Scrivi un tag, poi Invio"
+
+#: lib/vutuv_web/live/registration_live.ex:905
+#, elixir-autogen, elixir-format
+msgid "Your tags (e.g. JavaScript, Cooking, Origami, Cat)"
+msgstr "I tuoi tag (ad esempio JavaScript, Cucina, Origami, Gatti)"

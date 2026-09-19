@@ -304,6 +304,24 @@ defmodule VutuvWeb.RegistrationLiveTest do
   end
 
   describe "the topics step" do
+    # The examples are what says a tag can be a language, a hobby or an animal,
+    # and the box is the only place left that says it: the step's heading asks
+    # the question and there is no label above the field.
+    test "the empty box shows what a tag can be, and gives way once it holds one" do
+      {:ok, view, _html} = open()
+      view = walk_to_topics(view)
+
+      assert ["Your tags (e.g. JavaScript, Cooking, Origami, Cat)"] =
+               view |> render() |> topic_placeholder()
+
+      # Beside a chip that line is clipped by the box edge and offers examples
+      # the member has already answered.
+      assert ["Type a tag, then Enter"] =
+               view
+               |> render_click("add_typed", %{"value" => "Origami"})
+               |> topic_placeholder()
+    end
+
     test "offers the topics most members carry, each with its own tally" do
       tag = tag_with_members("Elixir", 3)
 
@@ -473,7 +491,18 @@ defmodule VutuvWeb.RegistrationLiveTest do
       html = walk_to_topics(view) |> render()
 
       assert html =~ "Wofür interessieren Sie sich?"
+      # Asserted whole: the examples are German words, so a catalog that kept
+      # the English ones would still pass a test that only looked for "Tags".
+      assert ["Ihre Tags (z.B. JavaScript, Kochen, Origami, Katze)"] =
+               topic_placeholder(html)
     end
+  end
+
+  defp topic_placeholder(html) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#signup-topic")
+    |> LazyHTML.attribute("placeholder")
   end
 
   # The account behind an address, the way a test can reach it:

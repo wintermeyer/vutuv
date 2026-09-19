@@ -824,18 +824,6 @@ defmodule VutuvWeb.PageControllerTest do
     |> List.first()
   end
 
-  # True when the <input type="radio" name=name value=value> in `html` is
-  # checked, regardless of attribute order.
-  defp radio_checked?(html, name, value) do
-    regex =
-      ~r/<input(?=[^>]*\btype="radio")(?=[^>]*\bname="#{Regex.escape(name)}")(?=[^>]*\bvalue="#{Regex.escape(value)}")[^>]*>/
-
-    case Regex.run(regex, html) do
-      [tag] -> tag =~ "checked"
-      _ -> false
-    end
-  end
-
   # Fresh, per-call-unique tag names: an async test file must never insert a
   # tag name/slug another async file also mints — the sandboxed unique-index
   # locks would convoy and deadlock (Postgres 40P01).

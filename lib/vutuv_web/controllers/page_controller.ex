@@ -359,7 +359,7 @@ defmodule VutuvWeb.PageController do
 
     public? =
       case user_params do
-        %{"emails" => %{"0" => %{"public?" => value}}} -> value in [true, "true", "1", "on"]
+        %{"emails" => %{"0" => %{"public?" => value}}} -> checked_box?(value)
         _ -> true
       end
 

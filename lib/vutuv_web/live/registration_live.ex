@@ -74,6 +74,7 @@ defmodule VutuvWeb.RegistrationLive do
      |> assign(:step, 1)
      |> assign(:tags, [])
      |> assign(:tag_counts, %{})
+     |> assign(:tag_errors, tag_errors([]))
      |> assign(:suggestions, [])
      |> assign(:errors, [])
      |> assign(:fields, default_fields())
@@ -87,8 +88,8 @@ defmodule VutuvWeb.RegistrationLive do
   # single screen it replaced.
   defp restore(socket, %{"params" => params, "errors" => errors}) when is_map(params) do
     fields =
-      Enum.reduce(socket.assigns.fields, %{}, fn {key, default}, acc ->
-        Map.put(acc, key, restored_field(params, key, default))
+      Map.new(socket.assigns.fields, fn {key, default} ->
+        {key, restored_field(params, key, default)}
       end)
 
     socket
@@ -189,7 +190,7 @@ defmodule VutuvWeb.RegistrationLive do
   def handle_event("next", params, socket) do
     socket = merge_fields(socket, params)
 
-    case validate_step(socket.assigns.step, socket.assigns) do
+    case validate_step(socket.assigns.step, socket.assigns.fields) do
       [] -> {:noreply, advance(socket)}
       errors -> {:noreply, assign(socket, :errors, errors)}
     end
@@ -219,16 +220,11 @@ defmodule VutuvWeb.RegistrationLive do
   @impl true
   def handle_event("add_typed", params, socket) do
     typed = params["value"] || socket.assigns.fields["typed"] || ""
-    added = Tags.parse_tag_names(typed)
     # What the hook left standing in the field, or nothing when Enter or the
     # button got here (both finish the whole field).
     rest = params["rest"] || ""
 
-    {:noreply,
-     socket
-     |> put_tags(socket.assigns.tags ++ added)
-     |> assign(:fields, Map.put(socket.assigns.fields, "typed", rest))
-     |> assign(:errors, [])}
+    {:noreply, socket |> absorb(typed, rest) |> assign(:errors, [])}
   end
 
   @impl true
@@ -249,10 +245,16 @@ defmodule VutuvWeb.RegistrationLive do
       parts ->
         {finished, [rest]} = Enum.split(parts, -1)
 
-        socket
-        |> put_tags(socket.assigns.tags ++ Tags.parse_tag_names(Enum.join(finished, ",")))
-        |> assign(:fields, Map.put(socket.assigns.fields, "typed", String.trim_leading(rest)))
+        absorb(socket, Enum.join(finished, ","), String.trim_leading(rest))
     end
+  end
+
+  # What both ways of finishing a tag do: the names join the chips, and what is
+  # left over stays in the field.
+  defp absorb(socket, finished, rest) do
+    socket
+    |> put_tags(socket.assigns.tags ++ Tags.parse_tag_names(finished))
+    |> assign(:fields, Map.put(socket.assigns.fields, "typed", rest))
   end
 
   defp merge_fields(socket, %{"step" => params}) when is_map(params) do
@@ -284,23 +286,31 @@ defmodule VutuvWeb.RegistrationLive do
   # them may read an absent key as "unticked": `handle_event("next", …)` on
   # step 1 carries no settings at all, and treating that as five unticked boxes
   # would silently clear them.
-  defp step_booleans(2) do
-    ~w(email_public search_engines ai_agents fediverse low_bandwidth)
-  end
+  defp step_booleans(2),
+    do: for({key, value} <- default_fields(), is_boolean(value), do: key)
 
   defp step_booleans(_step), do: []
 
   defp put_tags(socket, names) do
+    # Every entry point that takes a batch owes `canonical_tag_names/1`: it
+    # folds two spellings of one topic into the one the profile will carry, so
+    # the chips, their counts and the three-tag rule all count topics. A
+    # downcase dedupe counted spellings, and showed two chips where the rule
+    # under them saw one ("ROR, Ruby on Rails").
     tags =
       names
       |> Enum.map(&String.trim/1)
       |> Enum.reject(&(&1 == ""))
-      |> Enum.uniq_by(&String.downcase/1)
-      |> Enum.take(Tags.max_user_tags())
+      |> Tags.canonical_tag_names()
 
+    # No cap here: the changeset refuses an overlong list with a sentence, and
+    # `validate_maximum_tags/2` says why — "rejecting the excess here keeps the
+    # form honest instead of silently dropping tags". Taking the first fifteen
+    # is that silent drop, and it also hid the refusal from the rule below.
     socket
     |> assign(:tags, tags)
     |> assign(:tag_counts, Map.new(Tags.member_counts_by_name(tags)))
+    |> assign(:tag_errors, tag_errors(tags))
   end
 
   defp advance(socket) do
@@ -341,18 +351,18 @@ defmodule VutuvWeb.RegistrationLive do
   # Errors are kept as `{field, message}` rather than a flat list of sentences,
   # because the banner promises "the fields marked in red" and a form that
   # cannot say WHICH field is not keeping that promise.
-  defp validate_step(1, assigns) do
+  defp validate_step(1, fields) do
     user_errors =
       %User{}
       |> User.changeset(%{
-        "first_name" => assigns.fields["first_name"],
-        "last_name" => assigns.fields["last_name"]
+        "first_name" => fields["first_name"],
+        "last_name" => fields["last_name"]
       })
       |> errors_of([:first_name, :last_name])
 
     email_errors =
       %Email{}
-      |> Email.changeset(%{"value" => assigns.fields["email"], "email_type" => "Personal"})
+      |> Email.changeset(%{"value" => fields["email"], "email_type" => "Personal"})
       |> errors_of([:value])
       # The address's own field is called `value` on `Email` and `email` on this
       # form; renaming it here keeps the marking in one vocabulary.
@@ -361,17 +371,15 @@ defmodule VutuvWeb.RegistrationLive do
     user_errors ++ email_errors
   end
 
-  defp validate_step(2, assigns) do
+  defp validate_step(2, fields) do
     %User{}
-    |> User.changeset(%{"gender" => assigns.fields["gender"]})
+    |> User.changeset(%{"gender" => fields["gender"]})
     |> errors_of([:gender])
   end
 
-  defp validate_step(_step, _assigns), do: []
+  defp validate_step(_step, _fields), do: []
 
   defp errors_of(changeset, fields) do
-    changeset = Map.put(changeset, :action, :validate)
-
     for {field, {message, opts}} <- changeset.errors,
         field in fields,
         do: {field, ErrorHelpers.translate_error({message, opts})}
@@ -395,19 +403,6 @@ defmodule VutuvWeb.RegistrationLive do
 
   @impl true
   def render(assigns) do
-    assigns =
-      assigns
-      |> assign(:tag_errors, tag_errors(assigns.tags))
-      |> assign(
-        :label_class,
-        "mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300"
-      )
-      |> assign(:check_class, "flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300")
-      |> assign(
-        :hint_class,
-        "mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400"
-      )
-
     ~H"""
     <div id="registration-wizard">
       <.step_bar step={@step} />
@@ -472,14 +467,10 @@ defmodule VutuvWeb.RegistrationLive do
           :if={@step == 1}
           fields={@fields}
           errors={@errors}
-          label_class={@label_class}
         />
         <.step_two
           :if={@step == 2}
           fields={@fields}
-          label_class={@label_class}
-          check_class={@check_class}
-          hint_class={@hint_class}
         />
         <.step_three
           :if={@step == 3}
@@ -488,7 +479,6 @@ defmodule VutuvWeb.RegistrationLive do
           suggestions={@suggestions}
           tag_errors={@tag_errors}
           typed={@fields["typed"]}
-          label_class={@label_class}
         />
 
         <div class="mt-6 space-y-3">
@@ -546,31 +536,30 @@ defmodule VutuvWeb.RegistrationLive do
 
   attr(:errors, :list, required: true)
 
-  # The banner says the app's one sentence for a refused form whenever a field
-  # really is marked, and the reasons under it. A message that belongs to no
-  # field (a rejected submit hands those back) is shown on its own, since
-  # "marked in red" would then be a promise nothing keeps.
+  # `<.error_banner>` is the app's one refused-form strip, warning triangle and
+  # all, so sign-up's does not become a second look for the same thing — and a
+  # failure keeps being signalled by more than colour.
   defp error_list(assigns) do
-    assigns = assign(assigns, :marked?, Enum.any?(assigns.errors, &(elem(&1, 0) != :base)))
-
     ~H"""
-    <div
-      :if={@errors != []}
-      id="registration-errors"
-      class="mb-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-950 dark:text-rose-200"
-      role="alert"
-    >
-      <p :if={@marked?} class="font-semibold">
-        {gettext("Please check the fields marked in red.")}
-      </p>
-      <p :for={message <- messages(@errors)}>{message}</p>
-    </div>
+    <.error_banner :if={@errors != []} id="registration-errors" class="mt-0 mb-4">
+      {Enum.join(banner_sentences(@errors), " ")}
+    </.error_banner>
     """
+  end
+
+  # The app's sentence for a refused form whenever a field really is marked,
+  # then the reasons. A message that belongs to no field (a rejected submit
+  # hands those back) stands alone, since "marked in red" would then be a
+  # promise nothing keeps.
+  defp banner_sentences(errors) do
+    marked? = Enum.any?(errors, &(elem(&1, 0) != :base))
+    lead = if marked?, do: [gettext("Please check the fields marked in red.")], else: []
+
+    lead ++ messages(errors)
   end
 
   attr(:fields, :map, required: true)
   attr(:errors, :list, required: true)
-  attr(:label_class, :string, required: true)
 
   defp step_one(assigns) do
     ~H"""
@@ -591,7 +580,7 @@ defmodule VutuvWeb.RegistrationLive do
 
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <label for="step_first_name" class={@label_class}>{gettext("First name")}</label>
+          <label for="step_first_name" class="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300">{gettext("First name")}</label>
           <input
             type="text"
             id="step_first_name"
@@ -604,7 +593,7 @@ defmodule VutuvWeb.RegistrationLive do
           />
         </div>
         <div>
-          <label for="step_last_name" class={@label_class}>{gettext("Last name")}</label>
+          <label for="step_last_name" class="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300">{gettext("Last name")}</label>
           <input
             type="text"
             id="step_last_name"
@@ -619,7 +608,7 @@ defmodule VutuvWeb.RegistrationLive do
       </div>
 
       <div>
-        <label for="step_email" class={@label_class}>{gettext("Email address")}</label>
+        <label for="step_email" class="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300">{gettext("Email address")}</label>
         <input
           type="email"
           id="step_email"
@@ -642,9 +631,6 @@ defmodule VutuvWeb.RegistrationLive do
   end
 
   attr(:fields, :map, required: true)
-  attr(:label_class, :string, required: true)
-  attr(:check_class, :string, required: true)
-  attr(:hint_class, :string, required: true)
 
   defp step_two(assigns) do
     ~H"""
@@ -667,7 +653,7 @@ defmodule VutuvWeb.RegistrationLive do
       </div>
 
       <fieldset id="signup-gender">
-        <legend class={@label_class}>
+        <legend class="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300">
           {gettext("Gender")}
           <span class="font-normal text-slate-600 dark:text-slate-400">{gettext("(optional)")}</span>
         </legend>
@@ -688,9 +674,9 @@ defmodule VutuvWeb.RegistrationLive do
       <fieldset id="signup-settings">
         <%!-- No "can be changed at any time" line here: the sentence under
               the step's own heading already says it, with the address. --%>
-        <legend class={@label_class}>{gettext("Settings")}</legend>
+        <legend class="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300">{gettext("Settings")}</legend>
         <div class="mt-3 space-y-3">
-          <label class={@check_class}>
+          <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"
               name="step[email_public]"
@@ -717,7 +703,7 @@ defmodule VutuvWeb.RegistrationLive do
               {pre}<strong class="font-semibold">{@fields["email"]}</strong>{post}
             </span>
           </label>
-          <label class={@check_class}>
+          <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"
               name="step[search_engines]"
@@ -726,7 +712,7 @@ defmodule VutuvWeb.RegistrationLive do
             />
             <span>{gettext("Allow search engines to index your profile")} (SEO)</span>
           </label>
-          <label class={@check_class}>
+          <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"
               name="step[ai_agents]"
@@ -735,7 +721,7 @@ defmodule VutuvWeb.RegistrationLive do
             />
             <span>{gettext("Allow AI agents and LLMs to use your profile")} (GEO)</span>
           </label>
-          <label :if={Fediverse.enabled?()} class={@check_class}>
+          <label :if={Fediverse.enabled?()} class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"
               name="step[fediverse]"
@@ -749,7 +735,7 @@ defmodule VutuvWeb.RegistrationLive do
                   gettext("Your public posts then also appear on {mastodon}, for example."),
                   "{mastodon}"
                 ) %>
-              <span class={@hint_class}>
+              <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
                 {mastodon_pre}<a
                   href="https://joinmastodon.org"
                   target="_blank"
@@ -759,7 +745,7 @@ defmodule VutuvWeb.RegistrationLive do
               </span>
             </span>
           </label>
-          <label class={@check_class}>
+          <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"
               name="step[low_bandwidth]"
@@ -768,7 +754,7 @@ defmodule VutuvWeb.RegistrationLive do
             />
             <span>
               {Prefs.label(:low_bandwidth?)}
-              <span class={@hint_class}>{Prefs.hint(:low_bandwidth?)}</span>
+              <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">{Prefs.hint(:low_bandwidth?)}</span>
             </span>
           </label>
         </div>
@@ -782,7 +768,6 @@ defmodule VutuvWeb.RegistrationLive do
   attr(:suggestions, :list, required: true)
   attr(:tag_errors, :list, required: true)
   attr(:typed, :string, required: true)
-  attr(:label_class, :string, required: true)
 
   defp step_three(assigns) do
     ~H"""
@@ -797,10 +782,15 @@ defmodule VutuvWeb.RegistrationLive do
       </div>
 
       <div>
-        <label for="signup-topic" class={@label_class}>{gettext("Your tags")}</label>
-        <%!-- No button beside it: the field names both ways in — Enter in its
-              placeholder, the comma in the line below — and the shared pill box
-              has none anywhere else on the site either. --%>
+        <%!-- The box names itself, and the examples in it say what a tag is
+              here far faster than a definition would: a language, a hobby, an
+              animal. A second visible "Your tags" above the box would say it
+              twice on a screen whose heading already asks the question, so the
+              label stays for a screen reader only — a placeholder is not one. --%>
+        <label for="signup-topic" class="sr-only">{gettext("Your tags")}</label>
+        <%!-- No button beside it: the comma in the placeholder and the line
+              below name the way in, and the shared pill box has none anywhere
+              else on the site either. --%>
         <div class={@tag_errors != [] && "tag-input--error"}>
           <div class="tag-input__box">
             <span :for={name <- @tags} class="tag-input__pill">
@@ -818,7 +808,7 @@ defmodule VutuvWeb.RegistrationLive do
                 phx-value-name={name}
               >
                 <span aria-hidden="true">&times;</span>
-                <span class="sr-only">{gettext("Remove")}</span>
+                <span class="sr-only">{gettext("Remove the tag %{name}", name: name)}</span>
               </button>
             </span>
             <input
@@ -829,8 +819,9 @@ defmodule VutuvWeb.RegistrationLive do
               value={@typed}
               class="tag-input__entry"
               autocomplete="off"
+              phx-debounce="300"
               aria-invalid={@tag_errors != [] && "true"}
-              placeholder={gettext("Type a tag, then Enter")}
+              placeholder={tag_placeholder(@tags)}
               phx-keydown="add_typed"
               phx-key="Enter"
             />
@@ -860,7 +851,7 @@ defmodule VutuvWeb.RegistrationLive do
             type="button"
             phx-click="add_tag"
             phx-value-name={name}
-            class="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:border-brand-600 hover:text-brand-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-brand-400 dark:hover:text-brand-300"
+            class="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:border-brand-600 hover:text-brand-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-brand-400 dark:hover:text-brand-300"
           >
             {name}
             <span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
@@ -905,6 +896,15 @@ defmodule VutuvWeb.RegistrationLive do
     </div>
     """
   end
+
+  # The examples are what the empty box is for — they say what counts as a tag
+  # here (a language, a hobby, an animal) faster than any definition. Beside a
+  # pill they are noise: the line is clipped by the box edge and offers examples
+  # the member has already answered, so a short reminder takes over.
+  defp tag_placeholder([]),
+    do: gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)")
+
+  defp tag_placeholder(_tags), do: gettext("Type a tag, then Enter")
 
   defp count_of(counts, name), do: Map.get(counts, name, 0)
 
