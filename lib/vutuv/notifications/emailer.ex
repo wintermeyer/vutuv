@@ -815,19 +815,61 @@ defmodule Vutuv.Notifications.Emailer do
     |> render_bodies(template_base, "de", %{
       ad: ad,
       booker: booker,
-      booker_email: ad.invoice_email || Accounts.first_email_value(booker),
       billing_address: billing_address(ad),
       period: period,
       days: purchase.days,
       # Everything still waiting, this booking included: the mail that says one
       # arrived is also the only place that says what else is outstanding.
       pending: pending_lines(),
-      price: format_euro_cents(purchase.price_cents),
-      vat_percent: Ads.vat_percent(),
-      gross: format_euro_cents(Ads.gross_cents(purchase.price_cents)),
+      invoice: invoice_facts(ad, purchase, period, Ads.invoice_recipient(ad, booker)),
+      admin_url: "#{public_url()}admin/ads/#{ad.id}",
       url: public_url()
     })
   end
+
+  # Everything the operator needs to write the invoice, in one map so the text
+  # and the HTML body print the same figures rather than each doing the
+  # arithmetic. The list price and the code that reduced it are both named: a
+  # discount is stamped beside the price rather than taken out of it, so a mail
+  # quoting `price_cents` alone would invoice the member for money the code had
+  # already taken off - and `net` is the only figure that is the amount due.
+  defp invoice_facts(ad, purchase, period, recipient) do
+    %{
+      period: period,
+      days: purchase.days,
+      booked_at: booked_at(ad),
+      recipient: recipient,
+      price: format_euro_cents(purchase.price_cents),
+      discount: discount_line(purchase, ad),
+      net: format_euro_cents(purchase.net_cents),
+      vat_percent: Ads.vat_percent(),
+      vat: format_euro_cents(Ads.vat_cents(purchase.net_cents)),
+      gross: format_euro_cents(Ads.gross_cents(purchase.net_cents))
+    }
+  end
+
+  # When the booking was made, in the wall-clock the ad system already runs on
+  # (`Ads.today/0` is the Berlin calendar day). The stored instant is UTC, and
+  # an order date on an invoice two hours off the one the member remembers is
+  # an argument nobody needs.
+  # nil for an ad that was never inserted, which is not only a test shape: the
+  # row is the thing that carries the moment, so a struct without one has no
+  # order date to state and the line is left out rather than guessed at.
+  defp booked_at(%{inserted_at: nil}), do: nil
+
+  defp booked_at(ad) do
+    ad.inserted_at
+    |> DateTime.from_naive!("Etc/UTC")
+    |> Vutuv.BerlinTime.naive()
+    |> Calendar.strftime("%d.%m.%Y, %H:%M Uhr")
+  end
+
+  # What a code took off, and which code it was - nil where none was used, so
+  # the ordinary booking shows no row about a discount it did not get.
+  defp discount_line(%{discount_cents: off}, _ad) when off in [0, nil], do: nil
+
+  defp discount_line(%{discount_cents: off}, ad),
+    do: %{amount: format_euro_cents(off), code: ad.discount_code_id}
 
   # The review queue as the operator reads it, formatted here so both bodies
   # only print it. The operator notices are fixed German, so the date pattern is
@@ -919,7 +961,7 @@ defmodule Vutuv.Notifications.Emailer do
     # "21.09.2026 to 27.09.2026".
     day = in_locale(locale, fn -> ad_period(purchase, region) end)
     price = in_locale(locale, fn -> ad_price_line(purchase) end)
-    vat = in_locale(locale, fn -> AdsDoc.vat_display(purchase.price_cents) end)
+    vat = in_locale(locale, fn -> AdsDoc.vat_display(purchase.net_cents) end)
 
     build_email(user, email, template_base, %{ad: ad, day: day, price: price, vat: vat}, fn ->
       subject.(day, purchase.days)
@@ -939,9 +981,12 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
-  defp ad_price_line(%{days: 1, price_cents: cents}), do: AdsDoc.price_display(cents)
+  # Always the net after any discount code: this is the figure the invoice will
+  # carry, and a receipt quoting the list price would have the member expecting
+  # a different bill from the one the operator writes off the same purchase.
+  defp ad_price_line(%{days: 1, net_cents: cents}), do: AdsDoc.price_display(cents)
 
-  defp ad_price_line(%{price_cents: cents}),
+  defp ad_price_line(%{net_cents: cents}),
     do: gettext("%{amount} € for the whole period (net)", amount: UI.euro_cents(cents))
 
   ## Operator notices (fixed German recipient, no member ever receives them)

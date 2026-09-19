@@ -1,13 +1,10 @@
 <.email_layout preheader="Anzeige zurückgezogen" locale={@locale}>
   <.email_heading>Anzeige zurückgezogen</.email_heading>
-  <.email_panel>
-    <.email_row label="Tage">{@period}<span :if={@days > 1}> ({@days} Tage)</span></.email_row>
-    <.email_row label="Preis">{@price} EUR (netto)</.email_row>
-    <.email_row label="MwSt.">{@vat_percent} % → {@gross} EUR brutto</.email_row>
+  <.email_invoice_facts invoice={@invoice}>
     <.email_row label="Zurückgezogen von">
       @{@booker.username} ({@url}{@booker.username})
     </.email_row>
-  </.email_panel>
+  </.email_invoice_facts>
   <.email_p>
     Die Anzeige war freigeschaltet und wurde vom Buchenden zurückgezogen. Ab heute läuft sie nicht mehr.
   </.email_p>

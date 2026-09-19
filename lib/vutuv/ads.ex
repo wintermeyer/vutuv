@@ -629,6 +629,25 @@ defmodule Vutuv.Ads do
   defp same_purchase(%Ad{id: id, group_id: nil}), do: dynamic([a], a.id == ^id)
   defp same_purchase(%Ad{group_id: group_id}), do: dynamic([a], a.group_id == ^group_id)
 
+  @doc """
+  Where this booking's mail goes: the address the booker named for the invoice
+  in the wizard, their first one otherwise. One function owns the answer,
+  because the operator's notice says where the invoice is being sent and the
+  booker's receipt is what arrives there - two answers to that question would
+  have the operator writing to an address the member never heard from.
+
+  Checked against the member's own addresses here as well as on the way in
+  (`invoice_email/2`), since an address that has left the account in the
+  meantime is no longer theirs to be written to.
+  """
+  def invoice_recipient(%Ad{} = ad, %User{} = user) do
+    owned = Accounts.list_email_values(user)
+
+    if ad.invoice_email in owned, do: ad.invoice_email, else: List.first(owned)
+  end
+
+  def invoice_recipient(_ad, nil), do: nil
+
   # A mail about their booking to the booker, off the request path. The
   # account may be gone (`user_id` is nilified) or have no address.
   defp tell_booker(%Ad{user_id: nil}, _build), do: :ok
@@ -636,8 +655,15 @@ defmodule Vutuv.Ads do
 
   defp tell_booker(nil, _ad, _build), do: :ok
 
-  defp tell_booker(%User{} = user, ad, build),
-    do: Emailer.deliver_to_member(user, &build.(&1, &2, ad))
+  defp tell_booker(%User{} = user, ad, build) do
+    # Not `deliver_to_member/2`: that one writes to the member's first address,
+    # and the whole point of the wizard's radio group is that a member with
+    # several addresses says which one this booking belongs to.
+    case invoice_recipient(ad, user) do
+      nil -> :ok
+      address -> Emailer.deliver_async(fn -> user |> build.(address, ad) |> Emailer.deliver() end)
+    end
+  end
 
   @doc "One more card of `banner` seen (a booked ad; the house ad counts nothing)."
   def count_view({:ad, %Ad{id: id}}), do: bump(id, :views_count)
@@ -695,13 +721,14 @@ defmodule Vutuv.Ads do
     |> Enum.map(fn {_key, ads} ->
       sorted = Enum.sort_by(ads, & &1.day, Date)
 
-      %{
+      payable(%{
         ad: hd(sorted),
         days: length(sorted),
         first_day: hd(sorted).day,
         last_day: List.last(sorted).day,
-        price_cents: Enum.sum(Enum.map(sorted, & &1.price_cents))
-      }
+        price_cents: Enum.sum(Enum.map(sorted, & &1.price_cents)),
+        discount_cents: Enum.sum(Enum.map(sorted, &(&1.discount_cents || 0)))
+      })
     end)
     |> Enum.sort_by(& &1.first_day, Date)
   end
@@ -715,12 +742,24 @@ defmodule Vutuv.Ads do
 
   @doc """
   The purchase this ad belongs to, in one query: its first and last day, how
-  many days it runs and what the whole thing cost. Every mail about a booking
-  reads it, because a block's rows each carry only their share of the price and
-  the day they happen to fall on - neither of which is what the invoice says.
+  many days it runs, what the whole thing lists at, what a code took off it and
+  what is therefore payable. Every mail about a booking reads it, because a
+  block's rows each carry only their share of the price and the day they happen
+  to fall on - neither of which is what the invoice says.
+
+  `discount_cents` is stamped beside the price rather than subtracted from it
+  (a deleted code must not rewrite an invoice), so `net_cents` is the only
+  figure anybody may quote as the amount due.
   """
-  def purchase(%Ad{group_id: nil} = ad),
-    do: %{days: 1, first_day: ad.day, last_day: ad.day, price_cents: ad.price_cents}
+  def purchase(%Ad{group_id: nil} = ad) do
+    payable(%{
+      days: 1,
+      first_day: ad.day,
+      last_day: ad.day,
+      price_cents: ad.price_cents,
+      discount_cents: ad.discount_cents || 0
+    })
+  end
 
   def purchase(%Ad{group_id: group_id}) do
     from(a in Ad,
@@ -729,11 +768,16 @@ defmodule Vutuv.Ads do
         days: count(a.id),
         first_day: min(a.day),
         last_day: max(a.day),
-        price_cents: sum(a.price_cents)
+        price_cents: sum(a.price_cents),
+        discount_cents: sum(a.discount_cents)
       }
     )
     |> Repo.one()
+    |> payable()
   end
+
+  defp payable(%{price_cents: price, discount_cents: off} = purchase),
+    do: Map.put(purchase, :net_cents, price - off)
 
   @doc """
   The admin dashboard's upcoming bookings (today included) in serving order,

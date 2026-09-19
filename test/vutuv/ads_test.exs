@@ -484,6 +484,25 @@ defmodule Vutuv.AdsTest do
       assert mail.text_body =~ "stornieren"
     end
 
+    test "the receipt goes to the address the booker named for the invoice" do
+      user = booker()
+      insert(:email, user: user, value: "rechnung@acme.example")
+      chosen = "rechnung@acme.example"
+      refute chosen == Vutuv.Accounts.first_email_value(user)
+
+      assert {:ok, _ad} =
+               Ads.book_ad(user, Map.put(@valid_attrs, "invoice_email", chosen))
+
+      mails = flush_emails()
+      assert [receipt] = Enum.reject(mails, &(&1.to == [{"Stefan Wintermeyer", @operator}]))
+      assert [{_, ^chosen}] = receipt.to
+
+      # And the operator is told the same address, so the invoice and the
+      # receipt cannot land in two different mailboxes.
+      assert [operator] = mails_to(mails, @operator)
+      assert operator.text_body =~ chosen
+    end
+
     test "a booker with no address to write to only reaches the operator" do
       user = insert_activated_user()
       assert {:ok, _ad} = Ads.book_ad(user, @valid_attrs)

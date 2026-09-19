@@ -1,9 +1,7 @@
 Anzeige zurückgezogen
 =====================
 
-Tage:   <%= @period %><%= if @days > 1, do: " (#{@days} Tage)" %>
-Preis:  <%= @price %> EUR (netto)
-MwSt.:  <%= @vat_percent %> % -> <%= @gross %> EUR brutto
+<%= render "_ad_invoice_de.text", %{invoice: @invoice} %>
 
 Zurückgezogen von @<%= @booker.username %> (<%= @url %><%= @booker.username %>),
 nachdem die Anzeige freigeschaltet war. Ab heute läuft sie nicht mehr.

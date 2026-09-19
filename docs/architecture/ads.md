@@ -101,8 +101,12 @@ a stated line for one). That choice is re-checked against
 username-rename confirmation uses, and for the same reason: otherwise "where
 should we mail this" is a form field pointing at anybody's mailbox. A value that
 is not the member's own falls back to their first address, so a tampered one can
-only ever reach them. The operator mail, which the invoice is written from,
-names it.
+only ever reach them. **Every mail about the booking goes there**, the operator's
+notice naming it and the member's own receipt arriving at it, both through
+`invoice_recipient/2` — which re-checks it a second time on the way out, since
+an address that has left the account in the meantime is no longer theirs to be
+written to. Two answers to "which address" would have the operator writing to a
+mailbox the member never heard from.
 
 The calendar shows **this month and the next three**
 (`last_bookable_day/0`) and works in the unit being bought: with a week chosen,
@@ -192,7 +196,17 @@ unique index on `day` covers only the standing bookings
 taken" question goes through the same query. The mails to the booker come in
 their language (`ad_booked`, `ad_approved`, `ad_rejected`, `ad_cancelled`);
 the operator's three (`ad_booking`, `ad_cancellation`, `ad_withdrawal`) are
-German. The booking notice ends with **everything still waiting for approval**
+German. All three open with the facts an invoice is written from — period,
+booking date (Berlin wall-clock, the same day boundary `today/0` uses),
+recipient, and the money — rendered once by `invoice_facts/4` and printed by
+both bodies. **`net_cents` is the only figure that is the amount due**: a
+discount is stamped beside the price rather than taken out of it
+(`purchase/1`), so a mail quoting `price_cents` would invoice a member for
+money their code had already taken off, and the booker's receipt would promise
+a different bill from the one the operator writes. Where a code applied, the
+list price and the code's own id are named beside it.
+
+The booking notice ends with **everything still waiting for approval**
 (`pending_purchases/0`, soonest first, one line per purchase rather than per
 day): the mail that says one ad arrived is then also the only place that says
 what else is outstanding, so an admin who reads one away still knows what came

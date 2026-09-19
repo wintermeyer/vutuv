@@ -1,0 +1,8 @@
+Zeitraum:     <%= @invoice.period %><%= if @invoice.days > 1, do: " (#{@invoice.days} Tage)" %>
+<%= if @invoice.booked_at do %>Gebucht am:   <%= @invoice.booked_at %>
+<% end %>Rechnung an:  <%= @invoice.recipient %>
+<%= if @invoice.discount do %>Listenpreis:  <%= @invoice.price %> EUR
+Rabatt:       -<%= @invoice.discount.amount %> EUR (Code <%= @invoice.discount.code %>)
+<% end %>Netto:        <%= @invoice.net %> EUR
+<%= if @invoice.vat_percent > 0 do %>MwSt. (<%= @invoice.vat_percent %> %): <%= @invoice.vat %> EUR
+Brutto:       <%= @invoice.gross %> EUR<% end %>

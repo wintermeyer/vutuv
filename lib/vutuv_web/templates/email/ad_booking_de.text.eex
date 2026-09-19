@@ -1,12 +1,10 @@
 Neue Anzeigenbuchung auf vutuv
 ==============================
 
-Tage:   <%= @period %><%= if @days > 1, do: " (#{@days} Tage)" %>
-Preis:  <%= @price %> EUR (netto), Zahlung per Rechnung
-MwSt.:  <%= @vat_percent %> % -> <%= @gross %> EUR brutto
-
-Gebucht von @<%= @booker.username %> (<%= @url %><%= @booker.username %>)
-Rechnung an: <%= @booker_email %>
+Für die Rechnung
+----------------
+<%= render "_ad_invoice_de.text", %{invoice: @invoice} %>
+Gebucht von:  @<%= @booker.username %> (<%= @url %><%= @booker.username %>)
 
 Rechnungsadresse
 ----------------
@@ -19,7 +17,7 @@ Text:  <%= @ad.body %>
 Link:  <%= @ad.url %>
 
 Die Anzeige ist noch NICHT freigeschaltet. Bitte prüfen (familienfreundlich?)
-und freischalten: <%= @url %>admin/ads
+und freischalten: <%= @admin_url %>
 
 Wartet insgesamt auf Freischaltung
 ----------------------------------

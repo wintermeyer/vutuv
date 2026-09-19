@@ -198,6 +198,34 @@ defmodule Vutuv.Ads.DiscountsTest do
       assert ad.discount_code_id == nil
     end
 
+    test "both mails invoice the discounted amount, and the operator sees the code" do
+      user = booker()
+      code = code()
+
+      attrs =
+        @booking
+        |> Map.put("day", Date.to_iso8601(Ads.next_available_day()))
+        |> Map.put("discount_code", code.id)
+
+      assert {:ok, _ad} = Ads.book_ad(user, attrs, 7)
+      mails = flush_emails()
+      operator = Enum.find(mails, &(&1.subject =~ "Anzeigenbuchung"))
+      receipt = Enum.find(mails, &(&1 != operator))
+
+      # 2.000,00 list, 20 % off, so 1.600,00 net and 1.904,00 gross - the
+      # figures the operator types into the invoice.
+      assert operator.text_body =~ "Listenpreis:  2.000,00 EUR"
+      assert operator.text_body =~ "Rabatt:       -400,00 EUR (Code #{code.id})"
+      assert operator.text_body =~ "Netto:        1.600,00 EUR"
+      assert operator.text_body =~ "Brutto:       1.904,00 EUR"
+      assert operator.html_body =~ "1.600,00 EUR"
+
+      # And the member is quoted the same amount, never the list price (this
+      # booker reads English, so their receipt groups the other way round).
+      assert receipt.text_body =~ "1,600.00"
+      refute receipt.text_body =~ "2,000.00"
+    end
+
     test "a hundred percent books at nothing and still needs approval" do
       user = booker()
       assert {:ok, ad} = book(user, code(%{"percent_off" => 100}).id)
