@@ -604,9 +604,12 @@ defmodule VutuvWeb.PageControllerTest do
 
     # The failed re-render marks the field itself, not just the page: the
     # errored input turns red (aria-invalid for assistive tech), the specific
-    # error replaces the generic hint (never both, they'd say the same thing
-    # twice), and the banner points at the red marking instead of apologizing
-    # about a "validation error".
+    # error is named, and the banner points at the red marking instead of
+    # apologizing about a "validation error".
+    #
+    # The tags field is the shared pill box now, so its red comes from
+    # `.tag-input--error` in `components.css` rather than a utility class —
+    # which is also what a classic `.editform` page marks it with.
     test "a rejected sign-up marks the tag field itself", %{conn: conn} do
       attrs =
         Map.merge(valid_attrs(), %{
@@ -618,10 +621,8 @@ defmodule VutuvWeb.PageControllerTest do
 
       assert body =~ "Please check the fields marked in red."
       assert body =~ ~s(aria-invalid="true")
-      assert body =~ "border-red-400"
-      # The hint yields to the specific error instead of stacking under it.
+      assert body =~ "tag-input--error"
       assert body =~ "Please enter at least 3 different tags."
-      refute body =~ "At least three tags, separated by commas."
     end
 
     # The topics field and its hint are on step 3 now, so what a fresh landing

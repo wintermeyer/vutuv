@@ -655,11 +655,10 @@ defmodule VutuvWeb.RegistrationLive do
           {gettext("A few settings")}
         </h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          <%!-- The path is named rather than linked: a visitor with no account
-                yet cannot open it, and a dead link on the one page that is
-                supposed to make joining easy is worse than a word. It is the
-                same on every installation, so it needs no seam. --%>
-          {gettext("Everything can be changed later under /settings.")}
+          <%!-- Named, not linked: nobody here has an account yet, so the
+                link would lead to a login wall. The address comes from the
+                endpoint, so another installation reads its own. --%>
+          {gettext("Everything can be changed later at %{url}.", url: url(~p"/settings"))}
         </p>
       </div>
 
@@ -683,8 +682,9 @@ defmodule VutuvWeb.RegistrationLive do
       </fieldset>
 
       <fieldset id="signup-settings">
+        <%!-- No "can be changed at any time" line here: the sentence under
+              the step's own heading already says it, with the address. --%>
         <legend class={@label_class}>{gettext("Settings")}</legend>
-        <p class={@hint_class}>{gettext("Can be changed at any time.")}</p>
         <div class="mt-3 space-y-3">
           <label class={@check_class}>
             <input
@@ -771,28 +771,8 @@ defmodule VutuvWeb.RegistrationLive do
           {gettext("What are you interested in?")}
         </h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {gettext("Three tags are enough. They decide who finds you and what your feed shows.")}
+          {gettext("Three tags are enough.")}
         </p>
-      </div>
-
-      <div :if={@tags != []} class="flex flex-wrap gap-1.5">
-        <button
-          :for={name <- @tags}
-          type="button"
-          phx-click="remove_tag"
-          phx-value-name={name}
-          class="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-brand-600 bg-brand-100 px-3 text-sm font-semibold text-brand-700 hover:bg-brand-200 dark:border-brand-400 dark:bg-brand-800/60 dark:text-brand-100"
-        >
-          {name}
-          <span
-            :if={count_of(@tag_counts, name) > 0}
-            class="rounded-full bg-brand-200 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-brand-800 dark:bg-brand-700 dark:text-brand-100"
-          >
-            {compact_count(count_of(@tag_counts, name))}
-          </span>
-          <span aria-hidden="true" class="text-base leading-none">&times;</span>
-          <span class="sr-only">{gettext("Remove")}</span>
-        </button>
       </div>
 
       <%!-- The reach, and the reason this step is worth a screen of its own: it
@@ -822,28 +802,58 @@ defmodule VutuvWeb.RegistrationLive do
       <div>
         <label for="signup-topic" class={@label_class}>{gettext("Your tags")}</label>
         <div class="flex gap-2">
-          <input
-            type="text"
-            id="signup-topic"
-            phx-hook="TagComma"
-            name="step[typed]"
-            value={@typed}
-            class={input_class(@tag_errors != [])}
-            autocomplete="off"
-            aria-invalid={@tag_errors != [] && "true"}
-            placeholder={gettext("Type a tag, then Enter")}
-            phx-keydown="add_typed"
-            phx-key="Enter"
-          />
-          <%!-- Its own msgid, deliberately: the shared "Add" is translated
-                "Eintrag hinzufügen" for the profile's lists, which reads as
-                adding a record rather than a topic. --%>
+          <div class={["min-w-0 flex-1", @tag_errors != [] && "tag-input--error"]}>
+            <div class="tag-input__box">
+              <span :for={name <- @tags} class="tag-input__pill">
+                <span class="tag-input__name">{name}</span>
+                <span
+                  :if={count_of(@tag_counts, name) > 0}
+                  class="rounded-full bg-brand-100 px-1.5 text-xs font-semibold tabular-nums text-brand-700 dark:bg-brand-800 dark:text-brand-100"
+                >
+                  {compact_count(count_of(@tag_counts, name))}
+                </span>
+                <button
+                  type="button"
+                  class="tag-input__remove"
+                  phx-click="remove_tag"
+                  phx-value-name={name}
+                >
+                  <span aria-hidden="true">&times;</span>
+                  <span class="sr-only">{gettext("Remove")}</span>
+                </button>
+              </span>
+              <input
+                type="text"
+                id="signup-topic"
+                phx-hook="TagComma"
+                name="step[typed]"
+                value={@typed}
+                class="tag-input__entry"
+                autocomplete="off"
+                aria-invalid={@tag_errors != [] && "true"}
+                placeholder={gettext("Type a tag, then Enter")}
+                phx-keydown="add_typed"
+                phx-key="Enter"
+              />
+            </div>
+          </div>
+          <%!-- Just the verb: what is being added is the thing the cursor is
+                already in, and the shared "Add" msgid is translated "Eintrag
+                hinzufügen" for the profile's lists. --%>
           <.button type="button" variant="secondary" phx-click="add_typed" class="shrink-0">
             {gettext("Add tag")}
           </.button>
         </div>
         <p :if={@tag_errors != []} class="mt-1 text-sm text-rose-700 dark:text-rose-300">
           {Enum.join(messages(@tag_errors), " ")}
+        </p>
+        <%!-- Shown beside the error rather than instead of it: the red line says
+              how many are still missing, this says how to type them, and the
+              two are different questions. --%>
+        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
+          )}
         </p>
       </div>
 

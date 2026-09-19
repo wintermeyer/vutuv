@@ -74,7 +74,10 @@ defmodule VutuvWeb.RegistrationFediverseTest do
       body = settings_step()
 
       assert body =~ "Your public posts then also appear on"
-      assert body =~ "Can be changed at any time."
+      # That it can be taken back is said once for the whole step, under its
+      # heading and with the address, rather than a second time under this
+      # group's legend (Stefan, 2026-09-19).
+      assert body =~ "Everything can be changed later at"
     end
 
     # The word is the one thing in that sentence a first-time visitor may not
@@ -100,7 +103,7 @@ defmodule VutuvWeb.RegistrationFediverseTest do
 
       assert body =~ "Am Fediverse teilnehmen"
       assert body =~ "Ihre öffentlichen Beiträge erscheinen dann auch"
-      assert body =~ "Können jederzeit geändert werden."
+      assert body =~ "Alles ist jederzeit änderbar unter"
     end
 
     # An intranet installation (FEDIVERSE_ENABLED=false) federates nothing, so

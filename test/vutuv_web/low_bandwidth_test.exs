@@ -73,9 +73,11 @@ defmodule VutuvWeb.LowBandwidthTest do
 
       assert body =~ "Datensparmodus"
       assert body =~ "Für Mitglieder mit langsamer Internetanbindung"
-      # It sits in the one settings group now, under the line that covers every
-      # box on the form; there is no "Bandbreite" legend of its own any more.
-      assert body =~ "Können jederzeit geändert werden."
+      # It sits in the one settings group now; that everything here can be
+      # changed later is said once, under the step's own heading, with the
+      # address (Stefan, 2026-09-19) — so there is no line under the legend to
+      # assert, and no "Bandbreite" legend of its own any more.
+      assert body =~ "Einstellungen"
       # The English must not leak through beside it.
       refute body =~ "Low-bandwidth mode"
       # And not the social sense of "Connection", which is what the obvious
