@@ -115,6 +115,16 @@ if config_env() == :prod do
     config :vutuv, :post_edit_window_minutes, String.to_integer(minutes)
   end
 
+  # The daily text-ad system, off unless an installation asks for it
+  # (ADS_ENABLED=true). An env var rather than the shipped default, because the
+  # prices are ours (`Vutuv.Ads.tiers/0`) and the operator notices are fixed
+  # German: turning it on for everybody would hand each installation a shop
+  # billing in euros at vutuv.de's rates. Only "true" counts - a typo leaves it
+  # off, which is the safe way round for a switch that starts charging people.
+  if System.get_env("ADS_ENABLED") == "true" do
+    config :vutuv, :ads_enabled, true
+  end
+
   # The VAT rate on ad prices, in percent (default 19, the German rate; see
   # config/config.exs). Every quoted price is net, so an installation invoicing
   # elsewhere sets its own rate, and 0 drops the VAT line entirely.

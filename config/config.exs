@@ -364,9 +364,11 @@ config :vutuv, :welcome_suggestions, %{
 }
 
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
-# Off for now: no ad serves, the public /system/ads flow and the admin review
-# dashboard 404. "ads" stays a reserved username slug either way, so the
-# handle is kept free for when the system is switched back on.
+# Off unless an installation asks for it with ADS_ENABLED=true (runtime.exs):
+# no ad serves, the public /system/ads flow and the admin review dashboard 404.
+# "ads" stays a reserved username slug either way, so the handle is kept free.
+# The shipped default stays off because the prices and the German operator
+# notices are ours, not every installation's.
 config :vutuv, :ads_enabled, false
 
 # The VAT rate the operator adds on top of every quoted ad price, in percent
