@@ -22,12 +22,22 @@ defmodule VutuvWeb.AdBookingLive do
   days behind it are free (`Vutuv.Ads.free_block?/3`), and picking it marks all
   seven. Hovering marks them too, without a round trip, which is what makes a
   free stretch findable by eye (`assets/js/ad_calendar.js`).
+
+  **All three steps live in this process, so a reload used to empty them** —
+  and on a phone the commonest reload is a stray pull at the top of the page,
+  which cost a buyer their finished ad and invoice address in one drag. What
+  the wizard holds is therefore mirrored into the browser (`data-draft` below,
+  `assets/js/ad_draft.js`) and handed back through `restore-draft`; the gesture
+  itself is switched off while the page is open. The draft arrives from the
+  client, so `apply_draft/2` believes none of it — see `docs/architecture/ads.md`
+  for the whole arrangement and why the copy stays on the member's device.
   """
 
   use VutuvWeb, :live_view
 
   import VutuvWeb.ErrorHelpers, only: [error_tag: 2]
 
+  alias Phoenix.HTML.Form
   alias Vutuv.Accounts
   alias Vutuv.Ads
   alias Vutuv.Ads.Ad
@@ -42,6 +52,16 @@ defmodule VutuvWeb.AdBookingLive do
   on_mount({InitAssigns, :require_login})
 
   @steps [:text, :period, :billing]
+
+  # The invoice fields, spelled once and kept in both shapes they are needed in:
+  # atoms for the record and the form, strings for the params and the draft.
+  # Paired at compile time, because the draft map is built on every render.
+  @billing_pairs Enum.map(
+                   ~w(billing_name billing_company billing_street billing_zip_code billing_city
+                      billing_country vat_id)a,
+                   &{&1, Atom.to_string(&1)}
+                 )
+  @billing_keys Enum.map(@billing_pairs, fn {_field, key} -> key end)
 
   @impl true
   def mount(_params, _session, socket) do
@@ -65,6 +85,7 @@ defmodule VutuvWeb.AdBookingLive do
     |> assign(:start_day, nil)
     |> assign(:booking_error, nil)
     |> assign(:saved_notice, nil)
+    |> assign(:restored?, false)
     |> assign(:creatives, Ads.list_creatives(user))
     |> assign(:creative, nil)
     |> assign_text_form(%{})
@@ -174,11 +195,9 @@ defmodule VutuvWeb.AdBookingLive do
   end
 
   def handle_event("pick-day", %{"day" => day}, socket) do
-    with {:ok, day} <- Date.from_iso8601(day),
-         true <- start_fits?(socket, day, socket.assigns.days) do
-      {:noreply, assign(socket, :start_day, day)}
-    else
-      _unavailable -> {:noreply, socket}
+    case usable_day(socket, day) do
+      {:ok, day} -> {:noreply, assign(socket, :start_day, day)}
+      :error -> {:noreply, socket}
     end
   end
 
@@ -221,6 +240,116 @@ defmodule VutuvWeb.AdBookingLive do
   def handle_event("back", %{"to" => step}, socket) do
     step = String.to_existing_atom(step)
     {:noreply, if(step in @steps, do: assign(socket, :step, step), else: socket)}
+  end
+
+  ## The draft the browser kept
+
+  # Handed over by `assets/js/ad_draft.js` after a reload or a reconnect, and
+  # read the way any other form input is read: whose it is decides whether it
+  # is looked at at all, and every value in it is put through the same check it
+  # went through the first time.
+  def handle_event("restore-draft", draft, socket) when is_map(draft) do
+    {:noreply, restore_draft(socket, draft)}
+  end
+
+  # Starting over has to reach the browser's copy as well, or the next reload
+  # brings back exactly what they just threw away.
+  def handle_event("discard-draft", _params, socket) do
+    {:noreply, socket |> start_wizard() |> push_event("ad-draft:clear", %{})}
+  end
+
+  defp restore_draft(%{assigns: %{current_user: user}} = socket, %{"user" => id} = draft)
+       when is_binary(id) do
+    if id == user.id, do: apply_draft(socket, draft), else: socket
+  end
+
+  defp restore_draft(socket, _draft), do: socket
+
+  defp apply_draft(socket, draft) do
+    billing = if is_map(draft["billing"]), do: draft["billing"], else: %{}
+
+    socket =
+      socket
+      |> assign_text_form(Map.new(~w(title body url), &{&1, text_value(draft, &1)}))
+      |> assign(:days, restored_days(draft["days"]))
+      |> assign(:restored?, true)
+      |> assign_billing_form(Map.new(@billing_keys, &{&1, text_value(billing, &1)}))
+      |> assign(:invoice_email, chosen_address(draft, socket.assigns.addresses))
+      |> assign_discount(text_value(draft, "discount_code"))
+
+    # The day is read against today's calendar, not the one the draft was
+    # written on: a stretch somebody else booked in the meantime is simply
+    # gone, and the step follows it.
+    start_day =
+      case usable_day(socket, draft["start_day"]) do
+        {:ok, day} -> day
+        :error -> nil
+      end
+
+    socket
+    |> assign(:start_day, start_day)
+    |> assign(:step, restored_step(socket, draft["step"], start_day))
+  end
+
+  defp text_value(draft, key) do
+    case draft[key] do
+      value when is_binary(value) -> value
+      _missing -> ""
+    end
+  end
+
+  defp restored_days(days) when is_integer(days) do
+    if Ads.tier(days), do: days, else: 1
+  end
+
+  defp restored_days(_days), do: 1
+
+  # The step is the draft's suggestion, never its decision: nobody may land on
+  # the invoice without days, or on the calendar with an ad that does not pass.
+  # So the furthest step what came back has actually earned is the one shown.
+  defp restored_step(socket, step, start_day) do
+    cond do
+      not socket.assigns.text_form.source.valid? -> :text
+      step == "billing" and start_day -> :billing
+      step in ~w(period billing) -> :period
+      true -> :text
+    end
+  end
+
+  # What the browser is asked to keep. Empty while nothing has been written -
+  # which is also what a reconnect's fresh mount renders, so the hook can take
+  # an empty one as "nothing to say" rather than as "forget what you have".
+  #
+  # An attribute rather than a `push_event` from each handler, although HEEx
+  # escapes every quote in the JSON and a filled draft therefore travels at
+  # about 900 bytes instead of 590: one rendered value cannot drift from the
+  # wizard's state, while thirteen handlers each remembering to push can, and
+  # this page is opened to buy something once, not read all day.
+  defp draft_attr(assigns) do
+    if pristine?(assigns), do: "", else: Jason.encode!(draft_map(assigns))
+  end
+
+  defp pristine?(%{step: :text, start_day: nil, text: text}),
+    do: text.title == "" and text.body == "" and text.url == ""
+
+  defp pristine?(_assigns), do: false
+
+  defp draft_map(assigns) do
+    %{
+      "user" => assigns.current_user.id,
+      "step" => Atom.to_string(assigns.step),
+      "title" => assigns.text.title,
+      "body" => assigns.text.body,
+      "url" => assigns.text.url,
+      "days" => assigns.days,
+      "start_day" => assigns.start_day && Date.to_iso8601(assigns.start_day),
+      "discount_code" => assigns.discount_code,
+      "invoice_email" => assigns.invoice_email,
+      "billing" =>
+        Map.new(@billing_pairs, fn {field, key} ->
+          {key, to_string(Form.input_value(assigns.billing_form, field))}
+        end)
+    }
   end
 
   ## Assign helpers
@@ -313,11 +442,7 @@ defmodule VutuvWeb.AdBookingLive do
   defp previous_billing(user) do
     case Ads.user_bookings(user) do
       [%{ad: ad} | _rest] ->
-        Map.new(
-          ~w(billing_name billing_company billing_street billing_zip_code billing_city
-             billing_country vat_id)a,
-          fn field -> {Atom.to_string(field), Map.get(ad, field) || ""} end
-        )
+        Map.new(@billing_pairs, fn {field, key} -> {key, Map.get(ad, field) || ""} end)
 
       [] ->
         %{}
@@ -335,12 +460,25 @@ defmodule VutuvWeb.AdBookingLive do
       Ads.free_block?(day, days, socket.assigns.taken)
   end
 
+  # One reading of "may this day start the block", because the calendar's own
+  # press and a draft coming back ask the same question — and that answer has
+  # already moved once (a length change re-asks it).
+  defp usable_day(socket, day) when is_binary(day) do
+    with {:ok, date} <- Date.from_iso8601(day),
+         true <- start_fits?(socket, date, socket.assigns.days) do
+      {:ok, date}
+    else
+      _unavailable -> :error
+    end
+  end
+
+  defp usable_day(_socket, _day), do: :error
+
   defp booking_attrs(socket, params) do
     text = socket.assigns.text
 
     params
-    |> Map.take(~w(billing_name billing_company billing_street billing_zip_code billing_city
-         billing_country vat_id invoice_email))
+    |> Map.take(["invoice_email" | @billing_keys])
     |> Map.merge(%{
       "day" => Date.to_iso8601(socket.assigns.start_day),
       "discount_code" => socket.assigns.discount_code,
@@ -386,9 +524,34 @@ defmodule VutuvWeb.AdBookingLive do
 
   @impl true
   def render(assigns) do
+    assigns = assign(assigns, :draft, draft_attr(assigns))
+
     ~H"""
     <div class="mx-auto max-w-5xl py-6">
       <.step_bar step={@step} />
+
+      <%!-- The wizard's state, for the browser to keep while the page is open.
+      It carries no control of its own: `assets/js/ad_draft.js` reads it, and
+      hands it back through `restore-draft` after a reload. --%>
+      <div id="ad-draft" phx-hook="AdDraft" data-draft={@draft} hidden></div>
+
+      <%!-- The composer says this in the same words and the same tint when a
+      post draft comes back (`PostLive.Composer`); one sentence for "your
+      writing survived" is one sentence a member has to learn. --%>
+      <p
+        :if={@restored?}
+        id="draft-restored"
+        class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-800/60 dark:text-brand-100"
+      >
+        {gettext("Picked up where you left off.")}
+        <button
+          type="button"
+          phx-click="discard-draft"
+          class="font-semibold underline underline-offset-2"
+        >
+          {gettext("Start over")}
+        </button>
+      </p>
 
       <.text_step :if={@step == :text} {assigns} />
       <.period_step :if={@step == :period} {assigns} />
@@ -990,7 +1153,7 @@ defmodule VutuvWeb.AdBookingLive do
         type="text"
         id={"ad-#{@field}"}
         name={"ad[#{@field}]"}
-        value={Phoenix.HTML.Form.input_value(@form, @field)}
+        value={Form.input_value(@form, @field)}
         class={input_class(@form, @field)}
       />
       {error_tag(@form, @field)}

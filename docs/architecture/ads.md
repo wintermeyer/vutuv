@@ -97,6 +97,39 @@ invoice; a test pins that. Both meet the same rules, because
 `Vutuv.Ads.Ad.validate_text/1` is the one owner of them — a library that lets
 you save what the booking then refuses is the one thing it must not do.
 
+All three steps live in the LiveView process, so a reload used to empty them —
+and on a phone the commonest reload is a **stray pull at the top of the page**,
+which cost a buyer their finished ad and invoice address in one drag. Two
+answers, because the gesture and the loss are separate problems. The wizard
+marks `<html>` with `data-no-pull-refresh` while it is open
+(`assets/js/ad_draft.js`, the `overscroll-behavior-y` rule in
+`components.css`), since there is nothing on this page a refresh could fetch.
+And the state it holds is mirrored into `data-draft` on every patch, which the
+same hook keeps in **sessionStorage** and hands back through `restore-draft`
+after a reload or a reconnect — the draft carries an invoice address, so the
+one copy of it stays on the member's own device and dies with the tab. What
+comes back is read as any other client input: the text through the changeset,
+the day only if it is still free (otherwise they land on the calendar), the
+invoice address through the same allow-list, the code priced again, and the
+step capped at what the restored ad has earned. It also **names whose writing
+it is** and is dropped when that is not the current member, because two people
+share a tab. The draft ends when the wizard is taken off a page that goes on
+living — the booking's own navigation, a live patch — while a document on its
+way out keeps it, which is what makes a reload restore rather than erase; the
+notice's "Start over" clears it through `ad-draft:clear`.
+
+**This is the third answer in the tree to "what happens to unsaved input", and
+the question that picks between them is how long it has to live.** A post
+draft is meant to outlive the sitting, so it is a swept `post_drafts` row on
+the server (`docs/architecture/posts-and-feed.md`). A message composer only has
+to survive a *socket reconnect*, which LiveView's own form recovery already
+does — it replays the rendered form's `phx-change`, and never runs on a reload.
+A half-typed invoice address needs neither: it must survive the next ten
+minutes on this device and then be gone, and it carries personal data that is
+better not copied to a server at all. Reach for the row when the answer is
+"days", for form recovery when it is "this socket", and for this mirror when it
+is "this sitting".
+
 The last step says what we reserve, where the reader agrees to the money and
 not in a page of terms elsewhere: the booking is binding, **we may turn it down
 without giving a reason** (then it does not run and nothing is charged), and an

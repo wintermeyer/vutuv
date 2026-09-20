@@ -3386,6 +3386,23 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   }
 }
 
+/* ---------- No pull-to-refresh ----------
+
+   The mark any page may set on <html> while it holds a half-written form: the
+   phone's downward drag at the top of the page reloads, which is a thing
+   nobody means to do and which used to cost a whole ad booking. Today the ad
+   wizard's hook sets it on mount and takes it off when the wizard is left
+   (`assets/js/ad_draft.js`), so no other page is quietly changed.
+
+   `none`, not `contain`: only `none` takes the refresh itself off, at the
+   price of that page's elastic bounce. On both elements, because the used
+   value on the root is what propagates to the viewport and Chrome reads it
+   off <body>. */
+html[data-no-pull-refresh],
+html[data-no-pull-refresh] body {
+  overscroll-behavior-y: none;
+}
+
 /* The pill arriving on the compose line, fading in from the right over the
    width the compose button just gave up. The button itself does NOT animate —
    it snaps from `flex-1` to `flex-none` in the same frame the pill is inserted,

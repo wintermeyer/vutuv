@@ -408,6 +408,93 @@ defmodule VutuvWeb.AdBookingLiveTest do
     end
   end
 
+  describe "a reload in the middle" do
+    test "the whole wizard comes back, down to the picked day", %{conn: conn} do
+      first = Ads.next_available_day()
+      {view, _user, conn} = logged_in(conn)
+
+      at_billing(view, first)
+      render_change(element(view, "#ad-billing-form"), %{"ad" => @billing})
+
+      # What the browser keeps is what the page rendered for it, so the test
+      # travels the same road a stray pull does: read it out, throw the wizard
+      # away, hand it to a fresh one.
+      draft = stored_draft(view)
+      {:ok, second, _html} = live(conn, ~p"/system/ads/new")
+      html = restore(second, draft)
+
+      assert has_element?(second, "#ad-billing-form")
+      assert has_element?(second, "#draft-restored")
+      assert html =~ @text["title"]
+      assert html =~ "Musterstraße 1"
+
+      # And it is a booking, not a picture of one: the day it came back with
+      # is the day that gets booked.
+      render_submit(element(second, "#ad-billing-form"), %{"ad" => @billing})
+      assert %Ad{day: ^first, title: title} = Repo.one(Ad)
+      assert title == @text["title"]
+    end
+
+    test "a wizard nobody has written in keeps nothing", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      # An empty draft is also what a reconnect's fresh mount renders, and it
+      # must never be the thing that overwrites a saved one.
+      assert stored_draft(view) == ""
+
+      render_change(element(view, "#ad-text-form"), %{"ad" => @text})
+      assert stored_draft(view)["title"] == @text["title"]
+    end
+
+    test "a day booked while the page was away is not handed back", %{conn: conn} do
+      first = Ads.next_available_day()
+      {view, _user, conn} = logged_in(conn)
+
+      draft = view |> at_billing(first) |> stored_draft()
+
+      insert(:ad, day: first)
+      {:ok, second, _html} = live(conn, ~p"/system/ads/new")
+      restore(second, draft)
+
+      # The ad survives, the day does not - so they land on the calendar
+      # rather than on an invoice for a day that is gone.
+      assert has_element?(second, "#ad-calendar")
+      refute has_element?(second, "#ad-billing-form")
+      refute has_element?(second, "button[phx-value-day='#{Date.to_iso8601(first)}']")
+    end
+
+    test "somebody else's draft is not restored", %{conn: conn} do
+      {view, _user, conn} = logged_in(conn)
+      draft = view |> at_billing(Ads.next_available_day()) |> stored_draft()
+
+      # Two members, one tab: the draft names whose writing it is, and a name
+      # that is not this member's carries an invoice address that is not
+      # theirs to read.
+      {:ok, second, _html} = live(conn, ~p"/system/ads/new")
+      restore(second, %{draft | "user" => Vutuv.UUIDv7.generate()})
+
+      assert has_element?(second, "#ad-text-form")
+      refute has_element?(second, "#ad-billing-form")
+      refute render(second) =~ @text["title"]
+    end
+
+    test "starting over empties the browser's copy too", %{conn: conn} do
+      {view, _user, conn} = logged_in(conn)
+      view |> at_period(1) |> pick(Ads.next_available_day())
+      draft = stored_draft(view)
+
+      {:ok, second, _html} = live(conn, ~p"/system/ads/new")
+      restore(second, draft)
+      html = render_click(element(second, "button[phx-click='discard-draft']"))
+
+      # Otherwise the next reload brings back exactly what they just threw
+      # away.
+      assert_push_event(second, "ad-draft:clear", %{})
+      refute html =~ @text["title"]
+      assert has_element?(second, "#ad-text-form")
+    end
+  end
+
   # Text, day, invoice, confirm - the whole wizard, for the tests that need a
   # booking to exist rather than to watch one being made.
   defp book(view, day) do
@@ -415,5 +502,31 @@ defmodule VutuvWeb.AdBookingLiveTest do
     render_click(element(view, "button[phx-click='to-billing']"))
     render_submit(element(view, "#ad-billing-form"), %{"ad" => @billing})
     flush_emails()
+  end
+
+  # What the browser would have kept: the wizard renders its state into the
+  # element the hook mirrors into sessionStorage.
+  defp stored_draft(view) do
+    raw =
+      render(view)
+      |> elements("#ad-draft")
+      |> List.first()
+      |> attribute("data-draft")
+
+    if raw == "", do: "", else: Jason.decode!(raw)
+  end
+
+  # Step 1 -> step 2 -> a picked day -> the invoice, which is where a draft
+  # worth losing exists.
+  defp at_billing(view, day) do
+    view |> at_period(1) |> pick(day)
+    render_click(element(view, "button[phx-click='to-billing']"))
+    view
+  end
+
+  # The reload, from the wizard's side: a page that starts empty, handed what
+  # the browser had.
+  defp restore(view, draft) do
+    render_hook(element(view, "#ad-draft"), "restore-draft", draft)
   end
 end

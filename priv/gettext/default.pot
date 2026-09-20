@@ -3957,7 +3957,7 @@ msgstr ""
 msgid "Advertising on vutuv"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:846
+#: lib/vutuv_web/live/ad_booking_live.ex:1009
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:68
 #, elixir-autogen, elixir-format
 msgid "Billing name"
@@ -3970,7 +3970,7 @@ msgid "Book online (login required): %{url}"
 msgstr ""
 
 #: lib/vutuv_web/components/ad_components.ex:183
-#: lib/vutuv_web/live/ad_booking_live.ex:61
+#: lib/vutuv_web/live/ad_booking_live.ex:81
 #: lib/vutuv_web/templates/ad/bookings.html.heex:14
 #: lib/vutuv_web/templates/ad/index.html.heex:114
 #, elixir-autogen, elixir-format
@@ -3988,7 +3988,7 @@ msgid "Booking requires a vutuv login."
 msgstr ""
 
 #: lib/vutuv_web/components/welcome_components.ex:224
-#: lib/vutuv_web/live/ad_booking_live.ex:860
+#: lib/vutuv_web/live/ad_booking_live.ex:1023
 #: lib/vutuv_web/live/admin/organization_live.ex:245
 #: lib/vutuv_web/live/job_posting_live/form.ex:567
 #: lib/vutuv_web/live/organization_live/edit.ex:331
@@ -3999,12 +3999,12 @@ msgstr ""
 msgid "City"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:850
+#: lib/vutuv_web/live/ad_booking_live.ex:1013
 #, elixir-autogen, elixir-format
 msgid "Company (optional)"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:772
+#: lib/vutuv_web/live/ad_booking_live.ex:935
 #: lib/vutuv_web/views/admin/ad_html.ex:27
 #, elixir-autogen, elixir-format
 msgid "Day"
@@ -4031,7 +4031,7 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:412
 #: lib/vutuv_web/agent_docs/text.ex:368
-#: lib/vutuv_web/live/ad_booking_live.ex:784
+#: lib/vutuv_web/live/ad_booking_live.ex:947
 #: lib/vutuv_web/templates/ad/index.html.heex:71
 #: lib/vutuv_web/views/admin/ad_html.ex:175
 #, elixir-autogen, elixir-format
@@ -4043,7 +4043,7 @@ msgstr ""
 msgid "This spot is free today. One day, one ad, every visitor."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:868
+#: lib/vutuv_web/live/ad_booking_live.ex:1031
 #, elixir-autogen, elixir-format
 msgid "VAT ID (optional)"
 msgstr ""
@@ -4182,7 +4182,7 @@ msgstr ""
 msgid "You have not booked an ad yet."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:372
+#: lib/vutuv_web/live/ad_booking_live.ex:510
 #, elixir-autogen, elixir-format
 msgid "Your ad for %{day} is booked. We will review and approve it shortly; the invoice follows by email."
 msgstr ""
@@ -4249,7 +4249,7 @@ msgstr ""
 msgid "We"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:696
+#: lib/vutuv_web/live/ad_booking_live.ex:859
 #, elixir-autogen, elixir-format
 msgid "already booked"
 msgstr ""
@@ -4282,7 +4282,7 @@ msgstr ""
 msgid "by"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:948
+#: lib/vutuv_web/live/ad_booking_live.ex:1111
 #, elixir-autogen, elixir-format
 msgid "Book now (binding, by invoice)"
 msgstr ""
@@ -5903,7 +5903,7 @@ msgid "Tagline"
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:527
-#: lib/vutuv_web/live/ad_booking_live.ex:498
+#: lib/vutuv_web/live/ad_booking_live.ex:661
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:29
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:88
 #: lib/vutuv_web/templates/user/show.html.heex:971
@@ -6370,7 +6370,7 @@ msgid "The raw bounce ledger, newest first."
 msgstr ""
 
 #: lib/vutuv_web/live/account_activity_live.ex:103
-#: lib/vutuv_web/live/ad_booking_live.ex:406
+#: lib/vutuv_web/live/ad_booking_live.ex:569
 #: lib/vutuv_web/live/admin/activity_live.ex:142
 #: lib/vutuv_web/live/admin/deliverability_live.ex:213
 #: lib/vutuv_web/live/admin/deliverability_live.ex:250
@@ -12081,7 +12081,7 @@ msgid "Post as"
 msgstr ""
 
 #: lib/vutuv_web/components/welcome_components.ex:218
-#: lib/vutuv_web/live/ad_booking_live.ex:857
+#: lib/vutuv_web/live/ad_booking_live.ex:1020
 #: lib/vutuv_web/live/job_posting_live/form.ex:561
 #, elixir-autogen, elixir-format
 msgid "Postal code"
@@ -12698,7 +12698,7 @@ msgstr ""
 msgid "Search title, poster or organization"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:458
+#: lib/vutuv_web/live/ad_booking_live.ex:621
 #: lib/vutuv_web/live/admin/job_live.ex:264
 #, elixir-autogen, elixir-format
 msgid "Title"
@@ -16187,6 +16187,7 @@ msgstr ""
 msgid "Discard draft"
 msgstr ""
 
+#: lib/vutuv_web/live/ad_booking_live.ex:546
 #: lib/vutuv_web/live/post_live/composer.ex:1868
 #, elixir-autogen, elixir-format
 msgid "Picked up where you left off."
@@ -17741,7 +17742,7 @@ msgstr ""
 msgid "Show this reference publicly on my profile"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:478
+#: lib/vutuv_web/live/ad_booking_live.ex:641
 #: lib/vutuv_web/templates/job_reference/show.html.heex:39
 #: lib/vutuv_web/templates/job_reference/view.html.heex:86
 #: lib/vutuv_web/views/account_event_text.ex:227
@@ -19090,6 +19091,7 @@ msgstr ""
 msgid "Search as often as you like and add what belongs. Abbreviations will not turn up under the full name, so look for them separately."
 msgstr ""
 
+#: lib/vutuv_web/live/ad_booking_live.ex:552
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:604
 #, elixir-autogen, elixir-format
 msgid "Start over"
@@ -25280,7 +25282,7 @@ msgstr ""
 msgid "%{amount} € for the whole period (net)"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:968
+#: lib/vutuv_web/live/ad_booking_live.ex:1131
 #, elixir-autogen, elixir-format
 msgid "%{amount} € off"
 msgstr ""
@@ -25324,7 +25326,7 @@ msgstr[1] ""
 msgid "%{from} to %{to}"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:824
+#: lib/vutuv_web/live/ad_booking_live.ex:987
 #, elixir-autogen, elixir-format
 msgid "%{net} € net, plus %{percent} % VAT = %{gross} €"
 msgstr ""
@@ -25368,14 +25370,14 @@ msgstr ""
 msgid "An approved booking is binding and can no longer be cancelled here."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:661
-#: lib/vutuv_web/live/ad_booking_live.ex:945
+#: lib/vutuv_web/live/ad_booking_live.ex:824
+#: lib/vutuv_web/live/ad_booking_live.ex:1108
 #: lib/vutuv_web/live/registration_live.ex:498
 #, elixir-autogen, elixir-format
 msgid "Back"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:933
+#: lib/vutuv_web/live/ad_booking_live.ex:1096
 #, elixir-autogen, elixir-format
 msgid "Booking is binding; payment by invoice."
 msgstr ""
@@ -25425,7 +25427,7 @@ msgstr ""
 msgid "Codes"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:866
+#: lib/vutuv_web/live/ad_booking_live.ex:1029
 #, elixir-autogen, elixir-format
 msgid "Country (optional)"
 msgstr ""
@@ -25435,23 +25437,23 @@ msgstr ""
 msgid "Days that have already run stay as they are."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:570
-#: lib/vutuv_web/live/ad_booking_live.ex:571
+#: lib/vutuv_web/live/ad_booking_live.ex:733
+#: lib/vutuv_web/live/ad_booking_live.ex:734
 #, elixir-autogen, elixir-format
 msgid "Delete this saved ad"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:569
+#: lib/vutuv_web/live/ad_booking_live.ex:732
 #, elixir-autogen, elixir-format
 msgid "Delete this saved ad?"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:903
+#: lib/vutuv_web/live/ad_booking_live.ex:1066
 #, elixir-autogen, elixir-format
 msgid "Discount code (optional)"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:802
+#: lib/vutuv_web/live/ad_booking_live.ex:965
 #, elixir-autogen, elixir-format
 msgid "Discount code: −%{amount} €"
 msgstr ""
@@ -25493,22 +25495,22 @@ msgstr ""
 msgid "How ads work on vutuv"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:533
+#: lib/vutuv_web/live/ad_booking_live.ex:696
 #, elixir-autogen, elixir-format
 msgid "How it will look"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:603
+#: lib/vutuv_web/live/ad_booking_live.ex:766
 #, elixir-autogen, elixir-format
 msgid "How long"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:939
+#: lib/vutuv_web/live/ad_booking_live.ex:1102
 #, elixir-autogen, elixir-format
 msgid "If an invoice is not paid, we take the ad off the site again."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:406
+#: lib/vutuv_web/live/ad_booking_live.ex:569
 #, elixir-autogen, elixir-format
 msgid "Invoice"
 msgstr ""
@@ -25549,12 +25551,12 @@ msgstr ""
 msgid "My ads"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:520
+#: lib/vutuv_web/live/ad_booking_live.ex:683
 #, elixir-autogen, elixir-format
 msgid "Next: pick the days"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:664
+#: lib/vutuv_web/live/ad_booking_live.ex:827
 #, elixir-autogen, elixir-format
 msgid "Next: the invoice"
 msgstr ""
@@ -25569,7 +25571,7 @@ msgstr ""
 msgid "No codes yet."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:548
+#: lib/vutuv_web/live/ad_booking_live.ex:711
 #, elixir-autogen, elixir-format
 msgid "None yet. \"Save this ad\" keeps one here, so booking again is two clicks."
 msgstr ""
@@ -25586,7 +25588,7 @@ msgid_plural "%{days} days for %{amount} €"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:490
+#: lib/vutuv_web/live/ad_booking_live.ex:653
 #, elixir-autogen, elixir-format
 msgid "One sentence under the title, plain text."
 msgstr ""
@@ -25621,12 +25623,12 @@ msgstr ""
 msgid "Percent"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:631
+#: lib/vutuv_web/live/ad_booking_live.ex:794
 #, elixir-autogen, elixir-format
 msgid "Pick a free day. Struck-through days are already booked."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:633
+#: lib/vutuv_web/live/ad_booking_live.ex:796
 #, elixir-autogen, elixir-format
 msgid "Pick the day it starts. Only days with %{days} free days behind them can be picked, and picking one marks the whole stretch."
 msgstr ""
@@ -25661,12 +25663,12 @@ msgstr ""
 msgid "Rejected or cancelled"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:522
+#: lib/vutuv_web/live/ad_booking_live.ex:685
 #, elixir-autogen, elixir-format
 msgid "Save this ad"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:109
+#: lib/vutuv_web/live/ad_booking_live.ex:130
 #, elixir-autogen, elixir-format
 msgid "Saved. You can pick this ad again next time."
 msgstr ""
@@ -25677,12 +25679,12 @@ msgstr ""
 msgid "Search the ads you have seen"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:876
+#: lib/vutuv_web/live/ad_booking_live.ex:1039
 #, elixir-autogen, elixir-format
 msgid "Send the invoice to"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:470
+#: lib/vutuv_web/live/ad_booking_live.ex:633
 #, elixir-autogen, elixir-format
 msgid "Shown as the link, in bold."
 msgstr ""
@@ -25697,12 +25699,12 @@ msgstr ""
 msgid "Signed-in members see at most one ad an hour and none for the rest of the day once they close one. Visitors without an account see it on every profile they open. Each card goes again after two minutes in view."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:362
+#: lib/vutuv_web/live/ad_booking_live.ex:500
 #, elixir-autogen, elixir-format
 msgid "Somebody booked one of those days while you were filling this in. Please pick another stretch."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:852
+#: lib/vutuv_web/live/ad_booking_live.ex:1015
 #, elixir-autogen, elixir-format
 msgid "Street"
 msgstr ""
@@ -25742,7 +25744,7 @@ msgstr ""
 msgid "The ad for %{day} is rejected; the booker has been told why."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:539
+#: lib/vutuv_web/live/ad_booking_live.ex:702
 #, elixir-autogen, elixir-format
 msgid "The address under the sentence appears as soon as there is a link."
 msgstr ""
@@ -25772,17 +25774,17 @@ msgstr ""
 msgid "This ad can no longer be taken off the site."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:973
+#: lib/vutuv_web/live/ad_booking_live.ex:1136
 #, elixir-autogen, elixir-format
 msgid "This code belongs to somebody else."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:972
+#: lib/vutuv_web/live/ad_booking_live.ex:1135
 #, elixir-autogen, elixir-format
 msgid "This code has expired."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:444
+#: lib/vutuv_web/live/ad_booking_live.ex:607
 #, elixir-autogen, elixir-format
 msgid "Three lines. You see the result as you type."
 msgstr ""
@@ -25808,12 +25810,12 @@ msgstr ""
 msgid "We cannot run your ad for %{period}"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:971
+#: lib/vutuv_web/live/ad_booking_live.ex:1134
 #, elixir-autogen, elixir-format
 msgid "We do not know this code."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:936
+#: lib/vutuv_web/live/ad_booking_live.ex:1099
 #, elixir-autogen, elixir-format
 msgid "We look at every ad before it runs and may turn a booking down without giving a reason. Then it does not run and you pay nothing."
 msgstr ""
@@ -25838,17 +25840,17 @@ msgstr ""
 msgid "What it takes off"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:589
+#: lib/vutuv_web/live/ad_booking_live.ex:752
 #, elixir-autogen, elixir-format
 msgid "When should it run?"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:836
+#: lib/vutuv_web/live/ad_booking_live.ex:999
 #, elixir-autogen, elixir-format
 msgid "Where does the invoice go?"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:514
+#: lib/vutuv_web/live/ad_booking_live.ex:677
 #, elixir-autogen, elixir-format
 msgid "Where the title leads. Readers see the address without its query, so they know where they are going."
 msgstr ""
@@ -25863,17 +25865,17 @@ msgstr ""
 msgid "Why the ad is rejected (the booker reads this)"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:441
+#: lib/vutuv_web/live/ad_booking_live.ex:604
 #, elixir-autogen, elixir-format
 msgid "Write your ad"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:116
+#: lib/vutuv_web/live/ad_booking_live.ex:137
 #, elixir-autogen, elixir-format
 msgid "You already keep %{count} saved ads. Delete one first."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:974
+#: lib/vutuv_web/live/ad_booking_live.ex:1137
 #, elixir-autogen, elixir-format
 msgid "You have already used this code."
 msgstr ""
@@ -25888,9 +25890,9 @@ msgstr ""
 msgid "You see at most one ad an hour, and none for the rest of the day once you close one."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:406
-#: lib/vutuv_web/live/ad_booking_live.ex:671
-#: lib/vutuv_web/live/ad_booking_live.ex:956
+#: lib/vutuv_web/live/ad_booking_live.ex:569
+#: lib/vutuv_web/live/ad_booking_live.ex:834
+#: lib/vutuv_web/live/ad_booking_live.ex:1119
 #, elixir-autogen, elixir-format
 msgid "Your ad"
 msgstr ""
@@ -25945,17 +25947,17 @@ msgstr ""
 msgid "Your ad for %{period} is off the site from today. The invoice stands."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:379
+#: lib/vutuv_web/live/ad_booking_live.ex:517
 #, elixir-autogen, elixir-format
 msgid "Your ad is booked for %{period}. We will review and approve it shortly; the invoice follows by email."
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:768
+#: lib/vutuv_web/live/ad_booking_live.ex:931
 #, elixir-autogen, elixir-format
 msgid "Your booking"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:546
+#: lib/vutuv_web/live/ad_booking_live.ex:709
 #, elixir-autogen, elixir-format
 msgid "Your saved ads"
 msgstr ""
@@ -25970,7 +25972,7 @@ msgstr ""
 msgid "in cents, 1 € to 3.000 €"
 msgstr ""
 
-#: lib/vutuv_web/live/ad_booking_live.ex:778
+#: lib/vutuv_web/live/ad_booking_live.ex:941
 #, elixir-autogen, elixir-format
 msgid "not picked yet"
 msgstr ""
