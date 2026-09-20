@@ -36,7 +36,7 @@ defmodule VutuvWeb.TranslatedCatalogsTest do
   use ExUnit.Case, async: true
 
   # Every locale whose catalog holds real translations. `en` is excluded above.
-  @locales ~w(de it)
+  @locales ~w(de fr it)
 
   # Sources whose user-facing strings must be fully translated. `ui.ex` cannot
   # join as it stands: the scan is textual, so the `gettext("Add entry")` in

@@ -628,9 +628,14 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "no hint for a language we have no translation for, or without the header" do
+      # `nl` here, not `fr`: this hint keys off `Gettext.known_locales/1` rather
+      # than the Endpoint's `:locales`, so a language gets a hint the moment its
+      # catalog directory exists — which is what French did, turning this red on
+      # a branch that had not yet served French anywhere else. The stand-in has
+      # to be a language with no catalog at all.
       conn =
         build_conn()
-        |> put_req_header("accept-language", "fr-FR,fr;q=0.9")
+        |> put_req_header("accept-language", "nl-NL,nl;q=0.9")
         |> get("/agent_tester.md")
 
       refute conn.resp_body =~ "<!--"
