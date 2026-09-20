@@ -11002,33 +11002,33 @@ msgstr "Abréviation"
 #: lib/vutuv_web/live/organization_live/domains.ex:272
 #, elixir-autogen, elixir-format
 msgid "Add a domain"
-msgstr ""
+msgstr "Ajouter un domaine"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:190
 #, elixir-autogen, elixir-format
 msgid "Add a member"
-msgstr ""
+msgstr "Ajouter un membre"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:158
 #, elixir-autogen, elixir-format
 msgid "Added @%{handle} to the team."
-msgstr ""
+msgstr "@%{handle} a été ajouté à l'équipe."
 
 #: lib/vutuv_web/components/organization_components.ex:343
 #: lib/vutuv_web/live/organization_live/edit.ex:419
 #, elixir-autogen, elixir-format
 msgid "Alias"
-msgstr ""
+msgstr "Alias"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:109
 #, elixir-autogen, elixir-format
 msgid "Alias added."
-msgstr ""
+msgstr "Alias ajouté."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:133
 #, elixir-autogen, elixir-format
 msgid "Alias removed."
-msgstr ""
+msgstr "Alias retiré."
 
 #: lib/vutuv_web/agent_docs/markdown.ex:542
 #: lib/vutuv_web/agent_docs/text.ex:539
@@ -11037,64 +11037,64 @@ msgstr ""
 #: lib/vutuv_web/templates/tag/single_card.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Also known as"
-msgstr ""
+msgstr "Aussi connu sous"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:415
 #, elixir-autogen, elixir-format
 msgid "Alternative name"
-msgstr ""
+msgstr "Nom alternatif"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:390
 #, elixir-autogen, elixir-format
 msgid "Archive"
-msgstr ""
+msgstr "Archiver"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:388
 #, elixir-autogen, elixir-format
 msgid "Archive this page?"
-msgstr ""
+msgstr "Archiver cette page ?"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:167
 #: lib/vutuv_web/live/admin/organization_live.ex:182
 #, elixir-autogen, elixir-format
 msgid "Archived"
-msgstr ""
+msgstr "Archivée"
 
 #: lib/vutuv_web/components/organization_components.ex:341
 #: lib/vutuv_web/live/organization_live/edit.ex:420
 #, elixir-autogen, elixir-format
 msgid "Brand"
-msgstr ""
+msgstr "Marque"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:325
 #, elixir-autogen, elixir-format
 msgid "Claimed by"
-msgstr ""
+msgstr "Revendiquée par"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:230
 #, elixir-autogen, elixir-format
 msgid "Current team"
-msgstr ""
+msgstr "Équipe actuelle"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:397
 #, elixir-autogen, elixir-format
 msgid "Delete this page and everything it owns? This cannot be undone."
-msgstr ""
+msgstr "Supprimer cette page et tout ce qui lui appartient ? C'est irréversible."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:94
 #, elixir-autogen, elixir-format
 msgid "Domain added. Publish the record or file, then verify it."
-msgstr ""
+msgstr "Domaine ajouté. Publiez l'enregistrement ou le fichier, puis lancez la vérification."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:159
 #, elixir-autogen, elixir-format
 msgid "Domain removed."
-msgstr ""
+msgstr "Domaine retiré."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:60
 #, elixir-autogen, elixir-format
 msgid "Domain verified."
-msgstr ""
+msgstr "Domaine vérifié."
 
 #: lib/vutuv_web/components/organization_components.ex:251
 #: lib/vutuv_web/live/admin/organization_live.ex:302
@@ -11102,40 +11102,40 @@ msgstr ""
 #: lib/vutuv_web/live/organization_live/show.ex:175
 #, elixir-autogen, elixir-format
 msgid "Domains"
-msgstr ""
+msgstr "Domaines"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:34
 #, elixir-autogen, elixir-format
 msgid "Domains – %{name}"
-msgstr ""
+msgstr "Domaines – %{name}"
 
 #: lib/vutuv_web/components/organization_components.ex:340
 #, elixir-autogen, elixir-format
 msgid "Former name"
-msgstr ""
+msgstr "Ancien nom"
 
 #: lib/vutuv_web/live/admin/job_live.ex:460
 #: lib/vutuv_web/live/admin/organization_live.ex:373
 #: lib/vutuv_web/views/admin/account_html.ex:36
 #, elixir-autogen, elixir-format
 msgid "Freeze"
-msgstr ""
+msgstr "Geler"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:371
 #, elixir-autogen, elixir-format
 msgid "Freeze this page? It disappears for the public but stays visible to its owner."
-msgstr ""
+msgstr "Geler cette page ? Elle disparaît pour le public mais reste visible pour son propriétaire."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:226
 #: lib/vutuv_web/templates/settings/saved_searches.html.heex:36
 #, elixir-autogen, elixir-format
 msgid "Last checked"
-msgstr ""
+msgstr "Dernière vérification"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:257
 #, elixir-autogen, elixir-format
 msgid "Leave"
-msgstr ""
+msgstr "Quitter"
 
 #: lib/vutuv_web/live/admin/job_live.ex:160
 #: lib/vutuv_web/live/admin/job_live.ex:176
@@ -11145,72 +11145,72 @@ msgstr ""
 #: lib/vutuv_web/live/admin/organization_live.ex:193
 #, elixir-autogen, elixir-format
 msgid "Live"
-msgstr ""
+msgstr "En ligne"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:256
 #, elixir-autogen, elixir-format
 msgid "Make primary"
-msgstr ""
+msgstr "Définir comme principal"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:106
 #, elixir-autogen, elixir-format
 msgid "Member removed."
-msgstr ""
+msgstr "Membre retiré."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:226
 #, elixir-autogen, elixir-format
 msgid "Method"
-msgstr ""
+msgstr "Méthode"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:331
 #, elixir-autogen, elixir-format
 msgid "Names & aliases"
-msgstr ""
+msgstr "Noms et alias"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:93
 #, elixir-autogen, elixir-format
 msgid "No member found for “%{id}”."
-msgstr ""
+msgstr "Aucun membre trouvé pour « %{id} »."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:144
 #, elixir-autogen, elixir-format
 msgid "Only a verified domain can be the primary one."
-msgstr ""
+msgstr "Seul un domaine vérifié peut être le domaine principal."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:212
 #, elixir-autogen, elixir-format
 msgid "Primary"
-msgstr ""
+msgstr "Principal"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:140
 #, elixir-autogen, elixir-format
 msgid "Primary domain updated."
-msgstr ""
+msgstr "Domaine principal mis à jour."
 
 #: lib/vutuv_web/components/organization_components.ex:329
 #, elixir-autogen, elixir-format
 msgid "Recruiter"
-msgstr ""
+msgstr "Recruteur"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:263
 #, elixir-autogen, elixir-format
 msgid "Remove this domain?"
-msgstr ""
+msgstr "Retirer ce domaine ?"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:253
 #, elixir-autogen, elixir-format
 msgid "Remove this member from the team?"
-msgstr ""
+msgstr "Retirer ce membre de l'équipe ?"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:402
 #, elixir-autogen, elixir-format
 msgid "Remove this name?"
-msgstr ""
+msgstr "Retirer ce nom ?"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:233
 #, elixir-autogen, elixir-format
 msgid "Search name, alias or domain"
-msgstr ""
+msgstr "Rechercher un nom, un alias ou un domaine"
 
 #: lib/vutuv_web/components/organization_components.ex:248
 #: lib/vutuv_web/live/admin/organization_live.ex:318
@@ -11218,250 +11218,250 @@ msgstr ""
 #: lib/vutuv_web/live/organization_live/show.ex:171
 #, elixir-autogen, elixir-format
 msgid "Team"
-msgstr ""
+msgstr "Équipe"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:48
 #, elixir-autogen, elixir-format
 msgid "Team – %{name}"
-msgstr ""
+msgstr "Équipe – %{name}"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:105
 #, elixir-autogen, elixir-format
 msgid "That is not a valid domain."
-msgstr ""
+msgstr "Ce n'est pas un domaine valide."
 
 #: lib/vutuv_web/live/organization_live/roles.ex:161
 #, elixir-autogen, elixir-format
 msgid "That member could not be added."
-msgstr ""
+msgstr "Ce membre n'a pas pu être ajouté."
 
 #: lib/vutuv_web/live/admin/job_live.ex:468
 #: lib/vutuv_web/live/admin/organization_live.ex:381
 #: lib/vutuv_web/views/admin/account_html.ex:27
 #, elixir-autogen, elixir-format
 msgid "Unfreeze"
-msgstr ""
+msgstr "Dégeler"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:308
 #, elixir-autogen, elixir-format
 msgid "pending"
-msgstr ""
+msgstr "en attente"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:306
 #, elixir-autogen, elixir-format
 msgid "primary"
-msgstr ""
+msgstr "principal"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:563
 #: lib/vutuv_web/agent_docs/text.ex:559
 #: lib/vutuv_web/live/admin/organization_live.ex:308
 #, elixir-autogen, elixir-format
 msgid "verified"
-msgstr ""
+msgstr "vérifié"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:329
 #: lib/vutuv_web/live/organization_live/new.ex:136
 #, elixir-autogen, elixir-format
 msgid "Street address (optional)"
-msgstr ""
+msgstr "Rue et numéro (facultatif)"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:330
 #: lib/vutuv_web/live/organization_live/new.ex:137
 #, elixir-autogen, elixir-format
 msgid "ZIP / postal code (optional)"
-msgstr ""
+msgstr "Code postal (facultatif)"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:470
 #, elixir-autogen, elixir-format
 msgid "Claim"
-msgstr ""
+msgstr "Réserver"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:442
 #, elixir-autogen, elixir-format
 msgid "Reachable at"
-msgstr ""
+msgstr "Joignable à"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:213
 #, elixir-autogen, elixir-format
 msgid "That handle is not available."
-msgstr ""
+msgstr "Ce handle n'est pas disponible."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:476
 #, elixir-autogen, elixir-format
 msgid "Danger zone"
-msgstr ""
+msgstr "Zone sensible"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:488
 #, elixir-autogen, elixir-format
 msgid "Really delete %{name}? This cannot be undone."
-msgstr ""
+msgstr "Vraiment supprimer %{name} ? C'est irréversible."
 
 #: lib/vutuv_web/templates/url/verify.html.heex:32
 #, elixir-autogen, elixir-format
 msgid "Add a link back to your profile on your page, marked rel=\"me\":"
-msgstr ""
+msgstr "Ajoutez sur votre page un lien vers votre profil, marqué rel=\"me\" :"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:122
 #, elixir-autogen, elixir-format
 msgid "Back to Links"
-msgstr ""
+msgstr "Retour aux liens"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:30
 #, elixir-autogen, elixir-format
 msgid "Back-link (rel=me)"
-msgstr ""
+msgstr "Lien retour (rel=me)"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:25
 #: lib/vutuv_web/views/url_html.ex:65
 #, elixir-autogen, elixir-format
 msgid "Link verification is disabled on this installation."
-msgstr ""
+msgstr "La vérification de liens est désactivée sur cette installation."
 
 #: lib/vutuv_web/controllers/url_controller.ex:167
 #, elixir-autogen, elixir-format
 msgid "Link verified. It now shows a verified mark."
-msgstr ""
+msgstr "Lien vérifié. Il affiche maintenant une marque de vérification."
 
 #: lib/vutuv_web/templates/url/verify.html.heex:17
 #, elixir-autogen, elixir-format
 msgid "Prove this link is your own webpage with one of the methods below. It then shows a verified mark."
-msgstr ""
+msgstr "Prouvez avec l'une des méthodes ci-dessous que ce lien est votre propre page web. Elle affichera ensuite une marque de vérification."
 
 #: lib/vutuv_web/templates/url/verify.html.heex:104
 #, elixir-autogen, elixir-format
 msgid "Serve this file:"
-msgstr ""
+msgstr "Mettez ce fichier à disposition :"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:39
 #, elixir-autogen, elixir-format
 msgid "The link text can be anything. A hidden <link rel=\"me\"> in the page head works too."
-msgstr ""
+msgstr "Le texte du lien est libre. Un <link rel=\"me\"> caché dans l'en-tête de la page fonctionne aussi."
 
 #: lib/vutuv_web/components/ui.ex:1173
 #: lib/vutuv_web/live/section_reorder_live.ex:196
 #, elixir-autogen, elixir-format
 msgid "Verified webpage"
-msgstr ""
+msgstr "Page web vérifiée"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Verified. Re-run any method below to refresh it."
-msgstr ""
+msgstr "Vérifié. Relancez une des méthodes ci-dessous pour actualiser."
 
 #: lib/vutuv_web/controllers/url_controller.ex:199
 #: lib/vutuv_web/templates/url/verify.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Verify link"
-msgstr ""
+msgstr "Vérifier le lien"
 
 #: lib/vutuv_web/live/section_reorder_live.ex:203
 #: lib/vutuv_web/templates/url/card_list.html.heex:28
 #: lib/vutuv_web/templates/url/show.html.heex:29
 #, elixir-autogen, elixir-format
 msgid "Verify this is your page"
-msgstr ""
+msgstr "Vérifier qu'il s'agit de votre page"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:98
 #, elixir-autogen, elixir-format
 msgid "Verify via DNS"
-msgstr ""
+msgstr "Vérifier par DNS"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:45
 #, elixir-autogen, elixir-format
 msgid "Verify via back-link"
-msgstr ""
+msgstr "Vérifier par lien retour"
 
 #: lib/vutuv_web/templates/url/verify.html.heex:114
 #, elixir-autogen, elixir-format
 msgid "Verify via file"
-msgstr ""
+msgstr "Vérifier par fichier"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:1071
 #: lib/vutuv_web/agent_docs/text.ex:814
 #, elixir-autogen, elixir-format
 msgid "verified webpage"
-msgstr ""
+msgstr "page web vérifiée"
 
 #: lib/vutuv_web/templates/username/form_content.html.heex:21
 #, elixir-autogen, elixir-format
 msgid "%{min} to %{max} characters: letters (a-z), numbers (0-9) and underscores."
-msgstr ""
+msgstr "%{min} à %{max} caractères : lettres (a-z), chiffres (0-9) et traits de soulignement."
 
 #: lib/vutuv_web/live/organization_live/show.ex:865
 #, elixir-autogen, elixir-format
 msgid "Former"
-msgstr ""
+msgstr "Ancien"
 
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:18
 #, elixir-autogen, elixir-format
 msgid "Link this experience to the verified page for {name}?"
-msgstr ""
+msgstr "Lier cette expérience à la page vérifiée de {name} ?"
 
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "Link to page"
-msgstr ""
+msgstr "Lier"
 
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:20
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:29
 #, elixir-autogen, elixir-format
 msgid "Linked to {name}"
-msgstr ""
+msgstr "Liée à {name}"
 
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:21
 #, elixir-autogen, elixir-format
 msgid "Remove link"
-msgstr ""
+msgstr "Retirer le lien"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:554
 #: lib/vutuv_web/agent_docs/text.ex:550
 #, elixir-autogen, elixir-format
 msgid "former"
-msgstr ""
+msgstr "ancien"
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:315
 #, elixir-autogen, elixir-format
 msgid "%{formatted} alias matches another verified organization and is flagged for review."
 msgid_plural "%{formatted} aliases match another verified organization and are flagged for review."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%{formatted} alias correspond à une autre organisation vérifiée et a été marqué pour examen."
+msgstr[1] "%{formatted} alias correspondent à d'autres organisations vérifiées et ont été marqués pour examen."
 
 #: lib/vutuv_web/live/admin/organization_live.ex:199
 #, elixir-autogen, elixir-format
 msgid "%{count} alias matches another verified organization and is flagged for review. Open an organization below to see it."
 msgid_plural "%{count} aliases match another verified organization and are flagged for review. Open an organization below to see them."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%{count} alias correspond à une autre organisation vérifiée et a été marqué pour examen. Ouvrez une organisation ci-dessous pour le voir."
+msgstr[1] "%{count} alias correspondent à d'autres organisations vérifiées et ont été marqués pour examen. Ouvrez une organisation ci-dessous pour les voir."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:386
 #, elixir-autogen, elixir-format
 msgid "Alternative names, brands or abbreviations this organization is findable under. A rename keeps the old name here automatically."
-msgstr ""
+msgstr "Noms alternatifs, marques ou abréviations sous lesquels cette organisation est trouvable. Lors d'un changement de nom, l'ancien nom est conservé ici automatiquement."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:200
 #, elixir-autogen, elixir-format
 msgid "An organization can prove several domains. The primary one shows in the “Verified via …” badge."
-msgstr ""
+msgstr "Une organisation peut prouver plusieurs domaines. Le domaine principal apparaît dans le badge « Vérifié via … »."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:166
 #, elixir-autogen, elixir-format
 msgid "An organization keeps at least one verified domain, so this one cannot be removed."
-msgstr ""
+msgstr "Une organisation garde au moins un domaine vérifié, celui-ci ne peut donc pas être retiré."
 
 #: lib/vutuv_web/live/organization_live/roles.ex:167
 #, elixir-autogen, elixir-format
 msgid "An organization must keep at least one owner, so the last owner cannot be changed."
-msgstr ""
+msgstr "Une organisation doit garder au moins un propriétaire, le dernier propriétaire ne peut donc pas être modifié."
 
 #: lib/vutuv_web/live/organization_live/new.ex:97
 #, elixir-autogen, elixir-format
 msgid "Create a verified page for your company, association, school or public authority."
-msgstr ""
+msgstr "Créez une page vérifiée pour votre entreprise, votre association, votre école ou votre administration."
 
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:172
 #, elixir-autogen, elixir-format
 msgid "Any signed-in member whose confirmed email is at this domain, or a subdomain of it, is excluded. This is the reliable way to hide from your whole organization."
-msgstr ""
+msgstr "Tout membre connecté dont l'adresse e-mail confirmée relève de ce domaine, ou d'un de ses sous-domaines, est exclu. C'est le moyen fiable de vous masquer à toute votre organisation."
 
 #: lib/vutuv_web/live/organization_live/index.ex:68
 #: lib/vutuv_web/live/organization_live/index.ex:99
@@ -11470,114 +11470,114 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/organizations.html.heex:123
 #, elixir-autogen, elixir-format
 msgid "Add your organization"
-msgstr ""
+msgstr "Ajouter votre organisation"
 
 #: lib/vutuv_web/live/organization_live/new.ex:106
 #, elixir-autogen, elixir-format
 msgid "Why we ask you to verify"
-msgstr ""
+msgstr "Pourquoi nous demandons une vérification"
 
 #: lib/vutuv_web/live/organization_live/new.ex:109
 #, elixir-autogen, elixir-format
 msgid "So visitors can trust the page. We only publish it once you prove that you control the organization's web domain, so nobody can put up a page that pretends to be your organization."
-msgstr ""
+msgstr "Pour que les visiteurs puissent faire confiance à la page. Nous ne la publions qu'une fois que vous avez prouvé que vous contrôlez le domaine web de l'organisation. Ainsi, personne ne peut créer une page qui se fait passer pour votre organisation."
 
 #: lib/vutuv_web/live/organization_live/new.ex:114
 #, elixir-autogen, elixir-format
 msgid "You might need help from your admin"
-msgstr ""
+msgstr "Vous aurez peut-être besoin de l'aide de votre service informatique"
 
 #: lib/vutuv_web/live/organization_live/new.ex:117
 #, elixir-autogen, elixir-format
 msgid "The proof is a small technical change to your domain: a DNS entry or a file on your website. If you don't manage the website yourself, ask the person or team who does. That is usually your IT department or the company that runs your website. We show the exact instructions on the next step, so you can simply pass them on."
-msgstr ""
+msgstr "La preuve est une petite modification technique sur votre domaine : un enregistrement DNS ou un fichier sur votre site web. Si vous ne gérez pas le site vous-même, demandez à la personne ou à l'équipe qui s'en occupe. C'est généralement votre service informatique ou l'entreprise qui héberge votre site. Nous montrons les instructions exactes à l'étape suivante, vous pouvez donc simplement les transmettre."
 
 #: lib/vutuv_web/live/organization_live/show.ex:1085
 #, elixir-autogen, elixir-format
 msgid "These steps are technical. If you don't manage %{domain} yourself, copy the record or file shown below and send it to your IT team or whoever runs your website. Once they have added it, come back here and press Verify now."
-msgstr ""
+msgstr "Ces étapes sont techniques. Si vous ne gérez pas %{domain} vous-même, copiez l'enregistrement ou le fichier indiqué ci-dessous et envoyez-le à votre service informatique ou à l'entreprise qui héberge votre site. Dès qu'il a été ajouté, revenez ici et cliquez sur « Vérifier maintenant »."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:491
 #, elixir-autogen, elixir-format
 msgid "Delete this organization"
-msgstr ""
+msgstr "Supprimer cette organisation"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:478
 #, elixir-autogen, elixir-format
 msgid "Deleting this organization page is permanent. Its verified domains and its @handle are freed and can be claimed again."
-msgstr ""
+msgstr "La suppression de cette page d'organisation est définitive. Ses domaines vérifiés et son @handle sont libérés et peuvent être revendiqués de nouveau."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:301
 #: lib/vutuv_web/live/organization_live/new.ex:126
 #, elixir-autogen, elixir-format
 msgid "Kind of organization"
-msgstr ""
+msgstr "Type d'organisation"
 
 #: lib/vutuv_web/live/organization_live/roles.ex:252
 #, elixir-autogen, elixir-format
 msgid "Leave this organization team?"
-msgstr ""
+msgstr "Quitter cette équipe d'organisation ?"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:345
 #, elixir-autogen, elixir-format
 msgid "Matches another verified organization"
-msgstr ""
+msgstr "Correspond à une autre organisation vérifiée"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:238
 #, elixir-autogen, elixir-format
 msgid "No organization pages match."
-msgstr ""
+msgstr "Aucune page d'organisation ne correspond."
 
 #: lib/vutuv_web/live/organization_live/index.ex:90
 #, elixir-autogen, elixir-format
 msgid "No organization pages yet. Be the first to add yours."
-msgstr ""
+msgstr "Pas encore de pages d'organisation. Soyez le premier à ajouter la vôtre."
 
 #: lib/vutuv_web/live/organization_live/index.ex:92
 #, elixir-autogen, elixir-format
 msgid "No organizations found for %{term}."
-msgstr ""
+msgstr "Aucune organisation trouvée pour %{term}."
 
 #: lib/vutuv_web/live/post_live/saved.ex:731
 #, elixir-autogen, elixir-format
 msgid "No saved organizations match your search."
-msgstr ""
+msgstr "Aucune organisation enregistrée ne correspond à votre recherche."
 
 #: lib/vutuv_web/live/post_live/saved.ex:728
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. Organizations you bookmark show up here."
-msgstr ""
+msgstr "Il n'y a rien ici. Les organisations que vous mettez en marque-page apparaissent ici."
 
 #: lib/vutuv_web/live/post_live/saved.ex:725
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. Organizations you like show up here."
-msgstr ""
+msgstr "Il n'y a rien ici. Les organisations que vous aimez apparaissent ici."
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:310
 #, elixir-autogen, elixir-format
 msgid "Open organization oversight"
-msgstr ""
+msgstr "Ouvrir la supervision des organisations"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:96
 #, elixir-autogen, elixir-format
 msgid "Organization archived."
-msgstr ""
+msgstr "Organisation archivée."
 
 #: lib/vutuv_web/live/admin/organization_live.ex:126
 #, elixir-autogen, elixir-format
 msgid "Organization deleted."
-msgstr ""
+msgstr "Organisation supprimée."
 
 #: lib/vutuv_web/live/admin/organization_live.ex:84
 #, elixir-autogen, elixir-format
 msgid "Organization frozen."
-msgstr ""
+msgstr "Organisation gelée."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:300
 #: lib/vutuv_web/live/organization_live/new.ex:125
 #, elixir-autogen, elixir-format
 msgid "Organization name"
-msgstr ""
+msgstr "Nom de l'organisation"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:25
 #: lib/vutuv_web/live/admin/organization_live.ex:188
@@ -11585,17 +11585,17 @@ msgstr ""
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:305
 #, elixir-autogen, elixir-format
 msgid "Organization pages"
-msgstr ""
+msgstr "Pages d'organisation"
 
 #: lib/vutuv_web/notification_line.ex:351
 #, elixir-autogen, elixir-format
 msgid "Organization role"
-msgstr ""
+msgstr "Rôle dans l'organisation"
 
 #: lib/vutuv_web/live/admin/organization_live.ex:92
 #, elixir-autogen, elixir-format
 msgid "Organization unfrozen."
-msgstr ""
+msgstr "Organisation dégelée."
 
 #: lib/vutuv_web/agent_docs/markdown.ex:533
 #: lib/vutuv_web/agent_docs/organization_doc.ex:138
@@ -11613,248 +11613,248 @@ msgstr ""
 #: lib/vutuv_web/views/press_kit_html.ex:49
 #, elixir-autogen, elixir-format
 msgid "Organizations"
-msgstr ""
+msgstr "Organisations"
 
 #: lib/vutuv_web/components/organization_components.ex:170
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:90
 #, elixir-autogen, elixir-format
 msgid "Please choose"
-msgstr ""
+msgstr "Veuillez choisir"
 
 #: lib/vutuv_web/controllers/organization_controller.ex:129
 #, elixir-autogen, elixir-format
 msgid "Please confirm your email address before claiming an organization page."
-msgstr ""
+msgstr "Veuillez confirmer votre adresse e-mail avant de revendiquer une page d'organisation."
 
 #: lib/vutuv_web/controllers/organization_controller.ex:135
 #, elixir-autogen, elixir-format
 msgid "Please log in to claim an organization page."
-msgstr ""
+msgstr "Veuillez vous connecter pour revendiquer une page d'organisation."
 
 #: lib/vutuv_web/live/organization_live/index.ex:73
 #, elixir-autogen, elixir-format
 msgid "Search organizations"
-msgstr ""
+msgstr "Rechercher des organisations"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:101
 #, elixir-autogen, elixir-format
 msgid "That domain already belongs to an organization page."
-msgstr ""
+msgstr "Ce domaine appartient déjà à une page d'organisation."
 
 #: lib/vutuv_web/live/organization_live/new.ex:66
 #, elixir-autogen, elixir-format
 msgid "That domain already belongs to another organization page."
-msgstr ""
+msgstr "Ce domaine appartient déjà à une autre page d'organisation."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:116
 #, elixir-autogen, elixir-format
 msgid "That name is already listed for this organization."
-msgstr ""
+msgstr "Ce nom est déjà enregistré pour cette organisation."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:201
 #, elixir-autogen, elixir-format
 msgid "The organization page was deleted."
-msgstr ""
+msgstr "La page d'organisation a été supprimée."
 
 #: lib/vutuv_web/live/organization_live/show.ex:493
 #, elixir-autogen, elixir-format
 msgid "This organization page was reported and is hidden while it is reviewed. Only you and the moderators can see it."
-msgstr ""
+msgstr "Cette page d'organisation a été signalée et est masquée pendant son examen. Seuls vous et les modérateurs pouvez la voir."
 
 #: lib/vutuv_web/open_graph.ex:237
 #, elixir-autogen, elixir-format
 msgid "Verified organization pages on vutuv, each with a proven web domain."
-msgstr ""
+msgstr "Pages d'organisation vérifiées sur vutuv, chacune avec un domaine web prouvé."
 
 #: lib/vutuv_web/agent_docs/organization_doc.ex:139
 #, elixir-autogen, elixir-format
 msgid "Verified organization pages on vutuv."
-msgstr ""
+msgstr "Pages d'organisation vérifiées sur vutuv."
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:313
 #, elixir-autogen, elixir-format
 msgid "Verified organization pages: domains, team roles, aliases and rename history. Freeze, archive or delete a page."
-msgstr ""
+msgstr "Pages d'organisation vérifiées : domaines, rôles d'équipe, alias et historique des renommages. Geler, archiver ou supprimer une page."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:184
 #, elixir-autogen, elixir-format
 msgid "You are not allowed to delete this organization."
-msgstr ""
+msgstr "Vous n'êtes pas autorisé à supprimer cette organisation."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:149
 #, elixir-autogen, elixir-format
 msgid "Your organization handle is set."
-msgstr ""
+msgstr "Le handle de votre organisation est défini."
 
 #: lib/vutuv_web/live/organization_live/show.ex:379
 #: lib/vutuv_web/live/organization_live/show.ex:432
 #, elixir-autogen, elixir-format
 msgid "Your organization page is verified and now live."
-msgstr ""
+msgstr "Votre page d'organisation est vérifiée et maintenant en ligne."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:236
 #: lib/vutuv_web/live/organization_live/edit.ex:251
 #, elixir-autogen, elixir-format
 msgid "Your organization page was updated."
-msgstr ""
+msgstr "Votre page d'organisation a été mise à jour."
 
 #: lib/vutuv_web/notification_line.ex:115
 #, elixir-autogen, elixir-format
 msgid "gave you a role at %{organization}."
-msgstr ""
+msgstr "vous a attribué un rôle chez %{organization}."
 
 #: lib/vutuv_web/notification_line.ex:112
 #, elixir-autogen, elixir-format
 msgid "made you a recruiter for %{organization}."
-msgstr ""
+msgstr "vous a nommé recruteur pour %{organization}."
 
 #: lib/vutuv_web/notification_line.ex:109
 #, elixir-autogen, elixir-format
 msgid "made you an admin of %{organization}."
-msgstr ""
+msgstr "vous a nommé administrateur de %{organization}."
 
 #: lib/vutuv_web/notification_line.ex:106
 #, elixir-autogen, elixir-format
 msgid "made you an owner of %{organization}."
-msgstr ""
+msgstr "vous a nommé propriétaire de %{organization}."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:463
 #, elixir-autogen, elixir-format
 msgid "your_organization"
-msgstr ""
+msgstr "votre_organisation"
 
 #: lib/vutuv_web/templates/settings/privacy.html.heex:20
 #, elixir-autogen, elixir-format
 msgid "We can't stop a search engine or AI service from reading a page it can open. What we can do is tell them, in the machine-readable way they look for, that you don't want your profile listed in search results or used by AI. Reputable search engines and AI companies follow that request; we can't force the rest."
-msgstr ""
+msgstr "Nous ne pouvons pas empêcher un moteur de recherche ou un service d'IA de lire une page qu'il peut ouvrir. Ce que nous pouvons faire, c'est leur indiquer de la manière lisible par machine prévue à cet effet que vous ne voulez pas que votre profil apparaisse dans les résultats de recherche ni qu'il soit utilisé par l'IA. Les moteurs de recherche et les entreprises d'IA sérieux respectent cela ; nous ne pouvons pas l'imposer aux autres."
 
 #: lib/vutuv/organizations/organization.ex:105
 #, elixir-autogen, elixir-format
 msgid "Association"
-msgstr ""
+msgstr "Association / fédération"
 
 #: lib/vutuv/organizations/organization.ex:104
 #, elixir-autogen, elixir-format
 msgid "Business"
-msgstr ""
+msgstr "Entreprise"
 
 #: lib/vutuv/organizations/organization.ex:107
 #, elixir-autogen, elixir-format
 msgid "Education / research"
-msgstr ""
+msgstr "Éducation / recherche"
 
 #: lib/vutuv/organizations/organization.ex:108
 #, elixir-autogen, elixir-format
 msgid "NGO / foundation"
-msgstr ""
+msgstr "ONG / fondation"
 
 #: lib/vutuv/organizations/organization.ex:109
 #, elixir-autogen, elixir-format
 msgid "Other organization"
-msgstr ""
+msgstr "Autre"
 
 #: lib/vutuv/organizations/organization.ex:106
 #, elixir-autogen, elixir-format
 msgid "Public authority"
-msgstr ""
+msgstr "Administration / secteur public"
 
 #: lib/vutuv_web/live/admin/job_live.ex:371
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:136
 #, elixir-autogen, elixir-format
 msgid "%{views} views · %{clicks} apply clicks"
-msgstr ""
+msgstr "%{views} vues · %{clicks} clics de candidature"
 
 #: lib/vutuv_web/views/report_html.ex:98
 #, elixir-autogen, elixir-format
 msgid "A fake, misleading or discriminatory job advertisement."
-msgstr ""
+msgstr "Une offre d'emploi fausse, trompeuse ou discriminatoire."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:677
 #, elixir-autogen, elixir-format
 msgid "A pay range is required to publish (except volunteer postings)."
-msgstr ""
+msgstr "Une fourchette de rémunération est requise pour publier (sauf pour le bénévolat)."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:800
 #, elixir-autogen, elixir-format
 msgid "A vutuv message to me"
-msgstr ""
+msgstr "Un message vutuv qui m'est adressé"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:798
 #, elixir-autogen, elixir-format
 msgid "A website"
-msgstr ""
+msgstr "Un site web"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:799
 #, elixir-autogen, elixir-format
 msgid "An e-mail address"
-msgstr ""
+msgstr "Une adresse e-mail"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:588
 #, elixir-autogen, elixir-format
 msgid "Applicants must be located in"
-msgstr ""
+msgstr "Lieu de résidence exigé des candidats"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:804
 #, elixir-autogen, elixir-format
 msgid "Application URL"
-msgstr ""
+msgstr "URL de candidature"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:810
 #, elixir-autogen, elixir-format
 msgid "Application e-mail"
-msgstr ""
+msgstr "E-mail de candidature"
 
 #: lib/vutuv_web/controllers/job_posting_controller.ex:117
 #, elixir-autogen, elixir-format
 msgid "Application: %{title}"
-msgstr ""
+msgstr "Candidature : %{title}"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:796
 #, elixir-autogen, elixir-format
 msgid "Applications go to"
-msgstr ""
+msgstr "Les candidatures vont à"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:298
 #, elixir-autogen, elixir-format
 msgid "Apply by e-mail"
-msgstr ""
+msgstr "Candidater par e-mail"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:297
 #, elixir-autogen, elixir-format
 msgid "Apply on website"
-msgstr ""
+msgstr "Candidater sur le site web"
 
 #: lib/vutuv/jobs/job_posting.ex:156
 #, elixir-autogen, elixir-format
 msgid "Apprenticeship"
-msgstr ""
+msgstr "Apprentissage"
 
 #: lib/vutuv_web/live/admin/job_live.ex:163
 #: lib/vutuv_web/live/admin/job_live.ex:183
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:183
 #, elixir-autogen, elixir-format
 msgid "Closed"
-msgstr ""
+msgstr "Fermée"
 
 #: lib/vutuv/jobs/job_posting.ex:153
 #, elixir-autogen, elixir-format
 msgid "Contract"
-msgstr ""
+msgstr "Freelance"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:717
 #, elixir-autogen, elixir-format
 msgid "Describe the role. Markdown is supported."
-msgstr ""
+msgstr "Décrivez le poste. Markdown est pris en charge."
 
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:181
 #, elixir-autogen, elixir-format
 msgid "Drafts"
-msgstr ""
+msgstr "Brouillons"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:120
 #, elixir-autogen, elixir-format
 msgid "Edit posting"
-msgstr ""
+msgstr "Modifier l'offre"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:308
 #: lib/vutuv_web/agent_docs/markdown.ex:594
@@ -11865,12 +11865,12 @@ msgstr ""
 #: lib/vutuv_web/views/account_event_text.ex:225
 #, elixir-autogen, elixir-format
 msgid "Employer"
-msgstr ""
+msgstr "Employeur"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:484
 #, elixir-autogen, elixir-format
 msgid "Employer name (optional)"
-msgstr ""
+msgstr "Nom de l'employeur (facultatif)"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:309
 #: lib/vutuv_web/agent_docs/markdown.ex:595
@@ -11880,12 +11880,12 @@ msgstr ""
 #: lib/vutuv_web/live/job_posting_live/form.ex:499
 #, elixir-autogen, elixir-format
 msgid "Employment type"
-msgstr ""
+msgstr "Type de contrat"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:822
 #, elixir-autogen, elixir-format
 msgid "Everyone (public)"
-msgstr ""
+msgstr "Tout le monde (public)"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:681
 #: lib/vutuv_web/live/tag_live/timeline.ex:381
@@ -11893,43 +11893,43 @@ msgstr ""
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:63
 #, elixir-autogen, elixir-format
 msgid "From"
-msgstr ""
+msgstr "De"
 
 #: lib/vutuv/jobs/job_posting.ex:151
 #, elixir-autogen, elixir-format
 msgid "Full-time"
-msgstr ""
+msgstr "Temps plein"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:182
 #, elixir-autogen, elixir-format
 msgid "Highlighted tags match your profile."
-msgstr ""
+msgstr "Les tags surlignés correspondent à votre profil."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:794
 #, elixir-autogen, elixir-format
 msgid "How to apply"
-msgstr ""
+msgstr "Comment candidater"
 
 #: lib/vutuv/accounts/user.ex:1313
 #: lib/vutuv/jobs/job_posting.ex:165
 #, elixir-autogen, elixir-format
 msgid "Hybrid"
-msgstr ""
+msgstr "Hybride"
 
 #: lib/vutuv_web/controllers/job_posting_controller.ex:136
 #, elixir-autogen, elixir-format
 msgid "I'm interested in your posting: %{url}"
-msgstr ""
+msgstr "Je m'intéresse à votre offre : %{url}"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:716
 #, elixir-autogen, elixir-format
 msgid "Job description"
-msgstr ""
+msgstr "Description du poste"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:451
 #, elixir-autogen, elixir-format
 msgid "Job title"
-msgstr ""
+msgstr "Intitulé du poste"
 
 #: lib/vutuv_web/agent_docs/job_board_doc.ex:38
 #: lib/vutuv_web/components/saved_search_components.ex:56
@@ -11940,12 +11940,12 @@ msgstr ""
 #: lib/vutuv_web/templates/layout/app.html.heex:70
 #, elixir-autogen, elixir-format
 msgid "Jobs"
-msgstr ""
+msgstr "Emplois"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:832
 #, elixir-autogen, elixir-format
 msgid "Let search engines index this posting."
-msgstr ""
+msgstr "Les moteurs de recherche peuvent indexer cette offre."
 
 #: lib/vutuv_web/agent_docs/markdown.ex:569
 #: lib/vutuv_web/agent_docs/markdown.ex:572
@@ -11956,44 +11956,44 @@ msgstr ""
 #: lib/vutuv_web/live/job_posting_live/form.ex:549
 #, elixir-autogen, elixir-format
 msgid "Location"
-msgstr ""
+msgstr "Lieu"
 
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:160
 #, elixir-autogen, elixir-format
 msgid "Mark as filled"
-msgstr ""
+msgstr "Marquer comme pourvue"
 
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:158
 #, elixir-autogen, elixir-format
 msgid "Mark this posting as filled and close it?"
-msgstr ""
+msgstr "Marquer cette offre comme pourvue et la fermer ?"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:299
 #, elixir-autogen, elixir-format
 msgid "Message the poster"
-msgstr ""
+msgstr "Écrire à l'annonceur"
 
 #: lib/vutuv/jobs/job_posting.ex:158
 #, elixir-autogen, elixir-format
 msgid "Mini-job"
-msgstr ""
+msgstr "Petit emploi"
 
 #: lib/vutuv_web/views/report_html.ex:83
 #, elixir-autogen, elixir-format
 msgid "Misleading job posting"
-msgstr ""
+msgstr "Offre d'emploi trompeuse"
 
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:25
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:101
 #: lib/vutuv_web/live/job_posting_live/show.ex:204
 #, elixir-autogen, elixir-format
 msgid "My postings"
-msgstr ""
+msgstr "Mes offres"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:421
 #, elixir-autogen, elixir-format
 msgid "New accounts can publish after a few days."
-msgstr ""
+msgstr "Les nouveaux comptes peuvent publier après quelques jours."
 
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:102
 #: lib/vutuv_web/live/job_posting_live/form.ex:120
