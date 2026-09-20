@@ -845,5 +845,39 @@ defmodule Vutuv.AccountsTest do
     end
   end
 
+  describe "search_people/3" do
+    # Who counts as a candidate is the caller's question, and the two callers
+    # answer it differently: the messages finder shows you yourself (and greys
+    # the row out), because a search that silently omits you reads as broken;
+    # the composer's "Hide from…" sheet must not, since hiding a post from
+    # yourself is a no-op by invariant.
+    test "the viewer is left out unless the caller asks for them" do
+      me = insert(:activated_user, first_name: "Ada", last_name: "Sucher")
+      other = insert(:activated_user, first_name: "Bea", last_name: "Sucher")
+
+      found = Accounts.search_people(me, "Sucher")
+      assert Enum.map(found, & &1.id) == [other.id]
+
+      with_self = Accounts.search_people(me, "Sucher", include_self: true)
+      assert me.id in Enum.map(with_self, & &1.id)
+      assert other.id in Enum.map(with_self, & &1.id)
+    end
+
+    test "an account nobody may be shown stays out either way" do
+      me = insert(:activated_user, first_name: "Ada", last_name: "Versteckt")
+      hidden = insert(:activated_user, first_name: "Bea", last_name: "Versteckt")
+
+      {:ok, _} =
+        hidden
+        |> Ecto.Changeset.change(%{deactivated_at: naive_now()})
+        |> Repo.update()
+
+      assert Accounts.search_people(me, "Versteckt") == []
+
+      assert Accounts.search_people(me, "Versteckt", include_self: true) |> Enum.map(& &1.id) ==
+               [me.id]
+    end
+  end
+
   defp naive_now, do: NaiveDateTime.utc_now(:second)
 end

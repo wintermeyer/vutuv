@@ -270,6 +270,35 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
       assert html =~ ~s(phx-value-id="#{exact.id}")
     end
 
+    test "you are in your own results, greyed out and not writable", %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/messages")
+
+      html = view |> form("#recipient-search-form", %{"q" => user.username}) |> render_change()
+
+      # Shown, because a search that silently omits you reads as broken — and
+      # disabled, because writing to yourself is not a thing.
+      assert html =~ ~s(phx-value-id="#{user.id}")
+      assert has_element?(view, ~s(button[data-recipient-self][disabled]))
+      assert html =~ "That&#39;s you"
+    end
+
+    test "our own address written out in full names the member, not another server",
+         %{conn: conn} do
+      stub_remote(fn _conn -> raise "this installation must not ask itself over the network" end)
+      member = insert(:activated_user, first_name: "Ada", last_name: "Berg", username: "ada_b")
+
+      {:ok, view, _html} = live(conn, ~p"/messages")
+
+      # "localhost" is this installation in the test env, so `@ada_b@localhost`
+      # is the same member the bare handle names — that is how every other
+      # server writes a mention of them, and what a share button hands over.
+      html =
+        view |> form("#recipient-search-form", %{"q" => "@ada_b@localhost"}) |> render_change()
+
+      assert html =~ ~s(phx-value-id="#{member.id}")
+      refute html =~ "Look this address up"
+    end
+
     test "the German page says what the field searches", %{conn: conn} do
       {:ok, _view, html} =
         conn

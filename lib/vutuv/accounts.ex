@@ -2824,8 +2824,18 @@ defmodule Vutuv.Accounts do
   It is the one person typeahead: the messages finder and the composer's
   "Hide from…" sheet ask the same question, and finding a member by name is an
   Accounts question wherever it is asked.
+
+  ## Options
+
+    * `:limit` — how many rows at most (default 8).
+    * `:include_self` — whether the viewer counts as a candidate (default
+      `false`). The two callers really do differ: hiding a post from yourself
+      is a no-op by invariant, so the composer's sheet must not offer you,
+      while the messages finder shows you and greys the row out — a search for
+      your own name that answers "nobody" reads as broken rather than as a
+      rule, which is what a member reported.
   """
-  def search_people(%User{id: me_id}, term, limit \\ 8) when is_binary(term) do
+  def search_people(%User{id: me_id}, term, opts \\ []) when is_binary(term) do
     # A member writes a handle the way it is shown to them, with its @.
     term = Handles.normalize(term)
 
@@ -2835,38 +2845,53 @@ defmodule Vutuv.Accounts do
       like = contains(term)
       exact = equals(term)
       prefix = starts_with(term)
-      reversed = reversed_name(term)
 
-      Repo.all(
-        from(u in User,
-          where: u.id != ^me_id,
-          where: account_confirmed_row(u) and not account_hidden_row(u),
-          where:
-            person_ilike(u.first_name, u.last_name, u.username, ^like) or
-              name_ilike(u.first_name, u.last_name, ^reversed),
-          order_by: [
-            asc:
-              fragment(
-                "case when ? then 0 when ? then 1 else 2 end",
-                person_ilike(u.first_name, u.last_name, u.username, ^exact),
-                person_ilike(u.first_name, u.last_name, u.username, ^prefix)
-              ),
-            asc: u.first_name,
-            asc: u.last_name
-          ],
-          limit: ^limit
-        )
+      from(u in User,
+        where: account_confirmed_row(u) and not account_hidden_row(u),
+        where: ^matches(like, reversed_name(term)),
+        order_by: [
+          asc:
+            fragment(
+              "case when ? then 0 when ? then 1 else 2 end",
+              person_ilike(u.first_name, u.last_name, u.username, ^exact),
+              person_ilike(u.first_name, u.last_name, u.username, ^prefix)
+            ),
+          asc: u.first_name,
+          asc: u.last_name
+        ],
+        limit: ^Keyword.get(opts, :limit, 8)
       )
+      |> without_self(me_id, Keyword.get(opts, :include_self, false))
+      |> Repo.all()
     end
   end
 
+  defp without_self(query, _me_id, true), do: query
+  defp without_self(query, me_id, _include_self), do: where(query, [u], u.id != ^me_id)
+
+  # The match, as one expression rather than two `where`s: `or_where/3` would
+  # OR against everything accumulated before it, so a hidden account matching
+  # the reversed name would slip past the visibility gate.
+  defp matches(like, nil),
+    do: dynamic([u], person_ilike(u.first_name, u.last_name, u.username, ^like))
+
+  defp matches(like, reversed) do
+    dynamic(
+      [u],
+      person_ilike(u.first_name, u.last_name, u.username, ^like) or
+        name_ilike(u.first_name, u.last_name, ^reversed)
+    )
+  end
+
   # "Petersen Jan" as "Jan Petersen", so the pair matches whichever way round
-  # it was typed. Anything that is not exactly two words searches for itself
-  # twice, which costs nothing and keeps the query one shape.
+  # it was typed — and `nil` for anything that is not two words, where the
+  # reversed pattern IS the plain one. Asking for it anyway is not free once
+  # the trigram indexes can serve these arms: it made three of the query's
+  # seven bitmap index scans literal duplicates.
   defp reversed_name(term) do
     case String.split(term, ~r/\s+/, trim: true) do
       [first, last] -> contains(last <> " " <> first)
-      _other -> contains(term)
+      _not_a_pair -> nil
     end
   end
 

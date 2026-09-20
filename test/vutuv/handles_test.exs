@@ -201,4 +201,37 @@ defmodule Vutuv.HandlesTest do
       assert Handles.available?("totally_free")
     end
   end
+
+  describe "normalize/1" do
+    # The endpoint host is "localhost" in the test env (config/test.exs), so
+    # these read the real rule without flipping application env on an async
+    # file — which would reach every other test running beside this one.
+
+    test "an address on our own host is the handle written out in full" do
+      assert Handles.normalize("@ada@localhost") == "ada"
+      assert Handles.normalize("ada@localhost") == "ada"
+      assert Handles.normalize("@Ada@LOCALHOST") == "ada"
+    end
+
+    test "the www alias is us" do
+      assert Handles.normalize("@ada@www.localhost") == "ada"
+    end
+
+    test "an address anywhere else is somebody else's account and stays whole" do
+      assert Handles.normalize("@ada@other.example") == "ada@other.example"
+
+      # The classic near-miss: our host as a prefix of somebody else's.
+      assert Handles.normalize("@ada@localhost.evil.example") == "ada@localhost.evil.example"
+    end
+
+    test "our tag host names a topic, not a member, so it stays whole" do
+      assert Handles.normalize("@elixir@tags.localhost") == "elixir@tags.localhost"
+    end
+
+    test "it still does what it always did" do
+      assert Handles.normalize("  @Ada  ") == "ada"
+      assert Handles.normalize("ada") == "ada"
+      assert Handles.normalize("@a@b@c") == "a@b@c"
+    end
+  end
 end

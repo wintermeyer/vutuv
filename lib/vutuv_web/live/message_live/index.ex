@@ -100,16 +100,28 @@ defmodule VutuvWeb.MessageLive.Index do
   # An `@name@server` this installation does not already hold, or nil. What it
   # answers for is the row that offers to go and ask; everything it finds in
   # the table above needs no request at all.
+  #
+  # An address on our OWN host is a member, never a row to go and ask about:
+  # the members half above has already folded it to the bare handle
+  # (`Handles.normalize/1`) and found them. Offering the lookup beside that
+  # would send this installation to WebFinger itself, which `follow_remote/2`
+  # refuses as `:local_account` — a dead end at the end of a spent request.
   defp unknown_address(term) do
     address = String.trim(term)
 
-    with {:ok, _parts} <- RemoteFollow.parse_address(address),
+    with {:ok, {_name, host}} <- RemoteFollow.parse_address(address),
+         false <- Fediverse.local_host?(host),
          nil <- Fediverse.remote_account_by_address(address) do
       address
     else
-      _known_or_invalid -> nil
+      _ours_or_known_or_invalid -> nil
     end
   end
+
+  # The same id on both sides, so the two positions are constrained to be equal
+  # — deliberate here, where that is the whole question.
+  defp viewer?(%{id: id}, %{id: id}), do: true
+  defp viewer?(_member, _viewer), do: false
 
   defp open_conversation(socket, {:ok, %Conversation{} = conversation}),
     do: {:noreply, push_navigate(socket, to: ~p"/messages/#{conversation.id}")}
@@ -348,7 +360,10 @@ defmodule VutuvWeb.MessageLive.Index do
      socket
      |> assign(:recipient_query, term)
      |> assign(:lookup_error, nil)
-     |> assign(:recipient_members, Accounts.search_people(user, term, 6))
+     |> assign(
+       :recipient_members,
+       Accounts.search_people(user, term, limit: 6, include_self: true)
+     )
      |> assign(:recipient_accounts, if(remote?, do: Fediverse.search_accounts(term), else: []))
      |> assign(:recipient_lookup, remote? && unknown_address(term))}
   end
@@ -1231,13 +1246,26 @@ defmodule VutuvWeb.MessageLive.Index do
             <p class="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               {gettext("vutuv members")}
             </p>
+            <%!-- Your own row is shown and disabled rather than left out: a
+            search for your own name that answers "nobody" reads as a broken
+            search, not as a rule. `disabled` is what makes it unavailable —
+            the greying only says so — and `Chat.find_or_create_conversation/2`
+            refuses a pair of one anyway, so the guard does not live here. --%>
             <button
               :for={member <- @recipient_members}
               type="button"
+              disabled={viewer?(member, @current_user)}
               phx-click="write-to-member"
               phx-value-id={member.id}
               data-recipient="member"
-              class="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+              data-recipient-self={viewer?(member, @current_user)}
+              class={[
+                "flex w-full items-center gap-3 px-4 py-2.5 text-left",
+                if(viewer?(member, @current_user),
+                  do: "cursor-default opacity-60",
+                  else: "hover:bg-slate-50 dark:hover:bg-slate-800"
+                )
+              ]}
             >
               <.avatar user={member} size="sm" />
               <span class="min-w-0">
@@ -1247,6 +1275,12 @@ defmodule VutuvWeb.MessageLive.Index do
                 <span class="block truncate text-xs text-slate-600 dark:text-slate-400">
                   @{member.username}
                 </span>
+              </span>
+              <span
+                :if={viewer?(member, @current_user)}
+                class="ml-auto shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400"
+              >
+                {gettext("That's you")}
               </span>
             </button>
           </div>

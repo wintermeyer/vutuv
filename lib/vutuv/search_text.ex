@@ -84,6 +84,14 @@ defmodule Vutuv.SearchText do
   site's own extra columns inside a `where`. The bound columns are passed
   explicitly (`name_ilike(t.first_name, t.last_name, ^pattern)`) because the
   query binding name differs per call site (`target`, `author`, plain user).
+
+  **The concatenation's spelling is load-bearing.** `users_full_name_trgm_index`
+  indexes this exact expression, and a GIN expression index is used only when
+  the query's expression normalizes to the index's — so writing it as
+  `concat(?, ' ', ?)`, or wrapping a column in `coalesce`, takes the index out
+  of the plan **silently**: same rows, same order, a sequential scan per
+  keystroke. `test/vutuv/search_people_index_test.exs` holds the two together;
+  a behaviour test cannot, because the answer does not change.
   """
   defmacro name_ilike(first, last, pattern) do
     quote do

@@ -24,6 +24,7 @@ defmodule Vutuv.Handles do
   alias Vutuv.Accounts.Handle
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
 
@@ -98,11 +99,41 @@ defmodule Vutuv.Handles do
 
   @doc """
   Normalizes a user-typed `@handle` for lookup: trims whitespace, drops a
-  leading `@`, and lowercases (usernames are stored lowercase). Shared by
-  every site that resolves a member/organization from typed input so they
-  cannot drift.
+  leading `@`, lowercases (usernames are stored lowercase), and folds an
+  address on **our own host** back to the bare handle. Shared by every site
+  that resolves a member/organization from typed input so they cannot drift.
+
+  `@ada` and `@ada@<our host>` name the same member — the second is the first
+  written out in full, which is how every other server writes a mention of us
+  and what a share button hands a member to paste. Deciding that by **host**
+  rather than by shape is the rule `Vutuv.Mentions` already applies to a body;
+  this is the same rule for a single typed term.
+
+  Without it the full spelling did not merely fail to resolve, it **fell
+  through to the foreign path**: the messages finder answered `@ada@vutuv.de`
+  with "look this address up on another server", which `follow_remote/2` then
+  refused as `:local_account` — the shape `Vutuv.Fediverse.local_host?/1`'s own
+  docstring warns about.
   """
   def normalize(value) when is_binary(value) do
-    value |> String.trim() |> String.trim_leading("@") |> String.downcase()
+    value
+    |> String.trim()
+    |> String.trim_leading("@")
+    |> String.downcase()
+    |> drop_own_host()
+  end
+
+  # Only a plain `user@host` pair, and only when the host is ours. Anywhere
+  # else is somebody else's account and stays whole; our **tag** host names a
+  # topic rather than a member, which `local_host?/1` already answers `false`
+  # for, since it folds `www.` and nothing deeper.
+  defp drop_own_host(value) do
+    case String.split(value, "@") do
+      [handle, host] when handle != "" and host != "" ->
+        if Fediverse.local_host?(host), do: handle, else: value
+
+      _not_a_pair ->
+        value
+    end
   end
 end
