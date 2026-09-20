@@ -32,6 +32,14 @@ defmodule Vutuv.Ads.Discounts do
     )
   end
 
+  @doc """
+  How many codes are still inside their window, for the admin dashboard's tile.
+  An expired one is history, so counting it would advertise codes nobody can
+  use — which is why the window comes from `DiscountCode.live_query/1` rather
+  than being spelled a second time here.
+  """
+  def live_codes_count, do: Repo.aggregate(DiscountCode.live_query(), :count)
+
   @doc "One code by its id (which is the code), or nil - also on a malformed id."
   def get_code(id), do: UUIDv7.with_cast(id, &Repo.get(DiscountCode, &1))
 

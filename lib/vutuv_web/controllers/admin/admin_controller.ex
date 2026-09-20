@@ -2,6 +2,7 @@ defmodule VutuvWeb.Admin.AdminController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Ads.Discounts
   alias Vutuv.Fediverse
   alias Vutuv.Geo
   alias Vutuv.Moderation.ImageScans
@@ -14,6 +15,7 @@ defmodule VutuvWeb.Admin.AdminController do
     client_ip = conn.remote_ip |> :inet.ntoa() |> to_string()
 
     jobs_counts = Vutuv.Jobs.admin_overview_counts()
+    ads_enabled = Vutuv.Ads.enabled?()
 
     # The full member browser lives at /admin/users; the dashboard just links to
     # it and surfaces the one actionable slice — the identity-verification queue.
@@ -24,8 +26,9 @@ defmodule VutuvWeb.Admin.AdminController do
       moderation_count: Vutuv.Moderation.open_queue_count(),
       image_moderation_enabled: ImageScans.enabled?(),
       image_scan_counts: ImageScans.counts(),
-      ads_enabled: Vutuv.Ads.enabled?(),
-      pending_ads_count: if(Vutuv.Ads.enabled?(), do: Vutuv.Ads.pending_ads_count(), else: 0),
+      ads_enabled: ads_enabled,
+      pending_ads_count: if(ads_enabled, do: Vutuv.Ads.pending_ads_count(), else: 0),
+      live_discount_codes_count: if(ads_enabled, do: Discounts.live_codes_count(), else: 0),
       api_apps_count: Repo.aggregate(Vutuv.ApiAuth.App, :count),
       tags_count: Repo.aggregate(Tag, :count),
       honor_tags_count: Vutuv.Tags.honor_tags_count(),

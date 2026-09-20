@@ -181,7 +181,9 @@ reduced amount. Every rule about whether a code may be used lives in
 `Discounts.check/3`, which the wizard asks to SHOW a price and `book_ad/3` asks
 again before it stamps one. A code that turns out unusable books at the list
 price rather than failing the booking: nobody loses their week over a typo in a
-voucher.
+voucher. The page is reached from its own dashboard tile and from a link in the
+review page's header — it shipped with neither, so making a code meant knowing
+the URL; both sit behind `Ads.enabled?`, like everything else here.
 
 **Every ad is reviewed before it runs.** A booking is pending, then approved
 or rejected, and it can be cancelled on the way (`Vutuv.Ads.Ad.status/1`):

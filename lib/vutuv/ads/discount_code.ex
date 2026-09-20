@@ -122,4 +122,11 @@ defmodule Vutuv.Ads.DiscountCode do
   @doc "Whether the code is still inside its own window."
   def live?(%__MODULE__{expires_on: expires_on}, today \\ Vutuv.BerlinTime.today()),
     do: Date.compare(expires_on, today) != :lt
+
+  @doc """
+  The same window as `live?/2`, as a query, so a row read one at a time and a
+  count taken over all of them cannot answer differently.
+  """
+  def live_query(today \\ Vutuv.BerlinTime.today()),
+    do: from(c in __MODULE__, where: c.expires_on >= ^today)
 end

@@ -4069,7 +4069,7 @@ msgid "Advertising on vutuv"
 msgstr "Werbung auf vutuv"
 
 #: lib/vutuv_web/live/ad_booking_live.ex:846
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:58
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:68
 #, elixir-autogen, elixir-format
 msgid "Billing name"
 msgstr "Name für die Rechnung"
@@ -4230,7 +4230,7 @@ msgstr ""
 "Jede Anzeige wird vor der Ausspielung geprüft und freigeschaltet; der "
 "früheste buchbare Tag liegt drei Tage in der Zukunft."
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:13
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "Every ad must be approved before it runs. Check that it is family-friendly (community guidelines) before approving."
 msgstr ""
@@ -4254,7 +4254,7 @@ msgstr "Meine Buchungen"
 msgid "No ads waiting for approval."
 msgstr "Keine Anzeigen warten auf Freischaltung."
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:19
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:29
 #, elixir-autogen, elixir-format
 msgid "No upcoming ads."
 msgstr "Keine anstehenden Anzeigen."
@@ -4264,7 +4264,7 @@ msgstr "Keine anstehenden Anzeigen."
 msgid "Open the ad review"
 msgstr "Zur Anzeigen-Abnahme"
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:56
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:66
 #, elixir-autogen, elixir-format
 msgid "Past ads"
 msgstr "Vergangene Anzeigen"
@@ -4279,7 +4279,7 @@ msgstr "Die Community-Richtlinien lesen"
 msgid "The ad for %{day} is approved and will run."
 msgstr "Die Anzeige für den %{day} ist freigeschaltet und wird ausgespielt."
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:11
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Upcoming ads"
 msgstr "Anstehende Anzeigen"
@@ -4386,7 +4386,7 @@ msgstr "Freigeschaltet am"
 
 #: lib/vutuv_web/live/admin/job_live.ex:290
 #: lib/vutuv_web/live/admin/organization_live.ex:265
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:39
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:49
 #, elixir-autogen, elixir-format
 msgid "Details"
 msgstr "Details"
@@ -26156,6 +26156,7 @@ msgid "Acme is looking for you"
 msgstr "Acme sucht Sie"
 
 #: lib/vutuv_web/controllers/admin/discount_code_controller.ex:71
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:447
 #: lib/vutuv_web/templates/admin/discount_code/index.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Ad discount codes"
@@ -26261,6 +26262,7 @@ msgstr "Rabattcode (optional)"
 msgid "Discount code: −%{amount} €"
 msgstr "Rabattcode: −%{amount} €"
 
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:19
 #: lib/vutuv_web/templates/admin/discount_code/index.html.heex:8
 #, elixir-autogen, elixir-format
 msgid "Discount codes"
@@ -26337,6 +26339,7 @@ msgstr "Zuletzt gesehen"
 msgid "Leave empty and anybody may use it, once each. With a handle it belongs to that member and works exactly once."
 msgstr "Leer lassen: dann darf ihn jeder nutzen, jeder einmal. Mit einem Handle gehört er diesem Mitglied und gilt genau einmal."
 
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:451
 #: lib/vutuv_web/templates/admin/discount_code/index.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Make a code"
@@ -26444,7 +26447,7 @@ msgstr "Bitte nennen Sie der buchenden Person einen Grund."
 msgid "Please start the address with https:// or http://"
 msgstr "Bitte beginnen Sie die Adresse mit https:// oder http://"
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:51
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:61
 #, elixir-autogen, elixir-format
 msgid "Reason"
 msgstr "Grund"
@@ -26459,7 +26462,7 @@ msgstr "Ablehnen"
 msgid "Rejected on"
 msgstr "Abgelehnt am"
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:49
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:59
 #, elixir-autogen, elixir-format
 msgid "Rejected or cancelled"
 msgstr "Abgelehnt oder storniert"
@@ -26904,3 +26907,20 @@ msgstr ""
 "Willkommen bei vutuv! Sie können Ihren automatisch zugewiesenen "
 "Benutzernamen {handle} unter {url} ändern. Unter {import_url} lässt sich Ihr "
 "bestehendes LinkedIn-Profil importieren."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:457
+#, elixir-autogen, elixir-format
+msgid "%{formatted} code is valid right now."
+msgid_plural "%{formatted} codes are valid right now."
+msgstr[0] "%{formatted} Code gilt gerade."
+msgstr[1] "%{formatted} Codes gelten gerade."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:455
+#, elixir-autogen, elixir-format
+msgid "No code is out at the moment."
+msgstr "Zurzeit ist kein Code unterwegs."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:453
+#, elixir-autogen, elixir-format
+msgid "Percent or euro off an ad booking, for one member or for anybody."
+msgstr "Prozent oder Euro Rabatt auf eine Anzeigenbuchung, für ein Mitglied oder für alle."

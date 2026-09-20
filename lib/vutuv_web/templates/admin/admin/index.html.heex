@@ -437,5 +437,30 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         )}
       <% end %>
     </.admin_card>
+
+    <%!-- Its own tile rather than a line inside the ads card: the whole card is
+    one link, so a second destination cannot live in it, and making a code is
+    what an admin comes here for, not a detail of the review. --%>
+    <.admin_card
+      :if={@ads_enabled}
+      icon="ticket"
+      title={gettext("Ad discount codes")}
+      count={@live_discount_codes_count}
+      href={~p"/admin/ads/discounts"}
+      id="admin-ad-discounts-link"
+      cta={gettext("Make a code")}
+    >
+      {gettext("Percent or euro off an ad booking, for one member or for anybody.")}
+      <%= if @live_discount_codes_count == 0 do %>
+        {gettext("No code is out at the moment.")}
+      <% else %>
+        {ngettext(
+          "%{formatted} code is valid right now.",
+          "%{formatted} codes are valid right now.",
+          @live_discount_codes_count,
+          formatted: compact_count(@live_discount_codes_count)
+        )}
+      <% end %>
+    </.admin_card>
   </.admin_group>
 </div>

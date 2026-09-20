@@ -3956,7 +3956,7 @@ msgid "Advertising on vutuv"
 msgstr ""
 
 #: lib/vutuv_web/live/ad_booking_live.ex:846
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:58
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:68
 #, elixir-autogen, elixir-format
 msgid "Billing name"
 msgstr ""
@@ -4113,7 +4113,7 @@ msgstr ""
 msgid "Every ad is reviewed and approved before it runs; the earliest bookable day is three days out."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:13
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "Every ad must be approved before it runs. Check that it is family-friendly (community guidelines) before approving."
 msgstr ""
@@ -4135,7 +4135,7 @@ msgstr ""
 msgid "No ads waiting for approval."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:19
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:29
 #, elixir-autogen, elixir-format
 msgid "No upcoming ads."
 msgstr ""
@@ -4145,7 +4145,7 @@ msgstr ""
 msgid "Open the ad review"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:56
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:66
 #, elixir-autogen, elixir-format
 msgid "Past ads"
 msgstr ""
@@ -4160,7 +4160,7 @@ msgstr ""
 msgid "The ad for %{day} is approved and will run."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:11
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Upcoming ads"
 msgstr ""
@@ -4265,7 +4265,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/admin/job_live.ex:290
 #: lib/vutuv_web/live/admin/organization_live.ex:265
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:39
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:49
 #, elixir-autogen, elixir-format
 msgid "Details"
 msgstr ""
@@ -25348,6 +25348,7 @@ msgid "Acme is looking for you"
 msgstr ""
 
 #: lib/vutuv_web/controllers/admin/discount_code_controller.ex:71
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:447
 #: lib/vutuv_web/templates/admin/discount_code/index.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Ad discount codes"
@@ -25453,6 +25454,7 @@ msgstr ""
 msgid "Discount code: −%{amount} €"
 msgstr ""
 
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:19
 #: lib/vutuv_web/templates/admin/discount_code/index.html.heex:8
 #, elixir-autogen, elixir-format
 msgid "Discount codes"
@@ -25529,6 +25531,7 @@ msgstr ""
 msgid "Leave empty and anybody may use it, once each. With a handle it belongs to that member and works exactly once."
 msgstr ""
 
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:451
 #: lib/vutuv_web/templates/admin/discount_code/index.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Make a code"
@@ -25636,7 +25639,7 @@ msgstr ""
 msgid "Please start the address with https:// or http://"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:51
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:61
 #, elixir-autogen, elixir-format
 msgid "Reason"
 msgstr ""
@@ -25651,7 +25654,7 @@ msgstr ""
 msgid "Rejected on"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/ad/index.html.heex:49
+#: lib/vutuv_web/templates/admin/ad/index.html.heex:59
 #, elixir-autogen, elixir-format
 msgid "Rejected or cancelled"
 msgstr ""
@@ -26092,4 +26095,21 @@ msgstr ""
 #: lib/vutuv_web/live/notification_live/index.ex:1284
 #, elixir-autogen, elixir-format
 msgid "Welcome to vutuv! You can change your automatically assigned username {handle} on the {url} page. At {import_url} you can import your existing LinkedIn profile."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:457
+#, elixir-autogen, elixir-format
+msgid "%{formatted} code is valid right now."
+msgid_plural "%{formatted} codes are valid right now."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:455
+#, elixir-autogen, elixir-format
+msgid "No code is out at the moment."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:453
+#, elixir-autogen, elixir-format
+msgid "Percent or euro off an ad booking, for one member or for anybody."
 msgstr ""
