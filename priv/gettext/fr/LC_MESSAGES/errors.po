@@ -1,0 +1,373 @@
+## "msgid"s in this file come from POT (.pot) files.
+###
+### Do not add, change, or remove "msgid"s manually here as
+### they're tied to the ones in the corresponding POT file
+### (with the same domain).
+###
+### Use "mix gettext.extract --merge" or "mix gettext.merge"
+### to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n>1);\n"
+
+msgid "can't be blank"
+msgstr "ne peut pas être vide"
+
+msgid "is invalid"
+msgstr "n'est pas valide"
+
+msgid "has invalid format"
+msgstr "a un format non valide"
+
+msgid "has an invalid entry"
+msgstr "contient une valeur non valide"
+
+msgid "is reserved"
+msgstr "est réservé"
+
+msgid "does not match confirmation"
+msgstr "ne correspond pas à la confirmation"
+
+msgid "is still associated to this entry"
+msgstr "est encore lié à cette entrée"
+
+msgid "are still associated to this entry"
+msgstr "sont encore liés à cette entrée"
+
+msgid "should be %{count} character(s)"
+msgid_plural "should be %{count} character(s)"
+msgstr[0] "doit contenir %{count} caractère"
+msgstr[1] "doit contenir %{count} caractères"
+
+msgid "should have %{count} item(s)"
+msgid_plural "should have %{count} item(s)"
+msgstr[0] "doit contenir %{count} élément"
+msgstr[1] "doit contenir %{count} éléments"
+
+msgid "should be at least %{count} character(s)"
+msgid_plural "should be at least %{count} character(s)"
+msgstr[0] "doit contenir au moins %{count} caractère"
+msgstr[1] "doit contenir au moins %{count} caractères"
+
+msgid "should have at least %{count} item(s)"
+msgid_plural "should have at least %{count} item(s)"
+msgstr[0] "doit contenir au moins %{count} élément"
+msgstr[1] "doit contenir au moins %{count} éléments"
+
+msgid "should be at most %{count} character(s)"
+msgid_plural "should be at most %{count} character(s)"
+msgstr[0] "doit contenir au plus %{count} caractère"
+msgstr[1] "doit contenir au plus %{count} caractères"
+
+msgid "should have at most %{count} item(s)"
+msgid_plural "should have at most %{count} item(s)"
+msgstr[0] "doit contenir au plus %{count} élément"
+msgstr[1] "doit contenir au plus %{count} éléments"
+
+msgid "must be less than %{count}"
+msgid_plural "must be less than %{count}"
+msgstr[0] "doit être inférieur à %{count}"
+msgstr[1] "doit être inférieur à %{count}"
+
+msgid "must be greater than %{count}"
+msgid_plural "must be greater than %{count}"
+msgstr[0] "doit être supérieur à %{count}"
+msgstr[1] "doit être supérieur à %{count}"
+
+msgid "must be less than or equal to %{count}"
+msgid_plural "must be less than or equal to %{count}"
+msgstr[0] "doit être inférieur ou égal à %{count}"
+msgstr[1] "doit être inférieur ou égal à %{count}"
+
+msgid "must be greater than or equal to %{count}"
+msgid_plural "must be greater than or equal to %{count}"
+msgstr[0] "doit être supérieur ou égal à %{count}"
+msgstr[1] "doit être supérieur ou égal à %{count}"
+
+msgid "must be equal to %{count}"
+msgid_plural "must be equal to %{count}"
+msgstr[0] "doit être égal à %{count}"
+msgstr[1] "doit être égal à %{count}"
+
+msgid "may only contain letters, numbers, and underscores"
+msgstr "ne peut contenir que des lettres, des chiffres et des traits de soulignement"
+
+msgid "can only be changed %{limit} times within %{days} days"
+msgstr "ne peut être modifié que %{limit} fois par période de %{days} jours"
+
+msgid "is already your username"
+msgstr "est déjà votre nom d'utilisateur"
+
+msgid "must be booked at least three days ahead"
+msgstr "doit être réservé au moins trois jours à l'avance"
+
+msgid "has already been booked"
+msgstr "est déjà réservé"
+
+msgid "must not contain spaces"
+msgstr "ne doit pas contenir d'espaces"
+
+msgid "Please enter at least %{min} different tags."
+msgstr "Veuillez saisir au moins %{min} tags différents."
+
+msgid "Please enter at most %{max} different tags."
+msgstr "Veuillez saisir au plus %{max} tags différents."
+
+msgid "You can have at most %{max} tags. Remove one before adding another."
+msgstr "Vous pouvez avoir au plus %{max} tags. Retirez-en un avant d'en ajouter un autre."
+
+msgid "Please type at least one tag."
+msgstr "Veuillez saisir au moins un tag."
+
+msgid "You already have this tag."
+msgstr "Vous avez déjà ce tag."
+
+msgid "is already listed"
+msgstr "est déjà dans la liste"
+
+msgid "is already on your list"
+msgstr "est déjà sur votre liste"
+
+msgid "cannot exclude yourself"
+msgstr "vous ne pouvez pas vous exclure vous-même"
+
+msgid "must be a domain like example.com, without http:// or a path"
+msgstr "doit être un domaine comme example.com, sans http:// ni chemin"
+
+msgid "your exclusion list is full (max %{count})"
+msgstr "votre liste d'exclusion est pleine (max. %{count})"
+
+msgid "is already on this list"
+msgstr "est déjà sur cette liste"
+
+msgid "this list is full (max %{count})"
+msgstr "cette liste est pleine (max. %{count})"
+
+msgid "must be greater than or equal to the minimum"
+msgstr "doit être supérieur ou égal au minimum"
+
+msgid "contains an invalid country"
+msgstr "contient un pays non valide"
+
+msgid "is already used in a post, so it can't be claimed"
+msgstr "est déjà utilisé dans une publication et ne peut donc pas être revendiqué"
+
+msgid "The handle %{handles} does not exist. Remove the mention or check the spelling."
+msgid_plural "The handle %{handles} does not exist. Remove the mention or check the spelling."
+msgstr[0] "Le handle %{handles} n'existe pas. Retirez la mention ou vérifiez l'orthographe."
+msgstr[1] "Ces handles n'existent pas : %{handles}. Retirez les mentions ou vérifiez l'orthographe."
+
+msgid "is not a valid ISBN"
+msgstr "n'est pas un ISBN valide"
+
+msgid "is not a valid IMDb link"
+msgstr "n'est pas un lien IMDb valide"
+
+msgid "the review is missing the title of the work"
+msgstr "il manque à la critique le titre de l'œuvre"
+
+#: lib/vutuv_web/views/error_helpers.ex:113
+#, elixir-autogen, elixir-format
+msgid "PDF uploads are not available on this installation. Please upload an image instead."
+msgstr "Les envois de PDF ne sont pas disponibles sur cette installation. Veuillez envoyer une image à la place."
+
+#: lib/vutuv_web/views/error_helpers.ex:108
+#, elixir-autogen, elixir-format
+msgid "Please confirm that the file may be shown publicly. Without your consent nothing is uploaded."
+msgstr "Veuillez confirmer que le fichier peut être affiché publiquement. Sans votre accord, rien n'est envoyé."
+
+#: lib/vutuv_web/views/error_helpers.ex:117
+#, elixir-autogen, elixir-format
+msgid "could not be read. Please upload a PDF, JPG, PNG or WebP file."
+msgstr "n'a pas pu être lu. Veuillez envoyer un fichier PDF, JPG, PNG ou WebP."
+
+#: lib/vutuv_web/views/error_helpers.ex:112
+#, elixir-autogen, elixir-format
+msgid "is larger than 10 MB. Please upload a smaller file."
+msgstr "dépasse 10 MB. Veuillez envoyer un fichier plus petit."
+
+#: lib/vutuv_web/views/error_helpers.ex:131
+#, elixir-autogen, elixir-format
+msgid "must not be a web or email address"
+msgstr "ne doit pas être une adresse web ou e-mail"
+
+#: lib/vutuv_web/views/error_helpers.ex:132
+#, elixir-autogen, elixir-format
+msgid "can't be only a link. Please describe yourself in a few words."
+msgstr "ne peut pas être uniquement un lien. Décrivez-vous en quelques mots."
+
+#: lib/vutuv_web/views/error_helpers.ex:136
+#, elixir-autogen, elixir-format
+msgid "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
+msgstr "« %{tag} » est une adresse web, pas un tag. Décrivez-vous avec des mots."
+
+#: lib/vutuv_web/views/error_helpers.ex:148
+#, elixir-autogen, elixir-format
+msgid "must not be only punctuation"
+msgstr "ne doit pas être composé uniquement de signes de ponctuation"
+
+#: lib/vutuv_web/views/error_helpers.ex:149
+#, elixir-autogen, elixir-format
+msgid "\"%{tag}\" is only punctuation, not a tag."
+msgstr "« %{tag} » ne contient que des signes de ponctuation et n'est pas un tag."
+
+#: lib/vutuv_web/views/error_helpers.ex:178
+#, elixir-autogen, elixir-format
+msgid "\"%{uri}\" is not a valid https account address."
+msgstr "« %{uri} » n'est pas une adresse de compte https valide."
+
+#: lib/vutuv_web/views/error_helpers.ex:177
+#, elixir-autogen, elixir-format
+msgid "Please list at most %{max} accounts."
+msgstr "Veuillez indiquer au plus %{max} comptes."
+
+#: lib/vutuv_web/views/error_helpers.ex:146
+#, elixir-autogen, elixir-format
+msgid "must spell out how the name sounds"
+msgstr "doit indiquer comment le nom se prononce"
+
+#: lib/vutuv_web/views/error_helpers.ex:170
+#, elixir-autogen, elixir-format
+msgid "Please use at most %{max} tags."
+msgstr "Veuillez utiliser au plus %{max} tags."
+
+#: lib/vutuv_web/views/error_helpers.ex:180
+#, elixir-autogen, elixir-format
+msgid "Enter your Signal link, it starts with https://signal.me/#"
+msgstr "Indiquez votre lien Signal, il commence par https://signal.me/#"
+
+#: lib/vutuv_web/views/error_helpers.ex:172
+#, elixir-autogen, elixir-format
+msgid "We allow at most %{max} accounts per post. Please remove some mentions."
+msgstr "Nous autorisons au plus %{max} comptes par publication. Veuillez retirer quelques mentions."
+
+#: lib/vutuv_web/views/error_helpers.ex:183
+#, elixir-autogen, elixir-format
+msgid "Enter your Bluesky handle, e.g. name.bsky.social"
+msgstr "Indiquez votre handle Bluesky, par exemple nom.bsky.social"
+
+#: lib/vutuv_web/views/error_helpers.ex:196
+#, elixir-autogen, elixir-format
+msgid "Enter your Codeberg username, not a full URL with extra path segments"
+msgstr "Indiquez votre nom d'utilisateur Codeberg, pas une URL complète avec des segments de chemin supplémentaires"
+
+#: lib/vutuv_web/views/error_helpers.ex:192
+#, elixir-autogen, elixir-format
+msgid "Enter your GitHub username, not a full URL with extra path segments"
+msgstr "Indiquez votre nom d'utilisateur GitHub, pas une URL complète avec des segments de chemin supplémentaires"
+
+#: lib/vutuv_web/views/error_helpers.ex:188
+#, elixir-autogen, elixir-format
+msgid "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
+msgstr "Indiquez votre nom d'utilisateur GitLab, par exemple gitlab.com/utilisateur (pas un lien d'identifiant en /-/u/)"
+
+#: lib/vutuv_web/views/error_helpers.ex:182
+#, elixir-autogen, elixir-format
+msgid "Enter your full Mastodon handle, e.g. @user@instance.social"
+msgstr "Indiquez votre handle Mastodon complet, par exemple @nom@instance.social"
+
+#: lib/vutuv_web/views/error_helpers.ex:184
+#, elixir-autogen, elixir-format
+msgid "Enter your username and your instance, e.g. name@git.example.com"
+msgstr "Indiquez votre nom d'utilisateur et votre instance, par exemple nom@git.example.com"
+
+#: lib/vutuv_web/views/error_helpers.ex:200
+#, elixir-autogen, elixir-format
+msgid "Invalid account name"
+msgstr "Nom de compte non valide"
+
+#: lib/vutuv_web/views/error_helpers.ex:201
+#, elixir-autogen, elixir-format
+msgid "Someone has already claimed this account"
+msgstr "Quelqu'un a déjà revendiqué ce compte"
+
+#: lib/vutuv_web/views/error_helpers.ex:208
+#, elixir-autogen, elixir-format
+msgid "That instance did not answer. Please try again in a moment."
+msgstr "Cette instance n'a pas répondu. Veuillez réessayer dans un instant."
+
+#: lib/vutuv_web/views/error_helpers.ex:209
+#, elixir-autogen, elixir-format
+msgid "Too many checks for now. Please try again later."
+msgstr "Trop de vérifications pour le moment. Veuillez réessayer plus tard."
+
+#: lib/vutuv_web/views/error_helpers.ex:204
+#, elixir-autogen, elixir-format
+msgid "We could not find this account on that instance. Please check the address."
+msgstr "Nous n'avons pas trouvé ce compte sur cette instance. Veuillez vérifier l'adresse."
+
+#: lib/vutuv_web/views/error_helpers.ex:128
+#, elixir-autogen, elixir-format
+msgid "Only one email address can be given at sign-up."
+msgstr "Une seule adresse e-mail peut être indiquée à l'inscription."
+
+#: lib/vutuv_web/views/error_helpers.ex:157
+#, elixir-autogen, elixir-format
+msgid "Please confirm that you are making this claim in good faith."
+msgstr "Veuillez confirmer que vous faites ce signalement de bonne foi."
+
+#: lib/vutuv_web/views/error_helpers.ex:151
+#, elixir-autogen, elixir-format
+msgid "Please pick a category."
+msgstr "Veuillez choisir une catégorie."
+
+#: lib/vutuv_web/views/error_helpers.ex:153
+#, elixir-autogen, elixir-format
+msgid "Please tell us which work it is and where the original can be seen."
+msgstr "Veuillez nous dire de quelle œuvre il s'agit et où l'original peut être vu."
+
+#: lib/vutuv_web/views/error_helpers.ex:152
+#, elixir-autogen, elixir-format
+msgid "Your note is too long."
+msgstr "Votre note est trop longue."
+
+#: lib/vutuv_web/views/error_helpers.ex:160
+#, elixir-autogen, elixir-format
+msgid "Please give us an email address."
+msgstr "Veuillez nous indiquer une adresse e-mail."
+
+#: lib/vutuv_web/views/error_helpers.ex:164
+#, elixir-autogen, elixir-format
+msgid "Please tell us what is wrong with this content, in your own words."
+msgstr "Veuillez nous dire avec vos propres mots ce qui ne va pas avec ce contenu."
+
+#: lib/vutuv_web/views/error_helpers.ex:159
+#, elixir-autogen, elixir-format
+msgid "Please tell us your name."
+msgstr "Veuillez nous indiquer votre nom."
+
+#: lib/vutuv_web/views/error_helpers.ex:162
+#, elixir-autogen, elixir-format
+msgid "That address is too long."
+msgstr "Cette adresse est trop longue."
+
+#: lib/vutuv_web/views/error_helpers.ex:161
+#, elixir-autogen, elixir-format
+msgid "That does not look like an email address."
+msgstr "Cela ne ressemble pas à une adresse e-mail."
+
+#: lib/vutuv_web/views/error_helpers.ex:168
+#, elixir-autogen, elixir-format
+msgid "You already reported this."
+msgstr "Vous avez déjà signalé ce contenu."
+
+#: lib/vutuv_web/views/error_helpers.ex:163
+#, elixir-autogen, elixir-format
+msgid "Your name is too long."
+msgstr "Votre nom est trop long."
+
+#: lib/vutuv_web/views/error_helpers.ex:123
+#, elixir-autogen, elixir-format
+msgid "We cannot read this file. Please upload one of these formats: %{formats}."
+msgstr "Nous ne pouvons pas lire ce fichier. Veuillez envoyer l'un de ces formats : %{formats}."
+
+#: lib/vutuv_web/views/error_helpers.ex:122
+#, elixir-autogen, elixir-format
+msgid "That file is larger than %{limit}. Please upload a smaller one."
+msgstr "Ce fichier est plus grand que %{limit}. Veuillez en envoyer un plus petit."
+
+#: lib/vutuv_web/views/error_helpers.ex:144
+#, elixir-autogen, elixir-format
+msgid "First name or last name or nickname must be present"
+msgstr "Veuillez indiquer un prénom ou un nom."
