@@ -49,10 +49,13 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       assert has_element?(live, ~s([data-notification-row][data-kind="username"]))
       html = render(live)
-      assert html =~ "Welcome to vutuv!"
-      # It greets before it explains: leading with the machine detail ("Your
-      # automatically assigned vutuv username is …") is what this replaced.
-      refute html =~ "Your automatically assigned"
+      # One offer per sentence, the rename before the import, and the greeting
+      # before either: asserted as one needle because the two phrases sit in
+      # the same chunk of the translation, which pins the order for free.
+      # Leading with the machine detail ("Your automatically assigned vutuv
+      # username is …") is what this replaced.
+      assert html =~ "Welcome to vutuv! You can change your automatically assigned username"
+      assert html =~ "you can import your existing LinkedIn profile"
 
       # Three links inside the sentence, and the row itself is not one: the
       # handle goes to the member's own profile, the spelled-out URLs to the
@@ -89,6 +92,11 @@ defmodule VutuvWeb.NotificationLiveTest do
       # for the punctuation right after the closing tag rather than for a phrase.
       refute html =~ "/settings/import/linkedin</a>."
       refute html =~ "/settings/username</a>."
+
+      # A translation that drops or reorders a marker is not an error
+      # (split_marker/2 is total by design) — it renders the marker as text
+      # and puts the link somewhere else, so look for the leak.
+      for marker <- ~w({handle} {url} {import_url}), do: refute(html =~ marker)
     end
 
     test "lists real events derived from the database", %{conn: conn} do
@@ -1029,6 +1037,19 @@ defmodule VutuvWeb.NotificationLiveTest do
       # The grouped plural sentence and the folded overflow, both German.
       assert body =~ "folgen Ihnen jetzt."
       assert body =~ "und 1 weitere"
+
+      # The welcome row this account was just stamped with, by name in both
+      # sentences: a catalog merge can fuzzy-fill a new msgid with the
+      # translation of something unrelated and nothing fails the build.
+      assert body =~
+               "Willkommen bei vutuv! Sie können Ihren automatisch zugewiesenen Benutzernamen"
+
+      assert body =~ "lässt sich Ihr bestehendes LinkedIn-Profil importieren."
+
+      # Same two properties, German render.
+      refute body =~ "/settings/username</a>."
+      refute body =~ "/settings/import/linkedin</a>."
+      for marker <- ~w({handle} {url} {import_url}), do: refute(body =~ marker)
     end
 
     test "the card vocabulary is written German, not fuzzy-filled from something else", %{

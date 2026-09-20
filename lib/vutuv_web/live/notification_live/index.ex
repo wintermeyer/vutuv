@@ -1271,7 +1271,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # still has that profile in mind, and the page is otherwise buried in
   # /settings.
   #
-  # NEITHER language may end this sentence on a URL: the full stop then sits
+  # NEITHER language may end a sentence on a URL: the full stop then sits
   # flush against the address, and a reader cannot tell whether it belongs to
   # the link (reported 2026-08-04). Both {url} and {import_url} are therefore
   # followed by a space and at least one word. Keep that property when
@@ -1282,7 +1282,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     {greeting, rest} =
       split_marker(
         gettext(
-          "Welcome to vutuv! You can change your username {handle} at {url}, and at {import_url} you can import an existing LinkedIn profile."
+          "Welcome to vutuv! You can change your automatically assigned username {handle} on the {url} page. At {import_url} you can import your existing LinkedIn profile."
         ),
         "{handle}"
       )
