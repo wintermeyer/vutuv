@@ -7225,31 +7225,6 @@ defmodule Vutuv.Posts do
     end
   end
 
-  @doc """
-  Person typeahead for the composer's "Hide from…" sheet: activated members
-  matching `term` by name or slug, the author excluded (denying yourself is
-  a no-op by invariant). Returns `[]` below two characters.
-  """
-  def search_users(%User{id: author_id}, term, limit \\ 8) when is_binary(term) do
-    term = String.trim(term)
-
-    if String.length(term) < 2 do
-      []
-    else
-      pattern = contains(term)
-
-      Repo.all(
-        from(u in User,
-          where: u.id != ^author_id,
-          where: account_confirmed_row(u),
-          where: name_ilike(u.first_name, u.last_name, ^pattern) or ilike(u.username, ^pattern),
-          order_by: [u.first_name, u.last_name],
-          limit: ^limit
-        )
-      )
-    end
-  end
-
   ## Tags
 
   defp parse_tag_values(nil), do: []

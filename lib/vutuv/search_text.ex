@@ -66,6 +66,19 @@ defmodule Vutuv.SearchText do
   def contains(term), do: "%" <> escape_like(term) <> "%"
 
   @doc """
+  The LIKE pattern for a term a value *starts with*: the escaped term with one
+  trailing `%`.
+  """
+  def starts_with(term), do: escape_like(term) <> "%"
+
+  @doc """
+  The LIKE pattern that matches `term` and nothing else — the escaped term with
+  no wildcards at all, so `ilike(col, equals(term))` is case-insensitive
+  equality written in the same shape as its two wider siblings.
+  """
+  def equals(term), do: escape_like(term)
+
+  @doc """
   Query macro: case-insensitive name match on `first`, `last`, or the
   "first last" concatenation, against `pattern`. Compose it with `or` and a
   site's own extra columns inside a `where`. The bound columns are passed
@@ -76,6 +89,23 @@ defmodule Vutuv.SearchText do
     quote do
       ilike(unquote(first), unquote(pattern)) or ilike(unquote(last), unquote(pattern)) or
         ilike(fragment("? || ' ' || ?", unquote(first), unquote(last)), unquote(pattern))
+    end
+  end
+
+  @doc """
+  Query macro: `name_ilike/3` plus the handle — "does this person match the
+  pattern at all", for the person typeaheads.
+
+  It exists so that **matching and ranking cannot drift apart**. A typeahead
+  that filters on one set of columns and ranks on another widens its results
+  the moment a column is added and silently stops ranking the new one, which
+  buries an exact hit past the limit — the bug `Accounts.search_people/3` was
+  written to fix, one column along.
+  """
+  defmacro person_ilike(first, last, handle, pattern) do
+    quote do
+      name_ilike(unquote(first), unquote(last), unquote(pattern)) or
+        ilike(unquote(handle), unquote(pattern))
     end
   end
 end

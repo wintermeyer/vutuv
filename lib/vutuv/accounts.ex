@@ -6,7 +6,17 @@ defmodule Vutuv.Accounts do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
-  import Vutuv.SearchText, only: [contains: 1, name_ilike: 3, normalize_search: 1]
+
+  import Vutuv.SearchText,
+    only: [
+      contains: 1,
+      equals: 1,
+      name_ilike: 3,
+      normalize_search: 1,
+      person_ilike: 4,
+      starts_with: 1
+    ]
+
   require Logger
 
   # Enables the bare `gettext/1` macro for the PIN / status strings below.
@@ -2801,27 +2811,49 @@ defmodule Vutuv.Accounts do
   colleague types the name the way they hold it in their head, which in a
   German office is as often "Petersen Jan".
 
-  It lives here rather than in the context that first needed it (`Vutuv.Posts`
-  grew one for the composer's "Hide from…" sheet): finding a member by name is
-  an Accounts question, and the messages page asks exactly the same one.
+  **Ranked before it is cut**: an exact hit first, then one that starts with
+  the term, then one anywhere inside. The alphabet alone decides nothing about
+  how well a row matches, so a short term in a crowded name drops the row the
+  member was after: "witt" matched 13 members on vutuv.de, and Stephan Witt
+  (`witt_s`) — the exact hit on both his last name and his handle — sat at
+  position twelve of a list cut at six, behind "Dominico Klawitter".
+
+  Matching and ranking are the same expression (`SearchText.person_ilike/4`)
+  so a column added to one cannot go missing from the other.
+
+  It is the one person typeahead: the messages finder and the composer's
+  "Hide from…" sheet ask the same question, and finding a member by name is an
+  Accounts question wherever it is asked.
   """
   def search_people(%User{id: me_id}, term, limit \\ 8) when is_binary(term) do
-    term = String.trim(term)
+    # A member writes a handle the way it is shown to them, with its @.
+    term = Handles.normalize(term)
 
     if String.length(term) < 2 do
       []
     else
       like = contains(term)
+      exact = equals(term)
+      prefix = starts_with(term)
       reversed = reversed_name(term)
 
       Repo.all(
         from(u in User,
           where: u.id != ^me_id,
-          where: account_confirmed_row(u),
+          where: account_confirmed_row(u) and not account_hidden_row(u),
           where:
-            name_ilike(u.first_name, u.last_name, ^like) or ilike(u.username, ^like) or
+            person_ilike(u.first_name, u.last_name, u.username, ^like) or
               name_ilike(u.first_name, u.last_name, ^reversed),
-          order_by: [u.first_name, u.last_name],
+          order_by: [
+            asc:
+              fragment(
+                "case when ? then 0 when ? then 1 else 2 end",
+                person_ilike(u.first_name, u.last_name, u.username, ^exact),
+                person_ilike(u.first_name, u.last_name, u.username, ^prefix)
+              ),
+            asc: u.first_name,
+            asc: u.last_name
+          ],
           limit: ^limit
         )
       )

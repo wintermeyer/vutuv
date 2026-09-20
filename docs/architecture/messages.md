@@ -222,7 +222,11 @@ searches **both worlds at once**.
     (`Vutuv.Accounts.search_people/3`, which is where the composer's old
     `Posts.search_users/3` question belongs; `SearchText.name_ilike/3` covers
     the pair, and the reversed pair is asked for separately, because in a
-    German office "Petersen Jan" is as likely as "Jan Petersen").
+    German office "Petersen Jan" is as likely as "Jan Petersen"). A typed
+    leading `@` comes off through `Handles.normalize/1`, and the rows are
+    **ranked before they are cut** — exact, then starts-with, then anywhere
+    inside — which is what makes a short term usable at all; the incident that
+    bought that rule is in the function's own docstring.
   * **Accounts on other networks this installation already holds**
     (`Fediverse.search_accounts/2`) — rows we have because somebody follows
     them, answered them or was answered by them. No request to anybody.
@@ -232,7 +236,8 @@ searches **both worlds at once**.
 
 Two characters before anything is searched, `phx-debounce="250"` on the field,
 and both halves are named in one line under it, because neither is guessable
-from a placeholder. Without Fediverse participation the finder says so and
+from a placeholder — the username included, which is the half a member is
+least likely to try unprompted. Without Fediverse participation the finder says so and
 searches vutuv alone — a field that took an address it could not send would
 have wasted the typing.
 

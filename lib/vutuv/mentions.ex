@@ -174,7 +174,7 @@ defmodule Vutuv.Mentions do
   # more letter is faster than reading.
   @suggest_limit 8
 
-  # The shortest term the picker answers for, matching `Posts.search_users/3`.
+  # The shortest term the picker answers for, matching `Accounts.search_people/3`.
   @suggest_min_chars 2
 
   # How many handles one `check_handles/1` call answers about. The composer asks
@@ -519,7 +519,7 @@ defmodule Vutuv.Mentions do
   nobody — `mentioned_users/2` excludes the author).
 
   Answers nothing below `#{@suggest_min_chars}` characters, the floor its
-  sibling typeahead `Vutuv.Posts.search_users/3` already uses: a bare `@` starts
+  sibling typeahead `Vutuv.Accounts.search_people/3` already uses: a bare `@` starts
   a word far more often than a mention, and one letter names half the site — so
   the rows would be noise, and each of them costs a scan on every keystroke.
   """
@@ -617,7 +617,7 @@ defmodule Vutuv.Mentions do
   @suggest_pool 24
 
   defp suggest_users(%User{id: viewer_id}, term, blocked) do
-    pattern = prefix(term)
+    pattern = SearchText.starts_with(term)
 
     from(u in User,
       select: struct(u, ^User.listing_fields()),
@@ -639,7 +639,7 @@ defmodule Vutuv.Mentions do
   end
 
   defp suggest_organizations(term) do
-    pattern = prefix(term)
+    pattern = SearchText.starts_with(term)
 
     from(o in Organization,
       # Exactly what a picker row draws (`VutuvWeb.MentionController.payload/1`):
@@ -656,8 +656,6 @@ defmodule Vutuv.Mentions do
     )
     |> Repo.all()
   end
-
-  defp prefix(term), do: SearchText.escape_like(term) <> "%"
 
   # A stable partition, so each group keeps the order the queries gave it.
   defp rank_suggestions(candidates, viewer) do

@@ -1193,16 +1193,15 @@ defmodule VutuvWeb.MessageLive.Index do
             />
           </form>
 
-          <%!-- What this field can do, said once and plainly — the two halves
-          are not guessable from a placeholder, and the Fediverse half is not
-          available to everybody. --%>
+          <%!-- What this field can do, said once and plainly — neither half is
+          guessable from a placeholder, the username least of all, and the
+          Fediverse half is not available to everybody. The sentence they share
+          is one msgid, so a translator meets it once. --%>
           <p class="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+            {gettext("Search vutuv members by first name, last name, both or their username.")}
             <%= if @can_write_remote? do %>
-              {gettext(
-                "Search members by first name, last name or both — or enter an address like @name@server to reach somebody on another network."
-              )}
+              {gettext("An address like @name@server reaches somebody on another network.")}
             <% else %>
-              {gettext("Search members by first name, last name or both.")}
               {gettext("Switch Fediverse participation on to write to accounts on other networks.")}
               <.link
                 navigate={~p"/settings/fediverse"}
@@ -1230,7 +1229,7 @@ defmodule VutuvWeb.MessageLive.Index do
         <div :if={@recipient_query != ""} id="recipient-results" class="border-b border-slate-200 dark:border-slate-800">
           <div :if={@recipient_members != []} class="grp-people">
             <p class="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              {gettext("Members")}
+              {gettext("vutuv members")}
             </p>
             <button
               :for={member <- @recipient_members}

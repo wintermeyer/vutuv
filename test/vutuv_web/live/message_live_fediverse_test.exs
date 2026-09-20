@@ -242,7 +242,8 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
       insert(:activated_user, first_name: "Jan", last_name: "Petersen", username: "janpetersen")
       {:ok, view, _html} = live(conn, ~p"/messages")
 
-      for term <- ["Jan", "Petersen", "Jan Petersen", "Petersen Jan", "janpet"] do
+      # "@janpetersen" is the handle written the way the site shows it.
+      for term <- ["Jan", "Petersen", "Jan Petersen", "Petersen Jan", "janpet", "@janpetersen"] do
         html = view |> form("#recipient-search-form", %{"q" => term}) |> render_change()
         assert html =~ "Jan Petersen", "searching for #{inspect(term)} found nobody"
       end
@@ -250,6 +251,34 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
       # One keystroke never runs a %like% over the whole table.
       html = view |> form("#recipient-search-form", %{"q" => "J"}) |> render_change()
       refute html =~ "Jan Petersen"
+    end
+
+    test "an exact hit is not buried by the crowd it sits in", %{conn: conn} do
+      # Searching "witt" on production matched 13 members somewhere in their
+      # name; the alphabet by first name picked the first eight and Stephan
+      # Witt — the one exact hit, handle `witt_s` — sat at position twelve.
+      for first <- ~w(Anna Bernd Carla Dirk Emil Frieda Gustav Hanna Ida) do
+        insert(:activated_user, first_name: first, last_name: "Wittmann")
+      end
+
+      exact =
+        insert(:activated_user, first_name: "Stephan", last_name: "Witt", username: "witt_s")
+
+      {:ok, view, _html} = live(conn, ~p"/messages")
+      html = view |> form("#recipient-search-form", %{"q" => "witt"}) |> render_change()
+
+      assert html =~ ~s(phx-value-id="#{exact.id}")
+    end
+
+    test "the German page says what the field searches", %{conn: conn} do
+      {:ok, _view, html} =
+        conn
+        |> recycle()
+        |> Plug.Conn.put_req_header("accept-language", "de-DE,de")
+        |> live(~p"/messages")
+
+      assert html =~ "vutuv Mitglieder nach Vorname, Nachname, beidem oder Benutzernamen suchen."
+      refute html =~ "Search vutuv members"
     end
 
     test "writing to a member opens the conversation", %{conn: conn, user: user} do

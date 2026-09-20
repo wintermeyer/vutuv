@@ -70,6 +70,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   use VutuvWeb, :live_component
 
+  alias Vutuv.Accounts
   alias Vutuv.Attachments
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
@@ -1757,7 +1758,7 @@ defmodule VutuvWeb.PostLive.Composer do
         socket.assigns.user_results
       else
         socket.assigns.current_user
-        |> Posts.search_users(term)
+        |> Accounts.search_people(term)
         |> Enum.reject(fn user ->
           Enum.any?(socket.assigns.denied_users, &(&1.id == user.id))
         end)
