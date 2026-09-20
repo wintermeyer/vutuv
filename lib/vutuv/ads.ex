@@ -11,11 +11,11 @@ defmodule Vutuv.Ads do
   three days out (`first_bookable_day/0`). Serving is automatic:
   `current_banner/0` is what `VutuvWeb.AdServing` hands a profile or the feed -
   the **approved** ad on its day, the house ad (an ad for the ad system) on
-  days nobody booked (or where approval never came). A member sees at most one
-  ad an hour and none for the rest of the day after closing one
-  (`eligible?/3`), and the booked ads they saw are kept for them
-  (`record_sighting/3`); a visitor without an account sees the ad on every
-  profile.
+  days nobody booked (or where approval never came). A member sees nothing at
+  all for their first two weeks, then at most one ad an hour and none for the
+  rest of the day after closing one (`eligible?/2`), and the booked ads they
+  saw are kept for them (`record_sighting/3`); a visitor without an account
+  sees the ad on every profile.
 
   Day boundaries are German local time, computed with the fixed EU DST rule
   (see `berlin_date/1`) because the project deliberately carries no timezone
@@ -51,6 +51,11 @@ defmodule Vutuv.Ads do
 
   # At most one ad an hour per member.
   @hour 3600
+
+  # A fresh account is left out of the rotation for its first two weeks. The
+  # days after signing up are the ones that decide whether somebody stays, and
+  # a paid stranger's pitch is the wrong thing to meet in them.
+  @grace_days 14
 
   # How long a member's seen ads are kept (`forget_old_sightings/1`), and how
   # many the history page shows at a time.
@@ -820,14 +825,34 @@ defmodule Vutuv.Ads do
     Enum.find(Date.range(first, last), &(not MapSet.member?(booked, &1)))
   end
 
+  @doc "How long a new account stays out of the ad rotation."
+  def grace_days, do: @grace_days
+
   @doc """
-  A member's two frequency rules, over their `users.ad_seen_at` and
-  `users.ads_dismissed_on`: no ad within an hour of the last one (`seen_at`),
-  and none for the rest of a Berlin day on which one was closed
-  (`dismissed_on`). Either may be nil.
+  Whether `user` may be shown an ad now — the member's side of the decision,
+  over three of their columns:
+
+    * `users.inserted_at`: an account that signed up less than #{@grace_days}
+      days ago sees none at all.
+    * `users.ad_seen_at`: none within an hour of the last one.
+    * `users.ads_dismissed_on`: none for the rest of a Berlin day on which one
+      was closed with the ✕.
+
+  `nil` is a visitor without an account, and they always may: nothing is kept
+  about them to apply a rule to. A struct that did not bring its `inserted_at`
+  counts as new, so a thinned one errs towards no ad.
   """
-  def eligible?(seen_at, dismissed_on, now \\ DateTime.utc_now()) do
-    dismissed_on != today() and not within_the_hour?(seen_at, now)
+  def eligible?(user, now \\ DateTime.utc_now())
+
+  def eligible?(nil, _now), do: true
+
+  def eligible?(%User{} = user, now) do
+    not new_account?(user, now) and user.ads_dismissed_on != today() and
+      not within_the_hour?(user.ad_seen_at, now)
+  end
+
+  defp new_account?(%User{inserted_at: joined}, now) do
+    is_nil(joined) or NaiveDateTime.diff(DateTime.to_naive(now), joined, :day) < @grace_days
   end
 
   @doc "Whether `then` lies less than an hour before `now` (false for nil)."

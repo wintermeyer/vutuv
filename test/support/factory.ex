@@ -3,8 +3,12 @@ defmodule Vutuv.Factory do
 
   use ExMachina.Ecto, repo: Vutuv.Repo
 
+  import Ecto.Query
+
+  alias Vutuv.Accounts.User
   alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Repo
 
   def user_factory do
     %Vutuv.Accounts.User{
@@ -76,6 +80,20 @@ defmodule Vutuv.Factory do
   """
   def insert_activated_user(attrs \\ []) do
     insert(:activated_user, attrs)
+  end
+
+  @doc """
+  Moves `user`'s registration `days` into the past and hands back the updated
+  struct — what an account-age gate (`Vutuv.Ads.grace_days/0`, the job board's
+  publish gate, the profile's one-hour onboarding window) needs a test account
+  to be past.
+  """
+  def backdate_registration!(%User{} = user, days) do
+    joined = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -days, :day)
+
+    Repo.update_all(from(u in User, where: u.id == ^user.id), set: [inserted_at: joined])
+
+    %{user | inserted_at: joined}
   end
 
   # A booked text ad (Vutuv.Ads), approved by default so it serves; pass

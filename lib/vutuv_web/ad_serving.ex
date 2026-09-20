@@ -12,9 +12,10 @@ defmodule VutuvWeb.AdServing do
   replayed unchanged on every rejoin, so it carries only facts that never
   change while the page is open.
 
-  The two frequency rules (`Vutuv.Ads.eligible?/3`) are a member's, kept on
-  the server and shared by every device:
+  The three rules (`Vutuv.Ads.eligible?/2`) are a member's, kept on the server
+  and shared by every device:
 
+    * **Nothing for the first two weeks**, counted from `users.inserted_at`.
     * **At most one ad an hour**, `users.ad_seen_at`. Sending a page takes
       nothing; the hour starts when the `AdSlot` hook reports a card as seen.
     * **The ✕ ends ads for the day**, `users.ads_dismissed_on`.
@@ -29,7 +30,6 @@ defmodule VutuvWeb.AdServing do
 
   import Plug.Conn
 
-  alias Vutuv.Accounts.User
   alias Vutuv.Ads
 
   @doc """
@@ -37,23 +37,14 @@ defmodule VutuvWeb.AdServing do
   visitor may see one.
   """
   def serve(%Plug.Conn{} = conn) do
-    if Ads.enabled?() and is_nil(conn.assigns[:welcome_modal]) and eligible?(conn) do
+    if Ads.enabled?() and is_nil(conn.assigns[:welcome_modal]) and
+         Ads.eligible?(conn.assigns[:current_user]) do
       assign(conn, :ad_slot, %{
         banner: Ads.current_banner(),
         served_at: System.system_time(:second)
       })
     else
       conn
-    end
-  end
-
-  defp eligible?(conn) do
-    case conn.assigns[:current_user] do
-      %User{ad_seen_at: seen_at, ads_dismissed_on: dismissed_on} ->
-        Ads.eligible?(seen_at, dismissed_on)
-
-      nil ->
-        true
     end
   end
 

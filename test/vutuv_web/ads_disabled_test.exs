@@ -32,9 +32,11 @@ defmodule VutuvWeb.AdsDisabledTest do
 
   test "no ad is served, not even on the pages that carry one", %{conn: conn} do
     # A booked, approved ad for today would normally serve; with the switch
-    # off it does not.
+    # off it does not. The member is aged past the two-week grace period, or
+    # that rule alone would keep the card away and this would pass either way.
     insert(:ad, day: Ads.today(), title: "Acme sucht Leute")
     {conn, user} = create_and_login_user(conn)
+    backdate_registration!(user, Ads.grace_days() + 1)
 
     refute conn |> get(~p"/feed") |> html_response(200) =~ "ad-slot"
     refute conn |> get(~p"/#{user}") |> html_response(200) =~ "ad-slot"

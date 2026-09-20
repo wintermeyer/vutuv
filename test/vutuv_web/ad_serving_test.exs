@@ -3,11 +3,15 @@ defmodule VutuvWeb.AdServingTest do
   The daily text ad on the two pages that carry it, a profile and the feed:
   at the top of the rail on a desktop and as a card near the top on a phone.
   The request decides (`VutuvWeb.AdServing`), the LiveView shows what it was
-  handed (`VutuvWeb.Live.AdSlot`). A member's two frequency rules live on the
-  server: at most one ad an hour, and none for the rest of the day once the ✕
-  was pressed. A visitor without an account sees the ad on every page, and
-  nothing about them is stored, neither on the server nor in a cookie.
+  handed (`VutuvWeb.Live.AdSlot`). A member's rules live on the server: no ad
+  at all in the first two weeks after signing up, then at most one an hour, and
+  none for the rest of the day once the ✕ was pressed. A visitor without an
+  account sees the ad on every page, and nothing about them is stored, neither
+  on the server nor in a cookie.
   Only a profile carries the ad for a visitor; the feed needs an account.
+
+  Every member here is `established_member/1`: a fresh `create_and_login_user/1`
+  would see no ad for any of these tests.
   """
 
   use VutuvWeb.ConnCase
@@ -27,6 +31,13 @@ defmodule VutuvWeb.AdServingTest do
 
   # A member whose profile the test's anonymous conn opens.
   defp profile_owner, do: insert_activated_user()
+
+  # A signed-in member the ad system is willing to serve: registration is far
+  # enough back that the frequency rules are what decides.
+  defp established_member(conn) do
+    {conn, user} = create_and_login_user(conn)
+    {conn, backdate_registration!(user, Ads.grace_days() + 1)}
+  end
 
   defp put_state(user, fields),
     do: Repo.update_all(from(u in User, where: u.id == ^user.id), set: fields)
@@ -51,7 +62,7 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "a member sees it in the feed", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
+      {conn, _user} = established_member(conn)
 
       html = conn |> get(~p"/feed") |> html_response(200)
 
@@ -67,7 +78,7 @@ defmodule VutuvWeb.AdServingTest do
         url: "https://www.jobs.acme.example/elixir/?utm_source=vutuv"
       )
 
-      {conn, _user} = create_and_login_user(conn)
+      {conn, _user} = established_member(conn)
 
       html = conn |> get(~p"/feed") |> html_response(200)
 
@@ -149,9 +160,24 @@ defmodule VutuvWeb.AdServingTest do
     end
   end
 
+  # The rule is about the viewer, never the page: every `profile_owner/0` above
+  # is a brand-new account and a visitor sees the ad on it. Where the fortnight
+  # ends is pinned to the second in `Vutuv.AdsTest`; here it only has to reach
+  # both pages, and the ad coming back afterwards is what every
+  # `established_member/1` test below asserts.
+  describe "the first two weeks after signing up" do
+    test "a member who registered today sees none, in the feed or on a profile", %{conn: conn} do
+      insert(:ad, day: Ads.today(), title: "Acme sucht Leute")
+      {conn, user} = create_and_login_user(conn)
+
+      refute conn |> get(~p"/feed") |> html_response(200) =~ "ad-slot"
+      refute conn |> get(~p"/#{user}") |> html_response(200) =~ "ad-slot"
+    end
+  end
+
   describe "at most one ad an hour, for a member" do
     test "the hour starts when the card was seen, not when the page was sent", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
 
       assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
       assert Repo.get!(User, user.id).ad_seen_at == nil
@@ -159,7 +185,7 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "the hour is kept on the server, so it spans devices", %{conn: conn} do
-      {phone, user} = create_and_login_user(conn)
+      {phone, user} = established_member(conn)
       desktop = second_device(user)
 
       {:ok, view, _html} = live(phone, ~p"/feed")
@@ -171,7 +197,7 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "once the hour is over the next ad comes", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
       put_state(user, ad_seen_at: an_hour_ago())
 
       assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
@@ -179,7 +205,7 @@ defmodule VutuvWeb.AdServingTest do
 
     test "a booked ad the member saw is kept for their history, one row per ad", %{conn: conn} do
       ad = insert(:ad, day: Ads.today())
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       render_hook(view, "ad-seen", %{})
@@ -192,7 +218,7 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "the house ad takes the hour and leaves no sighting", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       render_hook(view, "ad-seen", %{})
@@ -203,7 +229,7 @@ defmodule VutuvWeb.AdServingTest do
 
     test "a second tab whose card comes into view within the hour loses it", %{conn: conn} do
       ad = insert(:ad, day: Ads.today())
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
 
       {:ok, first, _html} = live(conn, ~p"/feed")
       {:ok, second, _html} = live(conn, ~p"/feed")
@@ -218,7 +244,7 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "a card the page no longer shows records nothing", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       render_hook(view, "ad-expired", %{})
@@ -232,7 +258,7 @@ defmodule VutuvWeb.AdServingTest do
     test "a member's ✕ keeps every ad away for the rest of the day, on every device", %{
       conn: conn
     } do
-      {phone, user} = create_and_login_user(conn)
+      {phone, user} = established_member(conn)
       desktop = second_device(user)
 
       {:ok, view, _html} = live(phone, ~p"/feed")
@@ -248,7 +274,7 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "yesterday's ✕ no longer counts", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
       put_state(user, ads_dismissed_on: Date.add(Ads.today(), -1))
 
       assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
@@ -268,7 +294,7 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "a member's ✕ says it hides the ads for today", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
+      {conn, _user} = established_member(conn)
       html = conn |> get(~p"/feed") |> html_response(200)
 
       assert html =~ ~s(aria-label="Hide ads for today")
@@ -304,7 +330,7 @@ defmodule VutuvWeb.AdServingTest do
 
     test "a member's card is a view only when it takes the hour", %{conn: conn} do
       ad = insert(:ad, day: Ads.today())
-      {conn, _user} = create_and_login_user(conn)
+      {conn, _user} = established_member(conn)
 
       {:ok, first, _html} = live(conn, ~p"/feed")
       {:ok, second, _html} = live(conn, ~p"/feed")
@@ -327,7 +353,7 @@ defmodule VutuvWeb.AdServingTest do
     test "the card goes when the browser says its time is up, without closing the day", %{
       conn: conn
     } do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = established_member(conn)
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       render_hook(view, "ad-expired", %{})

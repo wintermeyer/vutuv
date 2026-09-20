@@ -32,7 +32,13 @@ On unbooked days a short house ad sells the slot.
 
 ## How often
 
-- **At most one ad an hour** (`Vutuv.Ads.eligible?/3`), counted from a card
+- **Nothing at all in a new account's first two weeks**
+  (`Vutuv.Ads.grace_days/0`, counted from `users.inserted_at`; the reason is in
+  the comment on that constant). The house ad is held back with the rest — the
+  rule is about the slot, not about who paid for it — and it is about the
+  **viewer**, so a newcomer's own profile still carries the ad for its
+  visitors.
+- **At most one ad an hour** (`Vutuv.Ads.eligible?/2`), counted from a card
   that was **seen**: the `AdSlot` hook reports the first moment a card is at
   least half in view. Sending a page takes nothing. For a member the hour is
   `users.ad_seen_at`, on the server and shared by every device, and

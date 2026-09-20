@@ -87,7 +87,9 @@ defmodule VutuvWeb.AdsSeenLiveTest do
 
   describe "the card's label" do
     test "leads a member to their seen ads", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
+      # Past the two-week grace period, or the feed carries no card to label.
+      {conn, user} = create_and_login_user(conn)
+      backdate_registration!(user, Ads.grace_days() + 1)
 
       html = conn |> get(~p"/feed") |> html_response(200)
 

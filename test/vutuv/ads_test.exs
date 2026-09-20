@@ -2,6 +2,7 @@ defmodule Vutuv.AdsTest do
   use Vutuv.DataCase, async: true
   import Vutuv.MailboxHelpers
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Ads
   alias Vutuv.Ads.Ad
   alias Vutuv.Ads.Sighting
@@ -28,6 +29,12 @@ defmodule Vutuv.AdsTest do
   end
 
   defp admin, do: insert_activated_user(first_name: "Ada", last_name: "Admin")
+
+  # The columns `eligible?/2` reads, as a struct rather than a row. Registered
+  # far enough back that the grace period is never what decides, including for
+  # the tests that let `now` default to the real clock.
+  defp member(fields \\ []),
+    do: struct(%User{inserted_at: ~N[2020-01-01 00:00:00]}, fields)
 
   # The mails in `mails` that went to `user`'s address, and to the operator.
   defp mails_to(mails, %Vutuv.Accounts.User{} = user) do
@@ -757,21 +764,37 @@ defmodule Vutuv.AdsTest do
     end
   end
 
-  describe "eligible?/3" do
+  describe "eligible?/2" do
+    test "a visitor without an account always may" do
+      assert Ads.eligible?(nil)
+    end
+
+    test "an account in its first two weeks sees none, clean hour and no ✕ alike" do
+      now = ~U[2026-09-17 10:00:00Z]
+
+      refute Ads.eligible?(member(inserted_at: ~N[2026-09-17 09:00:00]), now)
+      refute Ads.eligible?(member(inserted_at: ~N[2026-09-03 10:00:01]), now)
+      assert Ads.eligible?(member(inserted_at: ~N[2026-09-03 10:00:00]), now)
+    end
+
+    test "an account that did not bring its inserted_at counts as new" do
+      refute Ads.eligible?(%User{})
+    end
+
     test "nothing seen and nothing closed: an ad may show" do
-      assert Ads.eligible?(nil, nil)
+      assert Ads.eligible?(member())
     end
 
     test "an ad seen within the hour holds the next one back, an older one does not" do
       now = ~U[2026-09-17 10:00:00Z]
 
-      refute Ads.eligible?(~U[2026-09-17 09:00:01Z], nil, now)
-      assert Ads.eligible?(~U[2026-09-17 09:00:00Z], nil, now)
+      refute Ads.eligible?(member(ad_seen_at: ~U[2026-09-17 09:00:01Z]), now)
+      assert Ads.eligible?(member(ad_seen_at: ~U[2026-09-17 09:00:00Z]), now)
     end
 
     test "a day with a closed ad holds every ad back until Berlin midnight" do
-      refute Ads.eligible?(nil, Ads.today())
-      assert Ads.eligible?(nil, Date.add(Ads.today(), -1))
+      refute Ads.eligible?(member(ads_dismissed_on: Ads.today()))
+      assert Ads.eligible?(member(ads_dismissed_on: Date.add(Ads.today(), -1)))
     end
   end
 

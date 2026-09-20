@@ -22,6 +22,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Ads
   alias Vutuv.Profiles.Address
 
   defp address_of(user), do: Repo.one(from(a in Address, where: a.user_id == ^user.id))
@@ -180,8 +181,14 @@ defmodule VutuvWeb.WelcomeControllerTest do
     # The daily ad would sit behind the dimmed backdrop and still take the
     # member's hour on a sighting they cannot read. A profile carries the ad
     # otherwise, so this goes red the moment VutuvWeb.AdServing stops asking.
+    # The account is aged past the ad system's two-week grace period, or that
+    # rule would answer instead and this would pass either way — and the aged
+    # account is the real shape, since `:welcome_pending` is dropped only when
+    # the questions are answered or closed and the session cookie lives 90
+    # days, so somebody who ignores the window still carries it on day 20.
     test "no ad rides along behind it", %{conn: conn} do
       {conn, user} = register_and_confirm(conn)
+      backdate_registration!(user, Ads.grace_days() + 1)
 
       body = conn |> get(~p"/#{user}") |> html_response(200)
 
