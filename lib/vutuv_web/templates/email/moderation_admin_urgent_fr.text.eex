@@ -1,0 +1,19 @@
+<%= email_greeting(@user) %>,
+
+un contenu a été signalé et attend une décision.<%= if @profile? do %> Les signalements
+sur les profils sont urgents : un deuxième signalement indépendant gèle tout le
+profil.<% end %>
+
+  Signalé :             <%= @content_label %>
+  Profil :              @<%= @owner_slug %> (<%= @url %><%= @owner_slug %>)
+  Signalé comme :       <%= @category_label %>
+  Signalements :        <%= @report_count %><%= if @note do %>
+  Note du signalant :   <%= @note %><% end %>
+
+Examinez le dossier :
+
+<%= @url %>admin/moderation/<%= @case_id %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

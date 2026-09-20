@@ -1,0 +1,16 @@
+<.email_layout preheader="Votre annonce est annulée" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    nous avons annulé votre annonce pour {@day} :
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titre">{@ad.title}</.email_row>
+    <.email_row label="Texte">{@ad.body}</.email_row>
+    <.email_row label="Lien">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Elle ne sera pas mise en ligne ce jour-là et le jour est de nouveau libre. Si vous avez déjà reçu une facture, nous vous établirons un avoir.
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Vos réservations</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

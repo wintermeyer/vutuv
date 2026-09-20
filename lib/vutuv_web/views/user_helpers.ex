@@ -17,8 +17,10 @@ defmodule VutuvWeb.UserHelpers do
   alias PhoenixHTMLHelpers.Format, as: HTMLFormat
   alias PhoenixHTMLHelpers.Link, as: HTMLLink
   alias Vutuv.Accounts.User
+  alias Vutuv.DateRegions
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Prefs
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.WorkExperience
@@ -825,58 +827,46 @@ defmodule VutuvWeb.UserHelpers do
     |> HTMLFormat.text_to_html()
   end
 
-  def format_birthdate(%User{locale: "de", birthdate: birthdate}) do
-    format_pyramid(birthdate)
+  @doc """
+  The member's birthdate in the numeric shape their own interface language
+  writes — German `20.09.1985`, French and Italian `20/09/1985`, Japanese
+  `1985-09-20`.
+
+  The shape comes from `Vutuv.DateRegions`, the module every other date on the
+  page already goes through, rather than from a clause per locale here. That is
+  not tidying: the two clauses this replaces equated "not German" with "American",
+  so a French profile read `09/20/1985` and an Italian one had since the day
+  Italian shipped. It also settles `en`, which `DateRegions` maps to the British
+  shape — issue #1502's whole point was that an English-speaking reader is not
+  an American one, and the birthdate was the last place still assuming it.
+
+  A locale the table has no opinion about (a legacy row, a nil) falls back to the
+  installation's configured default rather than raising. `""` without a birthdate.
+  """
+  def format_birthdate(%User{locale: locale, birthdate: birthdate}) do
+    format_in_region(birthdate, locale, :date)
   end
 
-  def format_birthdate(%User{locale: "en", birthdate: birthdate}) do
-    format_usa(birthdate)
+  defp format_in_region(%Date{} = date, locale, part) do
+    region = DateRegions.from_language(locale) || Prefs.default(:date_region)
+    Calendar.strftime(date, DateRegions.pattern(region, part))
   end
 
-  # Legacy/pre-existing rows can carry a nil or otherwise-unrecognized locale
-  # (the column has no default and no validate_inclusion); fall back to the
-  # USA format instead of raising FunctionClauseError on the profile page.
-  def format_birthdate(%User{birthdate: birthdate}) do
-    format_usa(birthdate)
-  end
-
-  defp format_pyramid(%Date{year: year, month: month, day: day}) do
-    "#{String.pad_leading(Integer.to_string(day), 2, "0")}.#{String.pad_leading(Integer.to_string(month), 2, "0")}.#{year}"
-  end
-
-  defp format_pyramid(_), do: ""
-
-  defp format_usa(%Date{year: year, month: month, day: day}) do
-    "#{String.pad_leading(Integer.to_string(month), 2, "0")}/#{String.pad_leading(Integer.to_string(day), 2, "0")}/#{year}"
-  end
-
-  defp format_usa(_), do: ""
+  defp format_in_region(_no_date, _locale, _part), do: ""
 
   @doc """
   The birthday's day and month **without the year**, in the same locale-shaped
-  numeric style `format_birthdate/1` uses (German `23.04.`, otherwise the USA
-  `04/23`). For the "day_month" birthday visibility, where the year (and thus
+  numeric style `format_birthdate/1` uses (German `23.04.`, French and Italian
+  `23/04`). For the "day_month" birthday visibility, where the year (and thus
   the age) stays private. `""` for a member without a birthdate.
+
+  It had only a German clause, so every other language got the American
+  month-first order — the reason both formatters now read the shape off
+  `Vutuv.DateRegions` instead of naming locales.
   """
-  def format_birthdate_day_month(%User{locale: "de", birthdate: birthdate}) do
-    format_pyramid_day_month(birthdate)
+  def format_birthdate_day_month(%User{locale: locale, birthdate: birthdate}) do
+    format_in_region(birthdate, locale, :day_month)
   end
-
-  def format_birthdate_day_month(%User{birthdate: birthdate}) do
-    format_usa_day_month(birthdate)
-  end
-
-  defp format_pyramid_day_month(%Date{month: month, day: day}) do
-    "#{String.pad_leading(Integer.to_string(day), 2, "0")}.#{String.pad_leading(Integer.to_string(month), 2, "0")}."
-  end
-
-  defp format_pyramid_day_month(_), do: ""
-
-  defp format_usa_day_month(%Date{month: month, day: day}) do
-    "#{String.pad_leading(Integer.to_string(month), 2, "0")}/#{String.pad_leading(Integer.to_string(day), 2, "0")}"
-  end
-
-  defp format_usa_day_month(_), do: ""
 
   @doc """
   The member's age in whole years on the current German calendar day

@@ -1,0 +1,13 @@
+<.email_layout preheader="Votre offre d'emploi sur vutuv expire bientôt" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    votre offre d'emploi « {@posting_title} » expire le {Calendar.strftime(@expires_on, "%d/%m/%Y")}.
+    Les offres expirent automatiquement au bout de 90 jours ; il n'y a pas de renouvellement.
+  </.email_p>
+  <.email_p>
+    Le poste est pourvu ? Fermez l'offre. Il est toujours ouvert ? À l'expiration, republiez-la
+    d'un geste, avec une date de publication honnête.
+  </.email_p>
+  <.email_button href={"#{@url}jobs/#{@posting_slug}"}>Voir l'offre</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

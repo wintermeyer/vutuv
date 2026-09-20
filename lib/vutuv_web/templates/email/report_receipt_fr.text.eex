@@ -1,0 +1,20 @@
+<%= @greeting %>,
+
+nous avons reçu votre signalement. Pour qu'il soit examiné, confirmez cette
+adresse e-mail :
+
+<%= @confirm_url %>
+
+Jusque-là, le dossier reste en attente chez nos administrateurs et rien ne
+change pour le contenu signalé.
+
+  Signalé :         <%= @content_label %>
+  Adresse :         <%= @content_url %>
+  Signalé comme :   <%= @category_label %>
+
+Si ce n'est pas vous qui avez envoyé ce signalement, vous pouvez ignorer cet
+e-mail. Sans confirmation, rien ne se passe.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

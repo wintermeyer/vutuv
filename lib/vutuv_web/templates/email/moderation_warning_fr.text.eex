@@ -1,0 +1,17 @@
+<%= email_greeting(@user) %>,
+
+<%= if @copyright_case do %>nos administrateurs ont examiné un signalement concernant un de vos contenus et
+lui ont donné raison : le contenu porte atteinte au droit d'auteur d'autrui.
+C'est une question juridique, pas une règle de la maison.
+<% else %>nos administrateurs ont examiné un signalement concernant un de vos contenus et
+ont constaté qu'il enfreint nos règles de la communauté :
+
+<%= @url %>community
+<% end %>
+Ceci est un avertissement formel, le premier de trois étapes. Une deuxième
+infraction confirmée suspend votre compte pendant une semaine ; une troisième le
+désactive définitivement. Les avertissements expirent au bout de douze mois.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

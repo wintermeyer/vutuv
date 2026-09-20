@@ -1,0 +1,19 @@
+<.email_layout preheader="Votre annonce ne sera pas mise en ligne" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    nous ne pouvons malheureusement pas publier votre annonce pour {@day} :
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titre">{@ad.title}</.email_row>
+    <.email_row label="Texte">{@ad.body}</.email_row>
+    <.email_row label="Lien">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Notre motif : {@ad.rejection_reason}
+  </.email_p>
+  <.email_p>
+    La réservation est donc annulée, vous ne payez rien et le jour est de nouveau libre. Vous pouvez réserver une nouvelle annonce ici :
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/new"}>Réserver une nouvelle annonce</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

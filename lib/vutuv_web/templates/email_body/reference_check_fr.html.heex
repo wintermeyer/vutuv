@@ -1,0 +1,18 @@
+<.email_layout preheader="L'analyse de votre certificat de travail est terminée" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    l'analyse de votre certificat de travail « {@title} » est terminée.
+  </.email_p>
+  <.email_p :if={@grade}><strong>Note globale : {@grade}</strong></.email_p>
+  <.email_p>Vous seul voyez le résultat.</.email_p>
+  <.email_button href={"#{@url}settings/job_references/#{@reference_id}/check"}>
+    Lire l'analyse
+  </.email_button>
+  <.email_p>
+    Cette lecture a été produite par un modèle de langage sur nos serveurs et n'est pas un avis
+    juridique. Pour une appréciation qui engage, adressez-vous à un avocat, de préférence
+    spécialisé en droit du travail.
+  </.email_p>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

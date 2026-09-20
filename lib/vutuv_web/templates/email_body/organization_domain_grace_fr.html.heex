@@ -1,0 +1,33 @@
+<.email_layout preheader="La preuve de domaine de votre page d'organisation manque" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    la preuve de domaine de votre page d'organisation « {@organization_name} » ne répond plus.
+    Le domaine concerné est <strong>{@domain}</strong>. Nous revérifions la preuve chaque
+    semaine, et vous avez jusqu'au
+    <strong>{Calendar.strftime(@deadline, "%d/%m/%Y")}</strong> pour la rétablir.
+  </.email_p>
+  <%= if @last? do %>
+    <.email_p>
+      Si rien ne change d'ici là, la page perd sa vérification et ne sera plus visible
+      publiquement.
+    </.email_p>
+  <% else %>
+    <.email_p>
+      Si rien ne change d'ici là, seul ce domaine est retiré. La page reste publique grâce à vos
+      autres domaines vérifiés.
+    </.email_p>
+  <% end %>
+  <.email_p>
+    Il suffit généralement de rétablir la preuve d'origine :
+    <%= if @method == "dns" do %>
+      l'enregistrement DNS TXT pour {@domain}.
+    <% else %>
+      le fichier de vérification sur {@domain}.
+    <% end %>
+    La valeur exacte et le bouton pour revérifier sont sur la page des domaines.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Gérer les domaines
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

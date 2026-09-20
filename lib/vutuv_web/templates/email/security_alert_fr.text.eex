@@ -1,0 +1,20 @@
+<%= email_greeting(@user) %>,
+
+une connexion à votre compte vutuv vient d'avoir lieu. Si c'est vous, vous
+pouvez ignorer cet e-mail.
+
+Quand :     <%= @when_text %>
+Appareil :  <%= @device %>
+<%= if @location do %>Lieu :      <%= @location %>
+<% end %><%= if @ip do %>IP :        <%= @ip %>
+<% end %>
+Pourquoi nous vous le disons :
+<%= for line <- @reason_lines do %>- <%= line %>
+<% end %>
+Si vous ne reconnaissez pas cette connexion, vérifiez les appareils connectés à votre compte et déconnectez ceux que vous ne reconnaissez pas :
+
+<%= @devices_url %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

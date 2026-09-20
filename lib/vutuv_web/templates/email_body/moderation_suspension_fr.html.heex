@@ -1,0 +1,14 @@
+<.email_layout preheader="Votre compte vutuv est suspendu" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    après une deuxième infraction confirmée à nos règles de la communauté, votre compte vutuv est
+    suspendu jusqu'au {Calendar.strftime(@until, "%d/%m/%Y")}. Jusque-là, vous ne pouvez pas vous
+    connecter et votre profil est masqué.
+  </.email_p>
+  <.email_p>
+    Prenez-le au sérieux : une nouvelle infraction confirmée désactive définitivement votre compte.
+    Nos règles de la communauté :
+  </.email_p>
+  <.email_button href={"#{@url}community"}>Nos règles de la communauté</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

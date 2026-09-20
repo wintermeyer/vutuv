@@ -211,13 +211,28 @@ defmodule Vutuv.DateRegions do
 
   def from_accept_language(_other), do: nil
 
+  @doc """
+  The date shape a bare language code writes, or `nil` for one this table has no
+  opinion about — `"de"` -> `"DE"`, `"fr"` -> `"GB"`, `"ja"` -> `"ISO"`.
+
+  The half of `from_accept_language/1` that a stored `users.locale` needs, which
+  carries no region subtag and is not a header. It exists because the birthdate
+  formatter hand-rolled its own two-clause version of this table and therefore
+  answered the American shape for every language but German — a French profile
+  read `09/20/1985`.
+  """
+  def from_language(language) when is_binary(language),
+    do: @by_language[String.downcase(language)]
+
+  def from_language(_other), do: nil
+
   # One BCP-47 tag: prefer its region subtag ("en-GB"), fall back to the bare
   # language ("en"). A script subtag ("zh-Hans-CN") keeps the region last, so
   # the region is looked for in every subtag rather than only the second.
   defp from_tag(tag) do
     case String.split(tag, "-") do
       [language | subtags] ->
-        Enum.find_value(subtags, @by_language[String.downcase(language)], fn subtag ->
+        Enum.find_value(subtags, from_language(language), fn subtag ->
           @by_country[String.upcase(subtag)]
         end)
 

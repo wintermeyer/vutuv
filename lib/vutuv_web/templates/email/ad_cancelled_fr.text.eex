@@ -1,0 +1,16 @@
+<%= email_greeting(@user) %>,
+
+nous avons annulé votre annonce pour <%= @day %> :
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Elle ne sera pas mise en ligne ce jour-là et le jour est de nouveau libre. Si
+vous avez déjà reçu une facture, nous vous établirons un avoir.
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

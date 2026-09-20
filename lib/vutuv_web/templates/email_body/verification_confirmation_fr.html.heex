@@ -1,0 +1,9 @@
+<.email_layout preheader="Votre compte vutuv est vérifié" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>félicitations ! Votre compte vutuv est désormais vérifié.</.email_p>
+  <.email_p>
+    Une marque de vérification bleue apparaît maintenant à côté de votre nom sur votre profil, pour que les visiteurs voient d'un coup d'œil que ce compte est bien le vôtre.
+  </.email_p>
+  <.email_button href={"#{@url}#{@user.username}"}>Voir votre profil</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

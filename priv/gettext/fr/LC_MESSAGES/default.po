@@ -2781,7 +2781,7 @@ msgstr[1] "%{count} tags ajoutés."
 #, elixir-autogen, elixir-format
 msgid "1 connection"
 msgid_plural "%{formatted} connections"
-msgstr[0] "1 relation"
+msgstr[0] "%{formatted} relation"
 msgstr[1] "%{formatted} relations"
 
 #: lib/vutuv_web/live/job_board_live.ex:458
@@ -2790,7 +2790,7 @@ msgstr[1] "%{formatted} relations"
 #, elixir-autogen, elixir-format
 msgid "+1 more tag"
 msgid_plural "+%{formatted} more tags"
-msgstr[0] "+1 autre tag"
+msgstr[0] "+%{formatted} autre tag"
 msgstr[1] "+%{formatted} autres tags"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:738
@@ -7029,7 +7029,7 @@ msgstr "nom exact du tag"
 #, elixir-autogen, elixir-format
 msgid "minus 1 group"
 msgid_plural "minus %{count} groups"
-msgstr[0] "moins 1 groupe"
+msgstr[0] "moins %{count} groupe"
 msgstr[1] "moins %{count} groupes"
 
 #: lib/vutuv_web/live/admin/user_live.ex:204
@@ -7105,7 +7105,7 @@ msgstr "Suivant"
 #, elixir-autogen, elixir-format
 msgid "plus 1 group"
 msgid_plural "plus %{count} groups"
-msgstr[0] "plus 1 groupe"
+msgstr[0] "plus %{count} groupe"
 msgstr[1] "plus %{count} groupes"
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:951
@@ -10773,7 +10773,7 @@ msgstr "Gardez votre disponibilité largement visible tout en veillant à ce que
 #, elixir-autogen, elixir-format
 msgid "Manage exclusion list (1 entry)"
 msgid_plural "Manage exclusion list (%{formatted} entries)"
-msgstr[0] "Gérer la liste d'exclusion (1 entrée)"
+msgstr[0] "Gérer la liste d'exclusion (%{formatted} entrée)"
 msgstr[1] "Gérer la liste d'exclusion (%{formatted} entrées)"
 
 #: lib/vutuv_web/components/job_exclusion_components.ex:64
@@ -21345,7 +21345,7 @@ msgstr "Afficher %{count} serveurs de plus"
 #, elixir-autogen, elixir-format
 msgid "Show 1 more account"
 msgid_plural "Show %{formatted} more accounts"
-msgstr[0] "Afficher 1 compte de plus"
+msgstr[0] "Afficher %{formatted} compte de plus"
 msgstr[1] "Afficher %{formatted} comptes de plus"
 
 #: lib/vutuv_web/live/post_live/filter_band.ex:765
@@ -21395,7 +21395,7 @@ msgstr[1] "Replierait %{formatted} publications dans votre fil :"
 #, elixir-autogen, elixir-format
 msgid "and 1 more"
 msgid_plural "and %{formatted} more"
-msgstr[0] "et 1 de plus"
+msgstr[0] "et %{formatted} de plus"
 msgstr[1] "et %{formatted} de plus"
 
 #: lib/vutuv_web/live/post_live/feed.ex:3537

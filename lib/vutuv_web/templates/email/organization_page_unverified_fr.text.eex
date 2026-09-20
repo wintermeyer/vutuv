@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+votre page d'organisation « <%= @organization_name %> » a perdu son dernier domaine vérifié et est
+repassée à l'état « vérification en attente ». Elle n'est plus visible publiquement. Le domaine
+concerné est <%= @domain %>.
+
+La preuve est restée injoignable pendant une semaine. Rétablissez-la, relancez la vérification et
+la page revient en ligne. Entre-temps vos contenus restent, ils ne sont simplement pas publiés.
+
+<%= @url %>organizations/<%= @organization_slug %>/domains
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

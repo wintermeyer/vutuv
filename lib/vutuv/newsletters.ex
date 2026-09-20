@@ -21,6 +21,7 @@ defmodule Vutuv.Newsletters do
   alias Vutuv.Accounts.{Email, User}
   alias Vutuv.BerlinTime
   alias Vutuv.Identity
+  alias Vutuv.Languages
 
   alias Vutuv.Newsletters.{
     Markdown,
@@ -1019,9 +1020,13 @@ defmodule Vutuv.Newsletters do
   defp recipient_address(_email), do: "unknown"
 
   # A newsletter body exists per served locale; collapse anything else to en.
-  defp email_locale(%{locale: "de"}), do: "de"
-  defp email_locale(%{locale: "it"}), do: "it"
-  defp email_locale(_user), do: "en"
+  # `Languages.render_locale/1` rather than a clause per locale: this used to
+  # name "de" and "it" and sent every French member the English body while
+  # `newsletter_fr.text.eex` and its HTML half sat unreachable, and the
+  # authoring side already offers the admin every served locale
+  # (`NewsletterGroup.locales/0`) — so a French newsletter could be composed and
+  # never sent as one.
+  defp email_locale(%{locale: locale}), do: Languages.render_locale(locale)
 
   # Confirmed, reachable, not-suspended, not-deactivated members who have not
   # opted out of the newsletter. Named binding :u so eligible_count/0 can attach

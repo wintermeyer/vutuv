@@ -1,0 +1,19 @@
+<.email_layout preheader="Confirmez votre signalement" locale={@locale}>
+  <.email_p>{@greeting},</.email_p>
+  <.email_p>
+    nous avons reçu votre signalement. Pour qu'il soit examiné, confirmez cette adresse e-mail.
+    Jusque-là, le dossier reste en attente chez nos administrateurs et rien ne change pour le
+    contenu signalé.
+  </.email_p>
+  <.email_button href={@confirm_url}>Confirmer le signalement</.email_button>
+  <.email_panel>
+    <.email_row label="Signalé">{@content_label}</.email_row>
+    <.email_row label="Adresse">{@content_url}</.email_row>
+    <.email_row label="Signalé comme">{@category_label}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Si ce n'est pas vous qui avez envoyé ce signalement, vous pouvez ignorer cet e-mail. Sans
+    confirmation, rien ne se passe.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

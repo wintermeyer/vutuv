@@ -1,0 +1,32 @@
+<.email_layout preheader={@preheader} locale={@locale}>
+  <.email_p>{@greeting},</.email_p>
+  <.email_p>
+    merci pour votre signalement. Le dossier est clos, et voici comment cela s'est passé :
+  </.email_p>
+  <.email_p :if={@outcome == "removed"}>
+    Le propriétaire a supprimé le contenu que vous avez signalé.
+  </.email_p>
+  <.email_p :if={@outcome == "revised"}>
+    Le propriétaire a corrigé le contenu que vous avez signalé. Si vous estimez toujours qu'il
+    enfreint nos règles de la communauté, vous pouvez le signaler une nouvelle fois ; il ira alors
+    directement à nos administrateurs.
+  </.email_p>
+  <.email_p :if={@outcome == "upheld"}>
+    Une personne de notre équipe a examiné votre signalement et lui a donné raison. Ce que cela
+    signifie pour le compte derrière le contenu reste entre cette personne et nous.
+  </.email_p>
+  <.email_p :if={@outcome == "not_upheld"}>
+    Une personne de notre équipe a examiné votre signalement et ne lui a pas donné raison. Ce n'est
+    pas un jugement sur vous : signaler était juste, même quand la décision va dans une autre
+    direction.
+  </.email_p>
+  <.email_p :if={@content_fate == :removed}>Le contenu signalé a été supprimé.</.email_p>
+  <.email_p :if={@content_fate == :hidden}>
+    Le contenu signalé n'est plus visible sur vutuv.
+  </.email_p>
+  <.email_p :if={@content_fate == :visible}>
+    Le contenu signalé est toujours visible sur vutuv.
+  </.email_p>
+  <.email_p>Nous ne vous écrirons plus au sujet de ce dossier.</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+après une troisième infraction confirmée à nos règles de la communauté, votre
+compte vutuv a été désactivé définitivement. Vous ne pouvez plus vous connecter
+et votre profil n'est plus visible.
+
+Si vous estimez que cette décision est erronée, vous pouvez faire appel en
+répondant à cet e-mail.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

@@ -38,7 +38,7 @@ defmodule VutuvWeb.OpenGraphTest do
   describe "og:locale follows the page's own language" do
     test "every served locale gets its own tag, and none of them says en_US by accident",
          %{conn: conn} do
-      expected = %{"en" => "en_US", "de" => "de_DE", "it" => "it_IT"}
+      expected = %{"en" => "en_US", "de" => "de_DE", "fr" => "fr_FR", "it" => "it_IT"}
 
       for locale <- Vutuv.Languages.site_locales() do
         html =

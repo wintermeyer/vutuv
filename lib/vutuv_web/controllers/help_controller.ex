@@ -39,7 +39,7 @@ defmodule VutuvWeb.HelpController do
   alias VutuvWeb.DevDocMarkdown
   alias VutuvWeb.Endpoint
 
-  @locales ~w(de en it)
+  @locales ~w(de en fr it)
   @default_locale "en"
   @pages ~w(markdown mastodon)
 

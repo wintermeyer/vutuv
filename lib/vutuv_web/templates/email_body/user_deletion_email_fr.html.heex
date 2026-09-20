@@ -1,0 +1,11 @@
+<.email_layout preheader="Confirmez la suppression de votre compte" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>pour supprimer votre compte, saisissez le code PIN suivant :</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    <strong>ATTENTION :</strong> cette étape est irréversible. Votre compte sera supprimé dès que
+    vous saisirez ce code PIN sur vutuv. Le code PIN expire au bout de 30 minutes.
+  </.email_p>
+  <.email_p>Vous pourrez bien sûr toujours créer un nouveau compte.</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

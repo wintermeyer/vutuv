@@ -80,6 +80,23 @@ defmodule VutuvWeb.SettingsRegionTest do
       assert html =~ "data-browser-timezone"
     end
 
+    # The interface-language picker offered three hardcoded options while the
+    # installation served four, so a member whose browser sends `de` could never
+    # pin French — reachable only through `Accept-Language` or the API. It is
+    # built from `Languages.site_locales/0` now, and this asserts the outcome
+    # (an option per served locale) rather than the mechanism.
+    test "the interface language offers every locale this installation serves",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/settings/preferences") |> html_response(200)
+
+      for locale <- Vutuv.Languages.site_locales() do
+        assert html =~ ~s(value="#{locale}"),
+               "#{locale} is served but cannot be picked as the interface language"
+      end
+    end
+
     # Named assertions, because `gettext.extract --merge` fuzzy-fills a new
     # msgid with the translation of some string it merely looks similar to, and
     # nothing else fails the build when it does.

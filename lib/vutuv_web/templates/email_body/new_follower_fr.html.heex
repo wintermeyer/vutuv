@@ -1,0 +1,7 @@
+<.email_layout preheader="Vous avez un nouvel abonné sur vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>@{@actor_username} s'est abonné à vous sur vutuv.</.email_p>
+  <.email_button href={"#{@url}#{@actor_username}"}>Voir son profil</.email_button>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

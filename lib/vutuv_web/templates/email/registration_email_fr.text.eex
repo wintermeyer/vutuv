@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+merci de votre inscription à vutuv. Voici le code PIN dont vous avez besoin pour
+vous connecter :
+
+  <%= @pin %>
+
+Le code PIN expire au bout de 30 minutes. Vous pouvez toujours en demander un
+nouveau en revenant sur vutuv et en vous connectant de nouveau.
+
+Si notre service vous plaît, parlez-en à vos contacts.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

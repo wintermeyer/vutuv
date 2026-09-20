@@ -1,0 +1,17 @@
+<.email_layout preheader="Votre page d'organisation n'est plus publique" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    votre page d'organisation « {@organization_name} » a perdu son dernier domaine vérifié
+    (<strong>{@domain}</strong>) et est repassée à l'état « vérification en attente ». Elle n'est
+    plus visible publiquement.
+  </.email_p>
+  <.email_p>
+    La preuve est restée injoignable pendant une semaine. Rétablissez-la, relancez la vérification
+    et la page revient en ligne. Entre-temps vos contenus restent, ils ne sont simplement pas
+    publiés.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Revérifier le domaine
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,21 @@
+<.email_layout preheader="Un avertissement pour votre compte vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p :if={@copyright_case}>
+    nos administrateurs ont examiné un signalement concernant un de vos contenus et lui ont donné
+    raison : le contenu porte atteinte au droit d'auteur d'autrui. C'est une question juridique,
+    pas une règle de la maison.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    nos administrateurs ont examiné un signalement concernant un de vos contenus et ont constaté
+    qu'il enfreint nos règles de la communauté :
+  </.email_p>
+  <.email_button :if={!@copyright_case} href={"#{@url}community"}>
+    Nos règles de la communauté
+  </.email_button>
+  <.email_p>
+    Ceci est un avertissement formel, le premier de trois étapes. Une deuxième infraction confirmée
+    suspend votre compte pendant une semaine ; une troisième le désactive définitivement. Les
+    avertissements expirent au bout de douze mois.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

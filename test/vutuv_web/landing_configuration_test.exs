@@ -74,8 +74,11 @@ defmodule VutuvWeb.LandingConfigurationTest do
       # the jobs line it followed when this was written.
       assert body =~ "`/jobs`"
 
-      assert body =~
-               "and how to write (`?lang=` for en, de, it)\n\nList pages paginate with `?page=N`."
+      # Anchored on the break itself, not on the sentence before it: the locale
+      # list in that sentence is `Enum.join(Languages.site_locales(), ", ")`, so
+      # spelling it here made adding a language turn this test red, and deriving
+      # it here would only re-implement the line under test.
+      assert body =~ ")\n\nList pages paginate with `?page=N`."
     end
   end
 

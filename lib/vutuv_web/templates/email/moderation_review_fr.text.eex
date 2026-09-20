@@ -1,0 +1,38 @@
+<%= email_greeting(@user) %>,
+
+<%= email_wrapped_text(@content_intro) %>
+Le contenu signalé reste masqué jusqu'à ce que nos administrateurs aient
+examiné le dossier ; aucune personne ne l'a examiné avant.
+
+<%= email_wrapped_text(@standing_sentence) %>
+
+  Signalé comme : <%= @category_labels %>
+<%= if @notes != [] do %>
+Voici ce que dit le signalement, dans les mots de qui l'a écrit. Qui c'était,
+nous ne vous le dirons jamais :
+
+<%= email_quoted_text(@notes) %>
+<% else %>
+Le signalement a indiqué cette catégorie et rien d'autre.
+<% end %><%= if @copyright_case do %>
+C'est une contestation juridique, pas une règle de la maison : elle affirme que
+l'œuvre n'est pas la vôtre pour être publiée. C'est le droit d'auteur qui en
+décide.
+<% else %>
+Le fondement, ce sont nos règles de la communauté, auxquelles tout sur vutuv
+doit se tenir :
+
+<%= @url %>community
+<% end %>
+Ce dossier est déjà entre les mains de nos administrateurs, il n'y a donc pas de
+tour où vous pourriez le régler vous-même. Vous n'avez rien à faire : nous vous
+communiquerons le résultat et, si le signalement se révèle non fondé, votre
+contenu redeviendra visible.
+
+Vous pouvez voir le dossier ici :
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

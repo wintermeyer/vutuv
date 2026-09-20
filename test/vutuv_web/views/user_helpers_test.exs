@@ -295,6 +295,39 @@ defmodule VutuvWeb.UserHelpersTest do
     end
   end
 
+  # Both birthdate formatters read their shape off `Vutuv.DateRegions`, the module
+  # every other date on the page goes through. Before that they had a German
+  # clause and treated every other language as American, so a French profile read
+  # `09/20/1985` and an Italian one had since the day Italian shipped. `en` moving
+  # to the British shape is the same correction: `DateRegions` maps `en -> GB`
+  # because an English-speaking reader is not an American one (issue #1502), and
+  # the birthdate was the last place still assuming it.
+  describe "format_birthdate/1" do
+    test "German writes the day first with dots" do
+      assert UserHelpers.format_birthdate(%User{locale: "de", birthdate: ~D[1985-09-20]}) ==
+               "20.09.1985"
+    end
+
+    test "French and Italian write the day first with slashes, not the American order" do
+      for locale <- ~w(fr it) do
+        assert UserHelpers.format_birthdate(%User{locale: locale, birthdate: ~D[1985-09-20]}) ==
+                 "20/09/1985"
+      end
+    end
+
+    test "an unknown locale falls back to the installation default rather than raising" do
+      assert UserHelpers.format_birthdate(%User{locale: "zz", birthdate: ~D[1985-09-20]}) ==
+               Calendar.strftime(
+                 ~D[1985-09-20],
+                 Vutuv.DateRegions.pattern(Vutuv.Prefs.default(:date_region), :date)
+               )
+    end
+
+    test "no birthdate yields an empty string" do
+      assert UserHelpers.format_birthdate(%User{locale: "de", birthdate: nil}) == ""
+    end
+  end
+
   describe "format_birthdate_day_month/1 (day + month, no year)" do
     test "German locale drops the year, keeps the dd.mm. shape" do
       assert UserHelpers.format_birthdate_day_month(%User{
@@ -303,11 +336,11 @@ defmodule VutuvWeb.UserHelpersTest do
              }) == "23.04."
     end
 
-    test "other locales use the mm/dd shape without the year" do
+    test "French drops the year and keeps the day-first order" do
       assert UserHelpers.format_birthdate_day_month(%User{
-               locale: "en",
+               locale: "fr",
                birthdate: ~D[1990-04-23]
-             }) == "04/23"
+             }) == "23/04"
     end
 
     test "no birthdate yields an empty string" do

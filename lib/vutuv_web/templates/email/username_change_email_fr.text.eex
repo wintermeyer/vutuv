@@ -1,0 +1,21 @@
+<%= email_greeting(@user) %>,
+
+pour confirmer votre nouveau nom d'utilisateur @<%= @new_username %>, saisissez
+le code PIN suivant :
+
+  <%= @pin %>
+
+Saisissez-le sur vutuv pour terminer la modification. Le code PIN expire au bout
+de 30 minutes.
+
+L'adresse actuelle de votre profil cessera de fonctionner dès que la
+modification prendra effet, et les mentions de votre ancien handle dans les
+publications seront réécrites avec le nouveau.
+
+Si ce n'est pas vous qui avez demandé ce changement de nom, ne saisissez pas ce
+code PIN. Quelqu'un d'autre utilise peut-être votre compte : changez votre façon
+de vous connecter sur <%= @url %>settings/security
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

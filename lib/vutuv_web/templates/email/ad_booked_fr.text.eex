@@ -1,0 +1,20 @@
+<%= email_greeting(@user) %>,
+
+merci pour votre réservation. Votre annonce pour <%= @day %> est retenue :
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Prix : <%= @price %>, <%= @vat %>. Paiement sur facture ; nous vous
+enverrons la facture par e-mail.
+
+Nous examinons chaque annonce avant sa mise en ligne et nous vous écrirons dès
+qu'elle sera validée. Jusque-là, vous pouvez annuler la réservation
+gratuitement :
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

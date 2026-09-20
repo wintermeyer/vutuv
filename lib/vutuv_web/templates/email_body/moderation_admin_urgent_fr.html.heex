@@ -1,0 +1,19 @@
+<.email_layout preheader="Modération : un contenu a été signalé" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    un contenu a été signalé et attend une décision.<span :if={@profile?}>
+      Les signalements sur les profils sont urgents : un deuxième signalement indépendant gèle tout le profil.</span>
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Signalé">{@content_label}</.email_row>
+    <.email_row label="Profil">@{@owner_slug}</.email_row>
+    <.email_row label="Signalé comme">{@category_label}</.email_row>
+    <.email_row label="Signalements">{@report_count}</.email_row>
+    <.email_row :if={@note} label="Note du signalant">{@note}</.email_row>
+  </.email_panel>
+  <.email_p>Examinez le dossier :</.email_p>
+  <.email_button href={"#{@url}admin/moderation/#{@case_id}"}>
+    Examiner le dossier
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

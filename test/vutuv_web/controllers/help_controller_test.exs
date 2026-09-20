@@ -12,22 +12,39 @@ defmodule VutuvWeb.HelpControllerTest do
 
   alias Vutuv.Accounts.ReservedSlugs
 
-  defp german(conn), do: put_req_header(conn, "accept-language", "de-DE,de;q=0.9")
+  defp accept(conn, locale),
+    do: put_req_header(conn, "accept-language", "#{locale}-#{String.upcase(locale)},#{locale}")
+
+  # One row per served locale rather than a test per language: the render path is
+  # locale-generic (`@bodies[page][locale]`), so what differs between the copies
+  # is data, and three hand-written copies had left Italian with no coverage at
+  # all while a fourth language cost two more. `{page title, a section heading}`
+  # per page — the section heading is what catches a page that renders its title
+  # from the right file and its body from another.
+  #
+  # Apostrophes are avoided in these substrings on purpose: the renderer escapes
+  # `'` to `&#39;`, so a French or Italian sentence asserted verbatim fails on a
+  # page that is perfectly correct.
+  @pages %{
+    "markdown" => %{
+      "en" => {"Formatting text with Markdown", "Bold, italics, strikethrough"},
+      "de" => {"Text formatieren mit Markdown", "Fett, kursiv, durchgestrichen"},
+      "fr" => {"Mettre en forme un texte avec Markdown", "Notes de bas de page"},
+      "it" => {"Formattare il testo con Markdown", "Grassetto, corsivo, barrato"}
+    },
+    "mastodon" => %{
+      "en" => {"Using a Mastodon app", "The address to type"},
+      "de" => {"Eine Mastodon-App benutzen", "Welche Adresse Sie eintippen"},
+      "fr" => {"Utiliser une application Mastodon", "adresse à saisir"},
+      "it" => {"Usare un", "indirizzo da digitare"}
+    }
+  }
 
   describe "GET /system/markdown" do
     test "is public and needs no login", %{conn: conn} do
       conn = get(conn, ~p"/system/markdown")
 
       assert html_response(conn, 200) =~ "Markdown"
-    end
-
-    test "renders in German for a German visitor", %{conn: conn} do
-      html = conn |> german() |> get(~p"/system/markdown") |> html_response(200)
-
-      assert html =~ "Text formatieren mit Markdown"
-      assert html =~ "Fett, kursiv, durchgestrichen"
-      assert html =~ "Fußnoten"
-      refute html =~ "Bold, italics, strikethrough"
     end
 
     test "renders in English otherwise", %{conn: conn} do
@@ -59,7 +76,7 @@ defmodule VutuvWeb.HelpControllerTest do
       # of whatever string it looks similar to, and it did exactly that here:
       # "Markdown help" arrived as "Markdown". Nothing fails the build over a
       # fuzzy entry, so the short labels get named in a test.
-      html = conn |> german() |> get(~p"/system/markdown") |> html_response(200)
+      html = conn |> accept("de") |> get(~p"/system/markdown") |> html_response(200)
 
       assert html =~ "Auf dieser Seite"
       assert html =~ "Diese Seite als Markdown lesen"
@@ -80,12 +97,48 @@ defmodule VutuvWeb.HelpControllerTest do
       assert response(conn, 200) =~ "# Formatting text with Markdown"
       assert response_content_type(conn, :md) =~ "text/markdown"
     end
+  end
 
-    test "serves the German file to a German visitor", %{conn: conn} do
-      body = conn |> german() |> get("/system/markdown.md") |> response(200)
+  # Both pages in every language this installation serves. A page that renders in
+  # the wrong language is not a broken page — it answers 200 and reads fine — so
+  # nothing but an assertion per locale catches it, and the `.md` sibling is
+  # asserted beside the HTML because the two read the same file through different
+  # code paths (`@sources` raw vs `@bodies` rendered).
+  for {page, by_locale} <- @pages, {locale, {title, section}} <- by_locale do
+    describe "/system/#{page} in #{locale}" do
+      test "renders that language, not English", %{conn: conn} do
+        html =
+          conn
+          |> accept(unquote(locale))
+          |> get("/system/#{unquote(page)}")
+          |> html_response(200)
 
-      assert body =~ "# Text formatieren mit Markdown"
+        assert html =~ unquote(title)
+        assert html =~ unquote(section)
+      end
+
+      test "serves the same language as the raw .md", %{conn: conn} do
+        body =
+          conn |> accept(unquote(locale)) |> get("/system/#{unquote(page)}.md") |> response(200)
+
+        assert body =~ "# " <> unquote(title)
+      end
     end
+  end
+
+  # `fill_host/1` is one function for both pages and every locale, so this asks
+  # it once rather than riding along on a per-language test. A page that still
+  # said `{{host}}` would send every reader's Mastodon app nowhere, and
+  # `{{issues}}` would point their bug report at a dead link.
+  test "neither page ships a placeholder unsubstituted", %{conn: conn} do
+    for page <- ~w(markdown mastodon) do
+      html = conn |> get("/system/#{page}") |> html_response(200)
+
+      refute html =~ "{{host}}"
+      refute html =~ "{{issues}}"
+    end
+
+    assert conn |> get("/system/mastodon") |> html_response(200) =~ VutuvWeb.Endpoint.host()
   end
 
   test "the page's own path is under /system, so it burns no handle" do

@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+pour confirmer votre nouvelle adresse e-mail, saisissez le code PIN suivant :
+
+  <%= @pin %>
+
+Saisissez-le sur vutuv pour terminer l'ajout de l'adresse. Le code PIN expire
+au bout de 30 minutes.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

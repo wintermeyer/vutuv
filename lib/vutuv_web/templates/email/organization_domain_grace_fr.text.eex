@@ -1,0 +1,23 @@
+<%= email_greeting(@user) %>,
+
+la preuve de domaine de votre page d'organisation « <%= @organization_name %> » ne répond plus.
+Le domaine concerné est <%= @domain %>.
+
+Nous revérifions la preuve chaque semaine, et vous avez jusqu'au
+<%= Calendar.strftime(@deadline, "%d/%m/%Y") %> pour la rétablir.
+<%= if @last? do %>
+Si rien ne change d'ici là, la page perd sa vérification et ne sera plus
+visible publiquement.
+<% else %>
+Si rien ne change d'ici là, seul ce domaine est retiré. La page reste publique
+grâce à vos autres domaines vérifiés.
+<% end %>
+Il suffit généralement de rétablir la preuve d'origine :
+<%= if @method == "dns" do %>l'enregistrement DNS TXT pour <%= @domain %><% else %>le fichier de vérification sur <%= @domain %><% end %>.
+La valeur exacte et le bouton pour revérifier sont ici :
+
+<%= @url %>organizations/<%= @organization_slug %>/domains
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

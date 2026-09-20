@@ -297,6 +297,59 @@ defmodule Vutuv.NewslettersTest do
     end
   end
 
+  # The body-locale gate. `Newsletters.email_locale/1` picks
+  # `newsletter_<locale>.html` / `.text`, and it used to name "de" and "it" by
+  # hand — so when French shipped, every French member silently received the
+  # English body while `newsletter_fr.text.eex` sat unreachable in the tree.
+  # Nothing raised and nothing logged: a wrong-language bulk mail looks finished.
+  #
+  # So this iterates the served locales rather than naming any, and asserts a
+  # *distinct* body per language rather than a translated phrase — a phrase would
+  # pin wording the catalogs are free to change, while "the French body is not
+  # the English one" is exactly the claim that was false.
+  describe "which language the newsletter body is rendered in" do
+    defp admin_in(locale), do: insert(:activated_user, admin?: true, locale: locale)
+
+    # The signed unsubscribe token is per admin, and every call here mints a new
+    # one — so without scrubbing it, two bodies never compare equal and BOTH
+    # directions of this describe pass for the wrong reason: the `refute ==` below
+    # would be satisfied by the token alone even if the body were English.
+    defp test_bodies(locale) do
+      admin = admin_in(locale)
+      newsletter = draft(admin)
+
+      assert {:ok, _delivery} =
+               Newsletters.deliver_test(newsletter, "probe@example.com", admin)
+
+      assert_received {:email, email}
+      {scrub(email.text_body), scrub(email.html_body)}
+    end
+
+    defp scrub(body), do: String.replace(body, ~r|/unsubscribe/[\w.-]+|, "/unsubscribe/TOKEN")
+
+    for locale <- Vutuv.Languages.site_locales() -- ["en"] do
+      test "a member reading #{locale} gets the #{locale} body, not the English one" do
+        locale = unquote(locale)
+        {text, html} = test_bodies(locale)
+        {en_text, en_html} = test_bodies("en")
+
+        refute text == en_text,
+               "the #{locale} newsletter text body is byte-identical to the English one, " <>
+                 "so newsletter_#{locale}.text.eex is not being rendered"
+
+        refute html == en_html,
+               "the #{locale} newsletter HTML body is byte-identical to the English one, " <>
+                 "so newsletter_#{locale}.html.heex is not being rendered"
+      end
+    end
+
+    test "a locale this installation does not serve falls back to English" do
+      # `zz` is unassignable in ISO 639-1, so it can never become a real locale
+      # and quietly turn this test into a no-op.
+      assert test_bodies("zz") == test_bodies("en")
+    end
+  end
+
   describe "start_broadcast/1" do
     test "sends to every eligible member, logs each, and marks the newsletter sent" do
       admin = admin()

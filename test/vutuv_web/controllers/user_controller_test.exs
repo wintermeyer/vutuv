@@ -280,7 +280,7 @@ defmodule VutuvWeb.UserControllerTest do
 
     # General info (birthday in the en format, and the derived age)
     assert html =~ ~s(id="profile-about")
-    assert html =~ "04/15/1990"
+    assert html =~ "15/04/1990"
     assert html =~ "#{VutuvWeb.UserHelpers.age(user)} years old"
 
     # The gender answer is kept for the membership statistic and never reaches

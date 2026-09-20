@@ -5,10 +5,16 @@ import Config
 # directory) is set at boot in config/runtime.exs from the environment.
 # Nothing in this file is a secret.
 
+# `locales:` is deliberately NOT repeated here. `config.exs` imports this file
+# last and deep-merges onto the same Endpoint keyword list, so the list it sets
+# already reaches production — measured with `Config.Reader.read!(env: :prod)`,
+# which answers the same four locales with and without a copy here. The copy
+# was not merely redundant: it is the one place `Vutuv.SiteLocalesChokepointTest`
+# cannot see (it greps `lib/**`), so a list that fell behind would have served
+# production fewer languages than the suite ever tested.
 config :vutuv, VutuvWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json",
-  root: ".",
-  locales: ~w(en de it)
+  root: "."
 
 # Quiet by default, and `LOG_LEVEL` in config/runtime.exs raises the bar for a
 # boot. Anything an operator must be able to read while chasing a problem is

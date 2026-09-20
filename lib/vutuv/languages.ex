@@ -128,6 +128,24 @@ defmodule Vutuv.Languages do
   def user_locale(locale) when is_binary(locale) and locale != "", do: locale
   def user_locale(_no_choice), do: "en"
 
+  @doc """
+  The locale to *render* a member-facing text in: their own if this
+  installation serves it, otherwise `"en"`. The other half of `user_locale/1`
+  above — that one names a language, this one picks one we hold strings for.
+
+  Every per-locale template tree goes through here (the mail bodies, the
+  newsletter bodies), because the alternative is a clause per locale, and a
+  clause per locale is a place the next language gets forgotten: the newsletter
+  had `"de"` and `"it"` and silently sent every French member the English body
+  while `newsletter_fr.text.eex` sat unreachable in the tree. Nothing raised,
+  nothing logged — a wrong-language bulk mail reads as a finished feature.
+  """
+  def render_locale(locale) when is_binary(locale) do
+    if locale in site_locales(), do: locale, else: "en"
+  end
+
+  def render_locale(_no_choice), do: "en"
+
   @doc "Whether `code` is one of the curated languages."
   def known?(code) when is_binary(code), do: MapSet.member?(@code_set, code)
   def known?(_code), do: false

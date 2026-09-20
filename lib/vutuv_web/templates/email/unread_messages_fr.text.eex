@@ -1,0 +1,21 @@
+<%= email_greeting(@user) %>,
+
+vous avez un nouveau message de <%= @other_label %> sur vutuv :
+<%= if @message_body do %>
+<%= @message_text %>
+<% end %>
+Lisez-le et répondez ici :
+
+<%= @url %>messages/<%= @conversation_id %>
+
+<%= if @each_message? do %>Vous recevrez un e-mail comme celui-ci pour chaque nouveau message non lu.<% else %>Pour ne pas remplir votre boîte de réception, c'est le seul e-mail que vous recevrez au sujet de cette conversation jusqu'à ce que vous l'ouvriez.<% end %> C'est vous qui décidez si nous vous écrivons pour chaque message ou seulement pour le premier, et combien de temps nous attendons avant d'envoyer, dans vos paramètres de notification :
+
+<%= @settings_url %>
+
+Vous pouvez désactiver ces e-mails de notification ici :
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

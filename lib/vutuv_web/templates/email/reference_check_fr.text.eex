@@ -1,0 +1,21 @@
+<%= email_greeting(@user) %>,
+
+l'analyse de votre certificat de travail « <%= @title %> » est terminée.
+<%= if @grade do %>
+Note globale : <%= @grade %>
+<% end %>
+Vous seul voyez le résultat. Vous pouvez le lire ici :
+
+<%= @url %>settings/job_references/<%= @reference_id %>/check
+
+Cette lecture a été produite par un modèle de langage sur nos serveurs et n'est
+pas un avis juridique. Pour une appréciation qui engage, adressez-vous à un
+avocat, de préférence spécialisé en droit du travail.
+
+Vous pouvez désactiver ces e-mails de notification ici :
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

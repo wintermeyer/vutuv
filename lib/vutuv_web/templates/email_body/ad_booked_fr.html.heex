@@ -1,0 +1,19 @@
+<.email_layout preheader="Votre annonce est réservée" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    merci pour votre réservation. Votre annonce pour {@day} est retenue :
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titre">{@ad.title}</.email_row>
+    <.email_row label="Texte">{@ad.body}</.email_row>
+    <.email_row label="Lien">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Prix : {@price}, {@vat}. Paiement sur facture ; nous vous enverrons la facture par e-mail.
+  </.email_p>
+  <.email_p>
+    Nous examinons chaque annonce avant sa mise en ligne et nous vous écrirons dès qu'elle sera validée. Jusque-là, vous pouvez annuler la réservation gratuitement :
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Vos réservations</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

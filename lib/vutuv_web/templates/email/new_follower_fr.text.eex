@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+@<%= @actor_username %> s'est abonné à vous sur vutuv.
+
+Voir son profil :
+
+<%= @url %><%= @actor_username %>
+
+Vous pouvez désactiver ces e-mails de notification ici :
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

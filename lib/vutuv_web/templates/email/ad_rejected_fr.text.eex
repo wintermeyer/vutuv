@@ -1,0 +1,18 @@
+<%= email_greeting(@user) %>,
+
+nous ne pouvons malheureusement pas publier votre annonce pour <%= @day %> :
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Notre motif : <%= @ad.rejection_reason %>
+
+La réservation est donc annulée, vous ne payez rien et le jour est de nouveau
+libre. Vous pouvez réserver une nouvelle annonce ici :
+
+<%= @url %>system/ads/new
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

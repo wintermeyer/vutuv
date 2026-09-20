@@ -1,0 +1,41 @@
+<.email_layout
+  preheader={"Un contenu de #{@page_name} a été signalé et est masqué"}
+  locale={@locale}
+>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>{@content_intro} Tant que le dossier reste ouvert, le contenu reste masqué.</.email_p>
+  <.email_p>{@standing_sentence}</.email_p>
+  <.email_panel>
+    <.email_row label="Signalé comme">{@category_labels}</.email_row>
+    <.email_row label="Page">{@page_name}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    Voici ce que dit le signalement, dans les mots de qui l'a écrit. Qui c'était, nous ne vous le
+    dirons jamais :
+  </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>
+    Le signalement a indiqué cette catégorie et rien d'autre.
+  </.email_p>
+  <.email_p :if={@copyright_case}>
+    C'est une contestation juridique, pas une règle de la maison : elle affirme que l'œuvre n'est
+    pas celle de la page. C'est le droit d'auteur qui en décide.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    Le fondement, ce sont
+    <.email_link href={"#{@url}community"}>nos règles de la communauté</.email_link>, auxquelles
+    tout sur vutuv doit se tenir.
+  </.email_p>
+  <.email_p>Nous vous le disons parce que {@page_name} vous appartient.</.email_p>
+  <.email_p :if={@self_service}>
+    Répondre au signalement revient au membre qui a revendiqué la page : il a 72 heures pour
+    supprimer le contenu, le modifier ou rejeter le signalement, après quoi nos administrateurs
+    décident. Vous voyez tout ce qu'il voit.
+  </.email_p>
+  <.email_p :if={!@self_service}>
+    Le dossier est déjà entre les mains de nos administrateurs, il n'y a donc pas de tour où votre
+    équipe pourrait le régler. Nous communiquerons le résultat au membre qui a revendiqué la page.
+  </.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Voir le dossier</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

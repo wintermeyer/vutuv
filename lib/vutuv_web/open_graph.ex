@@ -424,9 +424,25 @@ defmodule VutuvWeb.OpenGraph do
   # one of `Languages.site_locales/0` by the time it reaches here, and the same
   # page renders `<html lang="it">` — so an Italian page telling Facebook and
   # LinkedIn it was American English contradicted its own `<head>`.
-  @og_locales %{"de" => "de_DE", "it" => "it_IT", "en" => "en_US"}
+  # Derived from CLDR rather than hand-listed. Open Graph wants
+  # `language_TERRITORY`, which is exactly the likely-subtags answer
+  # `Vutuv.Cldr` already carries for every locale it compiles in — including the
+  # `en_US` the old map spelled out by hand, so this is the library's own answer
+  # and not a deviation from it. A locale the backend does not know cannot be a
+  # served one (`Vutuv.SiteLocalesChokepointTest` fails the build if the CLDR
+  # backend misses a served locale), so the fallback is unreachable in practice
+  # and stays `en_US`, which is what the map answered. The literal table lives on
+  # in `test/vutuv_web/open_graph_test.exs` as the calibration.
+  defp og_locale(assigns) do
+    case Vutuv.Cldr.validate_locale(assigns[:locale]) do
+      {:ok, %{language: language, territory: territory}}
+      when is_binary(language) and not is_nil(territory) ->
+        "#{language}_#{territory}"
 
-  defp og_locale(assigns), do: Map.get(@og_locales, assigns[:locale], "en_US")
+      _unknown ->
+        "en_US"
+    end
+  end
 
   @doc """
   The canonical absolute URL for this page — the single value shared by

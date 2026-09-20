@@ -1,0 +1,17 @@
+<%= email_greeting(@user) %>,
+
+votre annonce pour <%= @day %> est validée et paraîtra ce jour-là sur les
+profils et dans le fil :
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Avec la validation, la réservation devient ferme. À partir de ce jour, vous
+pouvez voir ici combien de fois votre annonce a été vue et cliquée :
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

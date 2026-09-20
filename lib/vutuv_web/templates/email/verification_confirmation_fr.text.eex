@@ -1,0 +1,13 @@
+<%= email_greeting(@user) %>,
+
+félicitations ! Votre compte vutuv est désormais vérifié.
+
+Une marque de vérification bleue apparaît maintenant à côté de votre nom sur
+votre profil, pour que les visiteurs voient d'un coup d'œil que ce compte est
+bien le vôtre.
+
+<%= @url %><%= @user.username %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

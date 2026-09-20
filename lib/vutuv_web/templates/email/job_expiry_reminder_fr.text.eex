@@ -1,0 +1,16 @@
+<%= email_greeting(@user) %>,
+
+votre offre d'emploi « <%= @posting_title %> » expire le <%= Calendar.strftime(@expires_on, "%d/%m/%Y") %>.
+Les offres expirent automatiquement au bout de 90 jours ; il n'y a pas de
+renouvellement.
+
+Le poste est pourvu ? Fermez l'offre. Il est toujours ouvert ? À l'expiration,
+republiez-la d'un geste, avec une date de publication honnête.
+
+Voir l'offre :
+
+<%= @url %>jobs/<%= @posting_slug %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

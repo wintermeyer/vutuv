@@ -8,6 +8,7 @@ defmodule VutuvWeb.ComposerLanguageTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Languages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -163,7 +164,11 @@ defmodule VutuvWeb.ComposerLanguageTest do
       # And it leaves the long list, or two options would carry one value and
       # the second — the long one — would win the closed box back.
       refute has_element?(live, ~s(optgroup[label="More languages"] option[value="pt"]))
-      assert has_element?(live, ~s(optgroup[label="More languages"] option[value="fr"]))
+      # Derived, not named: a site locale sits in the "Language" group, so any
+      # code spelled here passes only until somebody translates that language —
+      # this assertion used to say "fr" and adding French turned it red.
+      other = hd(Languages.codes() -- Languages.site_locales())
+      assert has_element?(live, ~s(optgroup[label="More languages"] option[value="#{other}"]))
     end
   end
 end

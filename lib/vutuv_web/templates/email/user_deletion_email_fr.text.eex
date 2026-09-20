@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+pour supprimer votre compte, saisissez le code PIN suivant :
+
+  <%= @pin %>
+
+ATTENTION : cette étape est irréversible. Votre compte sera supprimé dès que
+vous saisirez ce code PIN sur vutuv. Le code PIN expire au bout de 30 minutes.
+
+Vous pourrez bien sûr toujours créer un nouveau compte.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

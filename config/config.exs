@@ -24,7 +24,7 @@ config :vutuv, VutuvWeb.Endpoint,
   # Signs the LiveView session token exchanged over the /live socket. Distinct
   # from secret_key_base and from the Plug.Session signing_salt.
   live_view: [signing_salt: "PHEbY7u44Jfd3Ei0"],
-  locales: ~w(en de it),
+  locales: ~w(en de fr it),
   max_page_items: 250
 
 config :logger, :console,

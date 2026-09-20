@@ -1,0 +1,48 @@
+<%= email_greeting(@user) %>,
+
+<%= email_wrapped_text(@content_intro) %>
+Aucune personne n'a examiné le contenu signalé avant ; désormais, vous seul et
+nos administrateurs pouvez le voir.
+
+<%= email_wrapped_text(@standing_sentence) %>
+C'est ce qui s'est passé ici.
+
+  Signalé comme : <%= @category_labels %>
+<%= if @notes != [] do %>
+Voici ce que dit le signalement, dans les mots de qui l'a écrit. Qui c'était,
+nous ne vous le dirons jamais :
+
+<%= email_quoted_text(@notes) %>
+<% else %>
+Le signalement a indiqué cette catégorie et rien d'autre.
+<% end %><%= if @copyright_case do %>
+C'est une contestation juridique, pas une règle de la maison : elle affirme que
+l'œuvre n'est pas la vôtre pour être publiée. C'est le droit d'auteur qui en
+décide, un administrateur doit donc l'examiner.
+<% else %>
+Le fondement, ce sont nos règles de la communauté, auxquelles tout sur vutuv
+doit se tenir :
+
+<%= @url %>community
+<% end %>
+Vous avez 72 heures pour régler cela vous-même ; après quoi nos administrateurs
+décident :
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+Sur cette page, vous pouvez :
+<%= if @edit_offer == :immediate do %>
+  * Modifier le contenu. Après une modification, il redevient immédiatement
+    visible.
+<% end %><%= if @edit_offer == :reviewed do %>
+  * Modifier le contenu. Nos administrateurs examinent ensuite la révision ;
+    jusque-là, il reste masqué.
+<% end %>
+  * Supprimer le contenu. Le signalement est alors clos, sans autre question.
+
+  * Nous dire que votre contenu est correct. Il reste masqué jusqu'à ce qu'un
+    administrateur ait décidé.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

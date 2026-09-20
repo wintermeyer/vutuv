@@ -1,0 +1,11 @@
+<.email_layout preheader="Confirmez votre adresse e-mail" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    pour confirmer votre nouvelle adresse e-mail, saisissez le code PIN suivant :
+  </.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    Saisissez-le sur vutuv pour terminer l'ajout de l'adresse. Le code PIN expire au bout de 30 minutes.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

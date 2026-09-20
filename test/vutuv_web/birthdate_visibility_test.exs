@@ -7,7 +7,9 @@ defmodule VutuvWeb.BirthdateVisibilityTest do
   must never leak (the year, the age, or the whole date).
 
   The birthdate is 1990-04-23 and the factory locale is "en", so the profile
-  renders the date as "04/23/1990" and the day-month as "04/23". Negative
+  renders the date as "23/04/1990" and the day-month as "23/04" — day first,
+  because `Vutuv.DateRegions` maps `en` to the British shape and not the American
+  one (issue #1502: an English-speaking reader is not an American one). Negative
   assertions lean on strings that carry a "/" (never present in the base64url
   LiveView tokens) rather than the bare year to stay token-collision-proof.
   """
@@ -46,7 +48,7 @@ defmodule VutuvWeb.BirthdateVisibilityTest do
     age = UserHelpers.age(user)
     r = formats(user)
 
-    assert r.html =~ "04/23/1990"
+    assert r.html =~ "23/04/1990"
     assert r.html =~ "#{age} year"
 
     assert r.md =~ "Birthday: 1990-04-23"
@@ -71,7 +73,7 @@ defmodule VutuvWeb.BirthdateVisibilityTest do
 
     assert r.html =~ "#{age} year"
     # No date at all, so neither the full date nor the day-month appears.
-    refute r.html =~ "04/23"
+    refute r.html =~ "23/04"
 
     refute r.md =~ "Birthday:"
     assert r.md =~ "Age: #{age}"
@@ -89,10 +91,10 @@ defmodule VutuvWeb.BirthdateVisibilityTest do
     user = profile_with("day_month")
     r = formats(user)
 
-    assert r.html =~ "04/23"
+    assert r.html =~ "23/04"
     # The year (and therefore the age) is gone: the full date and the age line
     # must both be absent.
-    refute r.html =~ "04/23/1990"
+    refute r.html =~ "23/04/1990"
     refute r.html =~ "year old"
 
     assert r.md =~ "Birthday: 04-23"
@@ -113,7 +115,7 @@ defmodule VutuvWeb.BirthdateVisibilityTest do
     user = profile_with("hidden")
     r = formats(user)
 
-    refute r.html =~ "04/23"
+    refute r.html =~ "23/04"
     refute r.html =~ "year old"
     refute r.md =~ "Birthday:"
     refute r.md =~ "Age:"
@@ -133,7 +135,7 @@ defmodule VutuvWeb.BirthdateVisibilityTest do
   describe "the public CV (/:slug/cv) never reveals more than the profile" do
     test "full keeps the date, day_month drops the year, age/hidden drop the DOB line" do
       assert VutuvWeb.CV.build(profile_with("full")).birthdate =~ "1990"
-      assert VutuvWeb.CV.build(profile_with("day_month")).birthdate == "04/23"
+      assert VutuvWeb.CV.build(profile_with("day_month")).birthdate == "23/04"
       assert VutuvWeb.CV.build(profile_with("age")).birthdate == nil
       assert VutuvWeb.CV.build(profile_with("hidden")).birthdate == nil
     end

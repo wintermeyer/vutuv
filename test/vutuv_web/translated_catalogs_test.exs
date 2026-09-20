@@ -35,8 +35,19 @@ defmodule VutuvWeb.TranslatedCatalogsTest do
   """
   use ExUnit.Case, async: true
 
-  # Every locale whose catalog holds real translations. `en` is excluded above.
-  @locales ~w(de fr it)
+  # Every locale whose catalog holds real translations, derived rather than
+  # spelled: this list DRIVES the iteration, so a hand-written one that fell
+  # behind would not go red — it would quietly stop checking a whole catalog,
+  # which is the failure this file exists to prevent. `en` is excluded above:
+  # English *is* the msgid.
+  #
+  # `compile_env/2` and not `Languages.site_locales/0`, because the `for` below
+  # generates one test per locale at compile time (so a failure names the
+  # language). Mix recompiles this file when that config key changes, which is
+  # the guarantee a module attribute alone would not give.
+  @locales Application.compile_env(:vutuv, VutuvWeb.Endpoint, [])
+           |> Keyword.get(:locales, ["en"])
+           |> Kernel.--(["en"])
 
   # Sources whose user-facing strings must be fully translated. `ui.ex` cannot
   # join as it stands: the scan is textual, so the `gettext("Add entry")` in

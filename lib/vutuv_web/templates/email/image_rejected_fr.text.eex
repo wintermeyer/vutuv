@@ -1,0 +1,28 @@
+<%= email_greeting(@user) %>,
+
+notre examen automatique des images a retiré
+<%= image_kind_label(@kind, @locale) %>.
+<%= if @category == "unverifiable" do %>
+C'est un problème technique : notre examen n'a pas réussi à ouvrir le fichier de
+l'image et n'a donc pas pu la juger. Cela ne dit rien de ce qu'elle
+représentait. Un fichier JPEG, PNG ou WebP fonctionne généralement.
+<% else %>
+Aucune personne n'a pris cette décision. Ici, c'est une IA qui le fait : elle
+regarde chaque image envoyée et décide d'elle-même si elle convient à tous et à
+un environnement de travail. Cela fonctionne de la même façon pour chaque
+membre, il n'y a donc là rien de personnel ni rien contre vous.
+
+Et cette IA se trompe. Quand elle soupçonne quelque chose, nous l'interrogeons
+plusieurs fois, et une image n'est retirée que si les réponses concordent. Même
+ainsi, cela peut toucher une image inoffensive, une bande dessinée, une citation
+de film ou une plaisanterie. Donc si vous pensez que votre image était correcte,
+vous avez peut-être raison.
+<% end %>
+Dans ce cas, répondez simplement à cet e-mail, si possible en joignant l'image,
+et une personne la regardera. Ce retrait n'a aucune conséquence sur votre compte :
+aucun avertissement, aucun reproche. Vous pouvez envoyer une autre image quand
+vous voulez.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

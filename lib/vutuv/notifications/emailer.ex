@@ -34,6 +34,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Ads
   alias Vutuv.DateRegions
   alias Vutuv.Identity
+  alias Vutuv.Languages
   alias Vutuv.Mailto
   alias Vutuv.Moderation
   alias Vutuv.Notifications.Bounces
@@ -47,7 +48,6 @@ defmodule Vutuv.Notifications.Emailer do
   alias VutuvWeb.EmailText
   alias VutuvWeb.Markdown
   alias VutuvWeb.NotificationDigestText, as: DigestText
-  alias VutuvWeb.Plug.Locale
   alias VutuvWeb.ReportHTML
   alias VutuvWeb.SavedSearchToken
   alias VutuvWeb.UI
@@ -1605,13 +1605,8 @@ defmodule Vutuv.Notifications.Emailer do
 
   defp in_locale(locale, fun), do: Gettext.with_locale(VutuvWeb.Gettext, locale, fun)
 
-  defp get_locale(nil), do: "en"
-
-  defp get_locale(locale) do
-    if Locale.locale_supported?(locale) do
-      locale
-    else
-      "en"
-    end
-  end
+  # `Vutuv.Languages.render_locale/1` owns this: "a locale we hold templates
+  # for" is a core question, and asking a web plug it made every other caller
+  # (the newsletter) more likely to hand-roll its own answer than to reuse one.
+  defp get_locale(locale), do: Languages.render_locale(locale)
 end

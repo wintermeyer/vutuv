@@ -1,0 +1,13 @@
+<.email_layout preheader="Vous avez un nouveau message sur vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>vous avez un nouveau message de {@other_label} sur vutuv :</.email_p>
+  <.email_markdown :if={@message_body} body={@message_body} />
+  <.email_button href={"#{@url}messages/#{@conversation_id}"}>Lire et répondre</.email_button>
+  <.email_p>
+    {(@each_message? &&
+      "Vous recevrez un e-mail comme celui-ci pour chaque nouveau message non lu.") ||
+      "Pour ne pas remplir votre boîte de réception, c'est le seul e-mail que vous recevrez au sujet de cette conversation jusqu'à ce que vous l'ouvriez."} C'est vous qui décidez si nous vous écrivons pour chaque message ou seulement pour le premier, et combien de temps nous attendons avant d'envoyer, dans vos <.email_link href={@settings_url}>paramètres de notification</.email_link>.
+  </.email_p>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

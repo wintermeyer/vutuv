@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+après une deuxième infraction confirmée à nos règles de la communauté, votre
+compte vutuv est suspendu jusqu'au <%= Calendar.strftime(@until, "%d/%m/%Y") %>.
+Jusque-là, vous ne pouvez pas vous connecter et votre profil est masqué.
+
+Prenez-le au sérieux : une nouvelle infraction confirmée désactive
+définitivement votre compte. Nos règles de la communauté :
+
+<%= @url %>community
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

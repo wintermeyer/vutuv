@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+<%= @open_count %> dossier(s) de modération en attente d'une décision d'un
+administrateur.
+
+La file d'attente :
+
+<%= @url %>admin/moderation
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

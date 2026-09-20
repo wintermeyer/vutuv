@@ -1,0 +1,18 @@
+<.email_layout preheader="Confirmez votre nouveau nom d'utilisateur" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    pour confirmer votre nouveau nom d'utilisateur @{@new_username}, saisissez le code PIN suivant :
+  </.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    Saisissez-le sur vutuv pour terminer la modification. Le code PIN expire au bout de 30 minutes.
+  </.email_p>
+  <.email_p>
+    L'adresse actuelle de votre profil cessera de fonctionner dès que la modification prendra effet, et les mentions de votre ancien handle dans les publications seront réécrites avec le nouveau.
+  </.email_p>
+  <.email_p>
+    Si ce n'est pas vous qui avez demandé ce changement de nom, ne saisissez pas ce code PIN. Quelqu'un d'autre utilise peut-être votre compte :
+    <.email_link href={"#{@url}settings/security"}>sécurisez votre façon de vous connecter</.email_link>.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

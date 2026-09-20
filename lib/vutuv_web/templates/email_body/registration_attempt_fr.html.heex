@@ -1,0 +1,17 @@
+<.email_layout
+  preheader="Quelqu'un a essayé de s'inscrire avec votre adresse e-mail"
+  locale={@locale}
+>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    quelqu'un vient d'essayer de créer un compte vutuv avec cette adresse e-mail. Vous avez déjà
+    un compte, nous n'en avons donc pas créé de nouveau.
+  </.email_p>
+  <.email_p>Si cette tentative est la vôtre, vous pouvez vous connecter ici :</.email_p>
+  <.email_button href={"#{@url}login"}>Se connecter</.email_button>
+  <.email_p>
+    Si elle n'est pas la vôtre, vous pouvez ignorer cet e-mail sans crainte. Aucun compte n'a été
+    créé et rien n'a changé sur le vôtre.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

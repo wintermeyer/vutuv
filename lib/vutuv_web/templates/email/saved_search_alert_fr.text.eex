@@ -1,0 +1,19 @@
+<%= email_greeting(@user) %>,
+
+voici les résultats les plus récents pour vos recherches enregistrées sur vutuv.
+<%= for section <- @sections do %>
+<%= if section.kind == :jobs, do: "Nouvelles offres", else: "Nouvelles personnes" %><%= if section.heading, do: " (" <> section.heading <> ")", else: "" %>
+<%= for entry <- section.entries do %>* <%= entry.title %><%= if entry.status, do: " · " <> entry.status, else: "" %>
+<%= if entry.meta != "", do: "  " <> entry.meta <> "\n", else: "" %>  <%= entry.url %>
+<% end %>
+Voir tous les résultats : <%= section.more_url %>
+Désactiver les alertes pour cette recherche : <%= section.disable_url %>
+<% end %>
+Vous pouvez désactiver ici tous les e-mails d'alerte des recherches
+enregistrées :
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>

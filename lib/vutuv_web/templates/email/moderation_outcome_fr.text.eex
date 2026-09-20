@@ -1,0 +1,30 @@
+<%= @greeting %>,
+
+merci pour votre signalement. Le dossier est clos, et voici comment cela s'est
+passé :
+<%= if @outcome == "removed" do %>
+Le propriétaire a supprimé le contenu que vous avez signalé.
+<% end %><%= if @outcome == "revised" do %>
+Le propriétaire a corrigé le contenu que vous avez signalé. Si vous estimez
+toujours qu'il enfreint nos règles de la communauté, vous pouvez le signaler une
+nouvelle fois ; il ira alors directement à nos administrateurs.
+<% end %><%= if @outcome == "upheld" do %>
+Une personne de notre équipe a examiné votre signalement et lui a donné raison.
+Ce que cela signifie pour le compte derrière le contenu reste entre cette
+personne et nous.
+<% end %><%= if @outcome == "not_upheld" do %>
+Une personne de notre équipe a examiné votre signalement et ne lui a pas donné
+raison. Ce n'est pas un jugement sur vous : signaler était juste, même quand la
+décision va dans une autre direction.
+<% end %><%= if @content_fate == :removed do %>
+Le contenu signalé a été supprimé.
+<% end %><%= if @content_fate == :hidden do %>
+Le contenu signalé n'est plus visible sur vutuv.
+<% end %><%= if @content_fate == :visible do %>
+Le contenu signalé est toujours visible sur vutuv.
+<% end %>
+Nous ne vous écrirons plus au sujet de ce dossier.
+
+<%= render "_signature_fr.text" %>
+
+<%= render "_footer.text" %>
