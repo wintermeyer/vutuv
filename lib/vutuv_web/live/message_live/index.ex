@@ -17,6 +17,7 @@ defmodule VutuvWeb.MessageLive.Index do
   """
   use VutuvWeb, :live_view
 
+  import VutuvWeb.FediverseComponents, only: [address_form: 1]
   import VutuvWeb.PendingPostComponents, only: [file_label: 1]
   import VutuvWeb.PostComponents, only: [remote_avatar: 1, remote_initials: 1]
 
@@ -65,6 +66,13 @@ defmodule VutuvWeb.MessageLive.Index do
      |> assign(:online_ids, Presence.online_ids())
      |> assign(:conversation, nil)
      |> assign(:other, nil)
+     # The "write to an address" box: what is typed, the last refusal, and
+     # whether the act is available at all. The gate is the member's own
+     # Fediverse standing, asked once per mount — a box that took an address
+     # and then explained it cannot send is a box that wasted the typing.
+     |> assign(:lookup_address, "")
+     |> assign(:lookup_error, nil)
+     |> assign(:can_write_remote?, Fediverse.federated?(user))
      |> assign(:more?, false)
      |> assign(:cursor, nil)
      |> assign_sidebar()
@@ -294,7 +302,34 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
+  # An address in, a conversation with that account out (the new-message box in
+  # the sidebar). Resolving costs an outbound request and a slot of the
+  # member's hourly budget, which is why this is a submit and not a keystroke.
   @impl true
+  def handle_event("write-to-address", %{"address" => address}, socket) do
+    user = socket.assigns.current_user
+
+    with true <- socket.assigns.can_write_remote?,
+         {:ok, account} <- Fediverse.resolve_remote_account(user, address),
+         :ok <- Fediverse.check_direct_message(user, account),
+         {:ok, conversation} <- Chat.fediverse_conversation(user, account, :member) do
+      {:noreply, push_navigate(socket, to: ~p"/messages/#{conversation.id}")}
+    else
+      false ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, socket |> assign(:lookup_address, address) |> assign(:lookup_error, reason)}
+    end
+  end
+
+  # Typing again clears the last refusal, so the box is not still shouting
+  # about an address the member has since corrected. Its own event name: the
+  # thread's composer already answers `typing` with the other meaning.
+  def handle_event("address-typing", %{"address" => address}, socket) do
+    {:noreply, socket |> assign(:lookup_address, address) |> assign(:lookup_error, nil)}
+  end
+
   def handle_event("send", %{"message" => params}, socket) do
     body = params |> Map.get("body", "") |> String.trim()
     socket = adopt_recovered_attachments(socket, params["attachment_ids"])
@@ -986,17 +1021,27 @@ defmodule VutuvWeb.MessageLive.Index do
   # their post, and a sent one is their answer to it — so the id is all the
   # permalink needs.
   defp post_path(%Message{} = message, %User{} = viewer) do
-    case source_post_id(message) do
-      id when is_binary(id) -> Posts.path(viewer, id)
+    case source_anchor(message) do
+      {post_id, anchor} when is_binary(post_id) -> Posts.path(viewer, post_id) <> "#" <> anchor
       _none -> nil
     end
   end
 
   defp post_path(_message, _viewer), do: nil
 
-  defp source_post_id(%Message{note: %Note{post_id: id}}), do: id
-  defp source_post_id(%Message{private_message: %PrivateMessage{post_id: id}}), do: id
-  defp source_post_id(_message), do: nil
+  # The post **and the fragment**, never the post alone: a conversation that
+  # has run for a while hangs under a post with a whole thread under it, and a
+  # link that only opens that page leaves the reader hunting for the message
+  # they pressed. Both anchors are owned by `Vutuv.Fediverse`, which is also
+  # where the two boxes under the post get their `id` — a fragment matching
+  # nothing fails silently, by opening the page at the top.
+  defp source_anchor(%Message{note: %Note{id: id, post_id: post_id}}),
+    do: {post_id, Fediverse.reply_anchor(id)}
+
+  defp source_anchor(%Message{private_message: %PrivateMessage{id: id, post_id: post_id}}),
+    do: {post_id, Fediverse.private_reply_anchor(id)}
+
+  defp source_anchor(_message), do: nil
 
   # The Accept/Decline pair, shared by the sidebar request rows and the
   # in-thread request banner.
@@ -1050,6 +1095,47 @@ defmodule VutuvWeb.MessageLive.Index do
           @conversation && "hidden"
         ]}
       >
+        <%!-- Writing to somebody this installation has never heard of. The
+        conversations below all start somewhere — a profile, an account page, a
+        private answer — and an address nobody here holds had no way in at all.
+        A native `<details>` so it costs no socket state, `data-keep-open` so a
+        badge ticking in the shell cannot fold it shut over a half-typed
+        address. Resolving spends an outbound request, so it stays a submit the
+        member makes on purpose, never something the page does on arrival. --%>
+        <details
+          :if={!@conversation || @loaded?}
+          id="new-fediverse-message"
+          data-keep-open
+          class="border-b border-slate-200 px-4 py-3 dark:border-slate-800"
+        >
+          <summary class="cursor-pointer text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+            {gettext("New message to another network")}
+          </summary>
+
+          <%= if @can_write_remote? do %>
+            <.address_form
+              id="new-fediverse"
+              address={@lookup_address}
+              error={@lookup_error}
+              event="write-to-address"
+              change="address-typing"
+              submit={gettext("Write")}
+              label_hidden
+              class="mt-3"
+            />
+          <% else %>
+            <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+              {gettext("Switch Fediverse participation on to write to accounts on other networks.")}
+              <.link
+                navigate={~p"/settings/fediverse"}
+                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              >
+                {gettext("Open the setting")}
+              </.link>
+            </p>
+          <% end %>
+        </details>
+
         <%!-- The lists load only once the socket has joined (see
         `assign_sidebar/1`), and on a slow line that leaves this card blank for
         seconds after the page itself is on screen — which reads as "you have

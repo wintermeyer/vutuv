@@ -6582,6 +6582,21 @@ defmodule Vutuv.Fediverse do
   def reply_anchor(note_id) when is_binary(note_id), do: "fediverse-reply-" <> note_id
 
   @doc """
+  The DOM anchor of one private answer a member sent, e.g.
+  `"private-reply-019fb8b5-…"` — the twin of `reply_anchor/1` for the other
+  half of a private exchange.
+
+  Same argument: a sent answer has no page of its own, it is rendered under
+  the post it answers, so the way to send a reader to one is that post's
+  permalink plus this fragment. One function again, because the box that
+  carries it as its `id` (`VutuvWeb.PostComponents.remote_reply_card/1`) and
+  the conversation's "To the post" link have to agree exactly; a fragment that
+  matches nothing fails silently by opening the page at the top.
+  """
+  def private_reply_anchor(message_id) when is_binary(message_id),
+    do: "private-reply-" <> message_id
+
+  @doc """
   The stored replies for `post_ids`, grouped by post id, oldest first — what the
   thread renderer interleaves among the vutuv replies.
 

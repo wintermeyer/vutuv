@@ -1525,7 +1525,7 @@ defmodule VutuvWeb.PostComponents do
           <div
             :for={reply <- @note.private_replies}
             :if={@viewer && reply.user_id == @viewer.id}
-            id={"private-reply-#{reply.id}"}
+            id={Fediverse.private_reply_anchor(reply.id)}
             data-private-reply={reply.id}
             class="mt-4 space-y-2 border-l-2 border-slate-200 pl-4 dark:border-slate-700"
           >

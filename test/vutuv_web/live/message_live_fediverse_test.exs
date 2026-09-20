@@ -48,6 +48,50 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
     {:ok, conn: conn, user: user, account: account}
   end
 
+  # WebFinger answers the `self` link, the actor URL answers the document —
+  # the two requests resolving an address really makes.
+  defp stub_remote(fun) do
+    Application.put_env(:vutuv, :fediverse_req_options, plug: fun)
+    on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
+  end
+
+  defp stub_account do
+    stub_remote(fn conn ->
+      {type, body} =
+        case conn.request_path do
+          "/.well-known/webfinger" ->
+            {"application/jrd+json",
+             %{
+               "links" => [
+                 %{
+                   "rel" => "self",
+                   "type" => "application/activity+json",
+                   "href" => "https://social.example/users/them"
+                 }
+               ]
+             }}
+
+          _actor ->
+            {"application/activity+json",
+             %{
+               "id" => "https://social.example/users/them",
+               "type" => "Person",
+               "preferredUsername" => "them",
+               "name" => "Them",
+               "inbox" => "https://social.example/users/them/inbox",
+               "publicKey" => %{
+                 "id" => "https://social.example/users/them#main-key",
+                 "publicKeyPem" => "PEM"
+               }
+             }}
+        end
+
+      conn
+      |> Plug.Conn.put_resp_content_type(type)
+      |> Plug.Conn.send_resp(200, Jason.encode!(body))
+    end)
+  end
+
   test "the account page's Message button opens the conversation", %{
     conn: conn,
     user: user,
@@ -138,16 +182,106 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
       element(view, "button[phx-value-id='#{entry.conversation.id}'][phx-click='accept']")
     )
 
-    # The thread carries the words and the way back to the post.
+    # The thread carries the words and the way back to the post — to the note
+    # itself, not merely to the page it sits on: a conversation that has run a
+    # while hangs under a post with a whole thread under it.
+    [note] = Repo.all(Vutuv.Fediverse.Note)
+    anchor = Fediverse.reply_anchor(note.id)
+
     {:ok, _view, html} = live(conn, ~p"/messages/#{entry.conversation.id}")
     assert html =~ "Frage lieber privat."
-    assert html =~ ~p"/#{user.username}/posts/#{post.id}"
+    assert html =~ "#{~p"/#{user.username}/posts/#{post.id}"}##{anchor}"
 
-    # And the post view carries the way into the conversation.
+    # And the post view carries the way into the conversation, to the message,
+    # with the anchor the link names really rendered.
     conn = get(conn, ~p"/#{user.username}/posts/#{post.id}")
     body = html_response(conn, 200)
     assert body =~ "data-note-conversation"
-    assert body =~ "/messages/#{entry.conversation.id}"
+    assert body =~ ~s(id="#{anchor}")
+    [message] = Repo.all(Message)
+    assert body =~ "/messages/#{entry.conversation.id}#message-#{message.id}"
+  end
+
+  test "a sent private reply is linked to its own box under the post", %{
+    conn: conn,
+    user: user,
+    account: account
+  } do
+    post = create_post!(user, %{body: "Mein Beitrag"})
+
+    note =
+      Repo.insert!(%Vutuv.Fediverse.Note{
+        post_id: post.id,
+        object_uri: "https://social.example/statuses/7",
+        actor_uri: @actor,
+        inbox_uri: @inbox,
+        handle: "alice",
+        display_name: "Alice Anders",
+        content_text: "Frage lieber privat.",
+        audience: "direct",
+        received_at: DateTime.utc_now(:second),
+        checked_at: DateTime.utc_now(:second),
+        expires_at: DateTime.add(DateTime.utc_now(:second), 86_400)
+      })
+
+    {:ok, reply} = Fediverse.create_private_reply(user, note, %{body: "Klar, gern."})
+
+    conversation = Repo.get_by!(Vutuv.Chat.Conversation, remote_account_id: account.id)
+    {:ok, _view, html} = live(conn, ~p"/messages/#{conversation.id}")
+
+    assert html =~
+             "#{~p"/#{user.username}/posts/#{post.id}"}##{Fediverse.private_reply_anchor(reply.id)}"
+
+    conn = get(conn, ~p"/#{user.username}/posts/#{post.id}")
+    assert html_response(conn, 200) =~ ~s(id="#{Fediverse.private_reply_anchor(reply.id)}")
+  end
+
+  describe "writing to an address nobody here holds" do
+    test "resolving the address opens the conversation", %{conn: conn, user: user} do
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+      stub_account()
+
+      {:ok, view, html} = live(conn, ~p"/messages")
+      assert html =~ "New message to another network"
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> form("#new-fediverse-form", %{"address" => "@them@social.example"})
+               |> render_submit()
+
+      conversation = Repo.get_by!(Vutuv.Chat.Conversation, user_a_id: user.id)
+      assert to == "/messages/#{conversation.id}"
+
+      account = Repo.get!(RemoteAccount, conversation.remote_account_id)
+      assert account.actor_uri == "https://social.example/users/them"
+
+      {:ok, _view, html} = live(conn, to)
+      assert html =~ "Them"
+    end
+
+    test "an address nothing answers for says so and opens no conversation", %{conn: conn} do
+      stub_remote(fn conn -> Plug.Conn.send_resp(conn, 404, "") end)
+
+      {:ok, view, _html} = live(conn, ~p"/messages")
+
+      view
+      |> form("#new-fediverse-form", %{"address" => "@nobody@social.example"})
+      |> render_submit()
+
+      assert has_element?(view, "#new-fediverse-error")
+      assert Repo.aggregate(Vutuv.Chat.Conversation, :count) == 0
+    end
+
+    test "a member who does not federate is told where the switch is", %{conn: conn, user: user} do
+      user
+      |> Ecto.Changeset.change(%{fediverse_followers?: false})
+      |> Repo.update!()
+
+      {:ok, view, html} = live(conn, ~p"/messages")
+
+      assert html =~ "Switch Fediverse participation on"
+      refute has_element?(view, "#new-fediverse-form")
+    end
   end
 
   test "no file button and no block menu for an account on another network", %{

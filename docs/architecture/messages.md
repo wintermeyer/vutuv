@@ -210,6 +210,26 @@ that one actor with no public collection and no followers, threaded under the
 last thing the other side said so clients there show one conversation. It shares
 the hourly outbound budget with public replies.
 
+### Starting one, and finding the way back
+
+Every other conversation here starts from somebody's page. An account nobody
+on this installation has ever heard of has no page, so `/messages` carries a
+**New message to another network** box: an address in, that account's
+conversation out. Resolving costs an outbound request and a slot of the
+member's hourly budget, so it is a submit they make on purpose — a native
+`<details>` (`data-keep-open`, or a ticking badge folds it shut over a
+half-typed address) around the shared `<.address_form>`, whose `change` event
+this page has to name for itself because `typing` already means the typing
+indicator here. Without Fediverse participation the box explains where the
+switch is instead of taking an address it could not send.
+
+The two views link to each other **by anchor**, not merely to each other's
+page: `Fediverse.reply_anchor/1` for a note and `private_reply_anchor/1` for a
+sent answer, each owned in one place and rendered as the `id` of the box under
+the post. A conversation that has run a while hangs under a post with a whole
+thread under it, and a link that only opened that page left the reader hunting
+for the message they pressed.
+
 ### What this conversation has that a local one does not
 
 One line at the top of the thread, said once rather than under every bubble:
