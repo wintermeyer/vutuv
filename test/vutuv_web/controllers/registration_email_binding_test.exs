@@ -13,6 +13,7 @@ defmodule VutuvWeb.RegistrationEmailBindingTest do
   use VutuvWeb.ConnCase, async: true
 
   alias Vutuv.Accounts.Email
+  alias Vutuv.Accounts.User
   alias Vutuv.Repo
 
   test "a second address in the sign-up POST creates no account", %{conn: conn} do
@@ -64,5 +65,100 @@ defmodule VutuvWeb.RegistrationEmailBindingTest do
     post(conn, ~p"/new_registration", user: attrs)
 
     assert Repo.get_by(Email, value: attrs["emails"]["0"]["value"])
+  end
+
+  # The same question from the other side, and it was open: `cast_assoc(:emails)`
+  # carried no `required`, so a POST that spells the address anywhere but
+  # `emails[0][value]` minted an account with **no address at all** — one nobody
+  # can ever sign into, since the login PIN has nowhere to go. The controller
+  # then re-derived the address from the same params, got nil, and 500ed inside
+  # `String.downcase/2`. An unauthenticated endpoint, so the shape is somebody
+  # else's to send, not only a typo in ours.
+  describe "a sign-up with no address" do
+    # Asserted on the USER row, not on the Email one: the bug created a user and
+    # no address, so `refute Repo.get_by(Email, …)` — the shape the four tests
+    # above use — passes against the un-fixed code and proves nothing here.
+    test "is refused rather than minting an account nobody can sign into",
+         %{conn: conn} do
+      attrs = registration_attrs("noaddr")
+
+      conn = post(conn, ~p"/new_registration", user: Map.delete(attrs, "emails"))
+
+      assert html_response(conn, 422)
+      refute Repo.get_by(User, first_name: attrs["first_name"])
+    end
+
+    # The shape that actually reached production: the address is present, but
+    # under a key `cast_assoc` ignores. Registration used to succeed on it.
+    test "an address under the wrong key is not an address", %{conn: conn} do
+      attrs = registration_attrs("wrongkey")
+      value = attrs["emails"]["0"]["value"]
+
+      attrs = attrs |> Map.delete("emails") |> Map.put("email", value)
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      assert html_response(conn, 422)
+      refute Repo.get_by(Email, value: value)
+      refute Repo.get_by(User, first_name: attrs["first_name"])
+    end
+
+    # The same nil, on the other branch. `several_emails?/1` counts entries, not
+    # keys, so ONE address under `emails[1]` passes it and Ecto casts it whatever
+    # the key is — but the controller's params extraction only ever matched
+    # `emails[0]`. With an address that already belongs to somebody, the insert
+    # trips the unique index, the "already taken" path runs, and it used to be
+    # handed nil. One unauthenticated POST, and knowing any member's address.
+    test "an already-taken address under a non-zero key does not crash the notice",
+         %{conn: conn} do
+      theirs = registration_attrs("owner")
+      post(conn, ~p"/new_registration", user: theirs)
+      taken = theirs["emails"]["0"]["value"]
+
+      attrs =
+        registration_attrs("collide")
+        |> Map.put("emails", %{"1" => %{"value" => taken}})
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      # The enumeration-safe answer: the same PIN screen a fresh sign-up gets.
+      assert html_response(conn, 200)
+    end
+
+    # Named for what it pins, which is not the translation: the wizard writes
+    # that lead sentence only when some error is bound to a field the form
+    # actually marks (`RegistrationLive`'s `@marked_fields`). The changeset's
+    # error is on the `:emails` ASSOCIATION, so without the rename to the
+    # `email` the form renders, it falls through to `:base` and the refusal
+    # arrives as a loose sentence beside an email field that looks fine. The
+    # German header stays because vutuv is a German site and the sentence has to
+    # read as German where it renders.
+    test "the address error marks the email field, so the banner speaks",
+         %{conn: conn} do
+      attrs = registration_attrs("noaddr")
+
+      body =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> post(~p"/new_registration", user: Map.delete(attrs, "emails"))
+        |> html_response(422)
+
+      assert body =~ "Bitte prüfen Sie die rot markierten Felder."
+    end
+
+    # The claim `registration_changeset/2`'s comment makes about the new
+    # `required: true`: the ordinary submit with the field left empty is
+    # unaffected, because it posts `emails[0][value]` as "" — which casts, and
+    # then fails on the Email changeset's own validation rather than on the
+    # association being missing. Untested, that sentence is just a hope.
+    test "an empty email field still fails on the field, not on the association",
+         %{conn: conn} do
+      attrs = registration_attrs("blank") |> put_in(["emails", "0", "value"], "")
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      assert html_response(conn, 422)
+      refute Repo.get_by(User, first_name: attrs["first_name"])
+    end
   end
 end

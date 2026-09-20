@@ -100,7 +100,7 @@ defmodule Vutuv.Accounts do
         {:ok, user}
 
       # The insert failed on the user changeset (invalid input, email taken):
-      # return it unchanged so email_already_taken?/1 can still classify it.
+      # return it unchanged so taken_email/1 can still classify it.
       {:error, :user, changeset, _} ->
         {:error, changeset}
 
@@ -115,24 +115,37 @@ defmodule Vutuv.Accounts do
   end
 
   @doc """
-  Whether a failed `register_user/3` changeset failed *only* because the email
-  address is already registered (the emails unique constraint fired). The
-  sign-up controller masks exactly this case so the form can't leak whether an
-  address has an account; classifying it here keeps that security-relevant rule
-  next to the constraint that defines it rather than in the web layer.
+  The address a failed `register_user/3` collided on, or `nil` when it failed
+  for any other reason — i.e. the emails unique constraint fired. The sign-up
+  controller masks exactly this case so the form can't leak whether an address
+  has an account; classifying it here keeps that security-relevant rule next to
+  the constraint that defines it rather than in the web layer.
 
   `unique_constraint` only fires after the INSERT, which Ecto attempts only on
   an otherwise-valid changeset, so a genuine input error (bad format, missing
   name) never coincides with it.
+
+  It returns the **address** rather than a boolean because the caller's next act
+  is mailing that address a "somebody tried to register you" notice, and it used
+  to read the address back out of the params instead. Those two answers were not
+  the same answer: the params extraction matched `emails[0]` alone, while
+  `several_emails?/1` counts entries rather than keys, so a single address
+  posted as `emails[1]` was cast, collided, and then handed the notifier a nil
+  — `String.downcase/2` four frames down, on an unauthenticated endpoint, for
+  anyone who knew one member's address. One owner, and the notice now goes to
+  the address that really collided.
   """
-  def email_already_taken?(%Ecto.Changeset{} = changeset) do
+  def taken_email(%Ecto.Changeset{} = changeset) do
     changeset
     |> Ecto.Changeset.get_change(:emails, [])
-    |> Enum.any?(fn email_changeset ->
-      Enum.any?(email_changeset.errors, fn
-        {:value, {_message, opts}} -> Keyword.get(opts, :constraint) == :unique
-        _ -> false
-      end)
+    |> Enum.find_value(fn email_changeset ->
+      collided? =
+        Enum.any?(email_changeset.errors, fn
+          {:value, {_message, opts}} -> Keyword.get(opts, :constraint) == :unique
+          _ -> false
+        end)
+
+      collided? && Ecto.Changeset.get_field(email_changeset, :value)
     end)
   end
 
@@ -352,7 +365,8 @@ defmodule Vutuv.Accounts do
   belongs to an account; an attacker who guesses an unknown address gets
   the identical PIN screen but never receives a PIN.
   """
-  def login_by_email(conn, email, flow) when flow in [:login, :registration] do
+  def login_by_email(conn, email, flow)
+      when is_binary(email) and flow in [:login, :registration] do
     advance_to_pin_screen(conn, email, &send_login_pin/2, flow)
   end
 
@@ -383,7 +397,8 @@ defmodule Vutuv.Accounts do
   them someone tried to register and links them to the login page. No PIN is
   sent, so the notice carries nothing a non-owner could act on.
   """
-  def notify_registration_attempt(conn, email, pin_allowed?) when is_boolean(pin_allowed?) do
+  def notify_registration_attempt(conn, email, pin_allowed?)
+      when is_binary(email) and is_boolean(pin_allowed?) do
     notify = fn user, address ->
       if pin_allowed? and incomplete_registration?(user) do
         send_login_pin(user, address)
@@ -399,6 +414,13 @@ defmodule Vutuv.Accounts do
   # address up, hand a found account to `notify` (a login PIN, or the
   # registration-attempt notice), and advance to the PIN screen the same way
   # whether or not it was found — the response never depends on existence.
+  #
+  # Both doors above guard `is_binary(email)` rather than letting a nil reach
+  # the `String.downcase/1` below. It is the one argument here that is a
+  # credential destination, and a caller that does not know where the PIN goes
+  # has a bug: a nil used to raise four frames down, which read as a crash in
+  # `String`, and a nil made into a silent no-op would be worse still — the
+  # member would sit on a PIN screen waiting for a mail nobody ever sent.
   defp advance_to_pin_screen(conn, email, notify, flow) do
     email = String.downcase(email)
 
@@ -2658,6 +2680,12 @@ defmodule Vutuv.Accounts do
   member with several addresses gets a deterministic primary recipient rather
   than whichever row Postgres happened to return.
   """
+  # A freshly registered account carries its one address already: `cast_assoc`
+  # writes the inserted child back onto the parent, so the sign-up path would
+  # otherwise spend a round trip asking for a row it is holding. One address
+  # needs no ordering, which is why this clause can answer without the query.
+  def first_email_value(%User{emails: [%Email{value: value}]}), do: value
+
   def first_email_value(%User{id: id}) do
     Repo.one(from(e in Email.ordered(), where: e.user_id == ^id, limit: 1, select: e.value))
   end

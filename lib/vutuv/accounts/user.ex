@@ -1107,7 +1107,15 @@ defmodule Vutuv.Accounts.User do
       # costs five.
       add_error(changeset, :emails, @one_email_message)
     else
-      cast_assoc(changeset, :emails)
+      # `required: true`, because the address is not an optional detail of a
+      # sign-up: it is where the login PIN goes, so an account created without
+      # one can never be signed into by anybody. A bare `cast_assoc/2` accepted
+      # a POST that spelled the address under any other key and minted exactly
+      # that account, and `POST /new_registration` is unauthenticated, so the
+      # shape is somebody else's to send. The ordinary empty-field submit is
+      # unaffected: it posts `emails[0][value]` as "", which casts and then
+      # fails the Email changeset on the field itself.
+      cast_assoc(changeset, :emails, required: true)
     end
   end
 

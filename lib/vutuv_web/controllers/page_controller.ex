@@ -276,30 +276,32 @@ defmodule VutuvWeb.PageController do
       |> expand_fediverse_choice()
       |> Prefs.drop_unchosen_booleans()
 
-    # Extract defensively: a malformed "emails" param (not the nested
-    # %{"0" => %{"value" => …}} the form produces) must reach register_user/2
-    # as a plain error changeset, not crash on chained Access indexing.
-    email =
-      case user_params do
-        %{"emails" => %{"0" => %{"value" => value}}} -> value
-        _ -> nil
-      end
-
+    # Neither branch below derives the address from the params any more, and
+    # that is the whole repair: the address was extracted here, matching
+    # `emails[0]` alone, while `cast_assoc` casts whichever single entry was
+    # posted and `first_email_value/1` reads what was stored. Three derivations
+    # of one fact, and a POST that spelled the address anywhere else made them
+    # disagree — a nil into `String.downcase/2`, on an unauthenticated endpoint.
+    # `rejected_form_state/2` keeps its own params read, because putting a
+    # refused value back in the form is genuinely a question about what was
+    # posted rather than about what was saved.
     case Vutuv.Accounts.register_user(conn, user_params) do
-      {:ok, _user} ->
-        handle_post_registration_login(conn, email)
+      {:ok, user} ->
+        handle_post_registration_login(conn, Vutuv.Accounts.first_email_value(user))
 
       {:error, changeset} ->
-        if Vutuv.Accounts.email_already_taken?(changeset) do
-          # Don't betray that the address exists: render the identical screen a
-          # fresh sign-up gets, and let the owner's inbox carry the truth (a
-          # "someone tried to register" notice with a login link). Surfacing the
-          # "has already been taken" error here would be an enumeration oracle.
-          handle_existing_email_registration(conn, email)
-        else
-          conn
-          |> put_status(:unprocessable_entity)
-          |> render_landing(form_state: rejected_form_state(user_params, changeset))
+        # Don't betray that the address exists: render the identical screen a
+        # fresh sign-up gets, and let the owner's inbox carry the truth (a
+        # "someone tried to register" notice with a login link). Surfacing the
+        # "has already been taken" error here would be an enumeration oracle.
+        case Vutuv.Accounts.taken_email(changeset) do
+          nil ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> render_landing(form_state: rejected_form_state(user_params, changeset))
+
+          taken ->
+            handle_existing_email_registration(conn, taken)
         end
     end
   end
@@ -379,15 +381,23 @@ defmodule VutuvWeb.PageController do
       changeset
       |> Ecto.Changeset.get_change(:emails, [])
       |> Enum.flat_map(fn nested ->
-        Enum.map(ErrorHelpers.changeset_messages(nested), &["email", &1])
+        Enum.map(ErrorHelpers.changeset_messages(nested), &[form_field(:emails), &1])
       end)
 
     own =
       for {field, error} <- Enum.reverse(changeset.errors),
-          do: [to_string(field), ErrorHelpers.translate_error(error)]
+          do: [form_field(field), ErrorHelpers.translate_error(error)]
 
     own ++ nested
   end
+
+  # `:emails` is the association; `email` is what the form calls the one field
+  # behind it, and only a name that form renders can be marked red
+  # (`RegistrationLive`'s `@marked_fields`). The top-level error exists because
+  # the address is required, so without this the refusal arrived as an unmarked
+  # sentence beside an email field that looked fine.
+  defp form_field(:emails), do: "email"
+  defp form_field(field), do: to_string(field)
 
   defp handle_post_registration_login(conn, email) do
     # The account was just created, so login_by_email/2 always mails the PIN
