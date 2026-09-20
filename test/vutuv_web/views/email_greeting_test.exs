@@ -84,7 +84,10 @@ defmodule VutuvWeb.EmailGreetingTest do
     end
   end
 
+  # `zz` is not a real ISO 639-1 code. It used to be "fr", which stopped being
+  # an unknown locale the day French shipped — pick an unassigned code here, not
+  # the next language somebody is going to add.
   test "an unknown locale falls back to a bare greeting" do
-    assert UserHelpers.email_greeting(user(locale: "fr")) == "Hi"
+    assert UserHelpers.email_greeting(user(locale: "zz")) == "Hi"
   end
 end

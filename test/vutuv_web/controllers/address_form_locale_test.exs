@@ -48,7 +48,7 @@ defmodule VutuvWeb.AddressFormLocaleTest do
     # was being skipped.
     html =
       conn
-      |> in_locale("fr")
+      |> in_locale("zz")
       |> get(~p"/settings/addresses/new")
       |> html_response(200)
 

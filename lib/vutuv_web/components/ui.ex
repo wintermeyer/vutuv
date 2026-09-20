@@ -3868,12 +3868,40 @@ defmodule VutuvWeb.UI do
     if n < 0, do: "-" <> digits, else: digits
   end
 
+  @doc """
+  The decimal separator of the reader's locale on its own, for a figure this
+  module does not format itself.
+
+  Three call sites want the decimal without the grouping — a file size in
+  megabytes, a click rate as a percentage — and each of them used to carry its
+  own copy of the locale rule. One copy per site is one place per site to
+  forget a language, which is exactly what French found: it shares German's
+  comma but *not* German's dot, so the `in ~w(de it)` shorthand those copies
+  used answers half of French correctly and reads as if it answered all of it.
+  """
+  def decimal_separator do
+    {_group, decimal} = number_separators()
+    decimal
+  end
+
   # German and Italian group thousands with a dot and write the decimal with a
   # comma (60.023 / 2,4); English inverts both. They invert **together**, so
   # they are one answer rather than two lists to keep in step — the wrong one is
   # misread rather than untidy.
+  #
+  # French takes the comma but groups with a narrow no-break space (U+202F,
+  # `60 023`), so it is the locale that broke the two-way split this used to be:
+  # it belongs to neither branch, and whichever one it had been folded into
+  # would have been wrong about one of the two separators. The space is
+  # deliberately the *narrow* no-break one CLDR names for `fr` and not a plain
+  # space — a normal space lets a browser break `60 023` across two lines, and
+  # half a number at the end of a line is not a number.
   defp number_separators do
-    if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it), do: {".", ","}, else: {",", "."}
+    case Gettext.get_locale(VutuvWeb.Gettext) do
+      "fr" -> {" ", ","}
+      locale when locale in ~w(de it) -> {".", ","}
+      _english -> {",", "."}
+    end
   end
 
   @doc """
@@ -4313,6 +4341,7 @@ defmodule VutuvWeb.UI do
   # not a Gettext string because this runs outside a request in the agent
   # formats, where the process locale is not the reader's.
   defp relative_yesterday("de"), do: "Gestern"
+  defp relative_yesterday("fr"), do: "Hier"
   defp relative_yesterday("it"), do: "Ieri"
   defp relative_yesterday(_), do: "Yesterday"
 

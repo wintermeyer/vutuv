@@ -38,7 +38,10 @@ defmodule Vutuv.CountriesTest do
     end
 
     test "unknown locale falls back to English" do
-      assert Countries.name("DE", "fr") == "Germany"
+      # `zz` is deliberately not a real ISO 639-1 code, the way the invalid
+      # country code below is `XX`: this used to say "fr", which stopped being
+      # an unknown locale the day French shipped.
+      assert Countries.name("DE", "zz") == "Germany"
     end
 
     test "unknown or invalid code returns the uppercased code" do
@@ -202,12 +205,86 @@ defmodule Vutuv.CountriesTest do
     end
   end
 
+  describe "the table's own spelling rules" do
+    # Deliberately not inside the French block below: this is an invariant of
+    # every column, and it would stay green if the French one stopped resolving
+    # (the English fallback spells its one apostrophe the same way). What it
+    # really guards is the next regeneration — CLDR writes the typographic
+    # apostrophe, and the generator normalizes it on the way in.
+    test "every name uses the ASCII apostrophe, so fold/1 and search reach it" do
+      # `fold/1` folds accents and not apostrophes, so a name carrying U+2019 is
+      # unreachable by anybody typing `'`.
+      carrying =
+        for locale <- ~w(en de fr it),
+            code <- Countries.all(),
+            name = Countries.name(code, locale),
+            String.contains?(name, "’"),
+            do: "#{locale}/#{code}: #{name}"
+
+      assert carrying == [], "typographic apostrophe in: #{inspect(carrying)}"
+    end
+
+    test "the one name with an apostrophe is searchable by typing it" do
+      assert Countries.name("CI", "fr") == "Côte d'Ivoire"
+      assert Countries.search("cote d'i", "fr") == [{"Côte d'Ivoire", "CI"}]
+    end
+  end
+
   describe "all/0" do
     test "covers the full ISO 3166-1 alpha-2 set" do
       codes = Countries.all()
       assert length(codes) >= 240
       assert "DE" in codes
       assert Enum.all?(codes, &(&1 == String.upcase(&1)))
+    end
+  end
+
+  describe "French" do
+    test "names the countries in French" do
+      assert Countries.name("DE", "fr") == "Allemagne"
+      assert Countries.name("US", "fr") == "États-Unis"
+      assert Countries.name("GB", "fr") == "Royaume-Uni"
+      assert Countries.name("ZA", "fr") == "Afrique du Sud"
+      assert Countries.name("CH", "fr") == "Suisse"
+    end
+
+    test "names the region presets in French" do
+      by_key = Map.new(Countries.regions("fr"), &{&1.key, &1.name})
+
+      assert by_key["EU"] == "Union européenne"
+      assert by_key["APAC"] == "Asie-Pacifique"
+    end
+
+    test "every country really has a French name, not the English fallback" do
+      # The column was generated from the CLDR data the backend compiles in
+      # rather than typed out, so what is worth asserting is that the generation
+      # covered all of it. "Non-empty" would not say that: an unresolved locale
+      # falls back to English, which is non-empty too, so this counts the names
+      # that actually differ from their English column. Most French country
+      # names do (Allemagne, Espagne, Chine); the ones that do not are the
+      # genuinely identical spellings (France, Canada, Angola).
+      for code <- Countries.all() do
+        assert String.trim(Countries.name(code, "fr")) != "", "empty French name for #{code}"
+      end
+
+      differing =
+        Enum.count(Countries.all(), &(Countries.name(&1, "fr") != Countries.name(&1, "en")))
+
+      assert differing > 150,
+             "only #{differing} French names differ from English — is the column resolving at all?"
+    end
+
+    test "sorts the select options by the French name, folding accents" do
+      options = Countries.select_options("fr")
+
+      assert length(options) == length(Countries.all())
+      assert {"Allemagne", "DE"} in options
+
+      # Folded, so "Égypte" sorts at E rather than after Z.
+      names = Enum.map(options, fn {name, _code} -> name end)
+
+      assert Enum.find_index(names, &(&1 == "Égypte")) <
+               Enum.find_index(names, &(&1 == "Espagne"))
     end
   end
 end

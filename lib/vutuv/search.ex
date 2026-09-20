@@ -36,26 +36,42 @@ defmodule Vutuv.Search do
   # and an unrecognized email would wrongly fall through to phonetic name search.
   @email_regex ~r/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/
 
-  # Operator keys (German first, then the English and Italian aliases) → parsed
-  # field. Every interface language gets its own spelling, because the search
-  # help page shows the examples in the reader's language and an example that
-  # does not parse is worse than none.
+  # Operator keys (German first, then the English, French and Italian aliases) →
+  # parsed field. Every interface language gets its own spelling, because the
+  # search help page shows the examples in the reader's language and an example
+  # that does not parse is worse than none. The query is downcased before it is
+  # split, so every key here is lowercase.
+  #
+  # **`nome` and `nom` are two different fields, and that is not a typo.**
+  # Italian `nome` is the given name; French `nom` is the family name, whose
+  # given-name counterpart is `prénom`. They are exact keys, so the lookup can
+  # never confuse them — but anybody editing this list can, which is why they
+  # are worth a sentence. An accented key gets its unaccented twin beside it
+  # (`prenom`, `competence`, the way `citta` already sits beside `città`),
+  # because a French keyboard is not what every reader of a French page has.
   @field_ops %{
     "tag" => :tag,
     "skill" => :tag,
+    "competence" => :tag,
+    "compétence" => :tag,
     "vorname" => :first_name,
     "first" => :first_name,
     "nome" => :first_name,
+    "prenom" => :first_name,
+    "prénom" => :first_name,
     "nachname" => :last_name,
     "last" => :last_name,
     "cognome" => :last_name,
+    "nom" => :last_name,
     "ort" => :city,
     "stadt" => :city,
     "city" => :city,
     "citta" => :city,
     "città" => :city,
+    "ville" => :city,
     "status" => :status,
-    "stato" => :status
+    "stato" => :status,
+    "statut" => :status
   }
 
   # The job-availability values the `status:` operator accepts (issue #935);

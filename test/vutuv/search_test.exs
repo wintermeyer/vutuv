@@ -183,6 +183,28 @@ defmodule Vutuv.SearchTest do
                Search.parse("müller tag:php ort:koblenz")
     end
 
+    test "the French operator spellings, accented and not" do
+      # The search help page prints its examples as gettext msgids, so the
+      # French catalog decides which words a French reader is told to type —
+      # and an example that does not parse is worse than none. These are the
+      # keys that catalog may use.
+      assert %{first_name: "jean", scope: :people} = Search.parse("prénom:jean")
+      assert %{first_name: "jean"} = Search.parse("prenom:jean")
+      assert %{last_name: "dupont", scope: :people} = Search.parse("nom:dupont")
+      assert %{city: "lyon", scope: :people} = Search.parse("ville:lyon")
+      assert %{status: "open", scope: :people} = Search.parse("statut:open")
+      assert %{tag: "php"} = Search.parse("compétence:php")
+      assert %{tag: "php"} = Search.parse("competence:php")
+    end
+
+    test "`nome` and `nom` stay two different fields" do
+      # Italian `nome` is the given name, French `nom` the family name. They
+      # differ by one letter and sit three lines apart in `@field_ops`, which is
+      # the whole reason this is pinned.
+      assert %{first_name: "mario", last_name: nil} = Search.parse("nome:mario")
+      assert %{first_name: nil, last_name: "dupont"} = Search.parse("nom:dupont")
+    end
+
     test "a fully quoted query turns on exact" do
       assert %{text: "maria meier", exact?: true} = Search.parse(~s("Maria Meier"))
     end

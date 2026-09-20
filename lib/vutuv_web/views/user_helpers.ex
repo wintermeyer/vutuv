@@ -945,6 +945,27 @@ defmodule VutuvWeb.UserHelpers do
   def image_kind_label("press_kit", "de"), do: "ein Bild aus Ihrem Pressebereich"
 
   def image_kind_label(_kind, "de"), do: "ein Bild"
+  def image_kind_label("avatar", "fr"), do: "votre photo de profil"
+  def image_kind_label("cover", "fr"), do: "votre image de couverture"
+  def image_kind_label("post_image", "fr"), do: "une image de l'une de vos publications"
+
+  def image_kind_label("job_posting_image", "fr"),
+    do: "une image de l'une de vos offres d'emploi"
+
+  def image_kind_label("organization_image", "fr"),
+    do: "une image de l'une de vos pages d'organisation"
+
+  def image_kind_label("qualification_document", "fr"),
+    do: "un justificatif téléversé pour l'un de vos certificats et licences"
+
+  def image_kind_label("job_reference_document", "fr"),
+    do: "un certificat de travail téléversé"
+
+  def image_kind_label("post_video_frame", "fr"), do: "une vidéo de l'une de vos publications"
+
+  def image_kind_label("press_kit", "fr"), do: "une image de votre espace presse"
+
+  def image_kind_label(_kind, "fr"), do: "une image"
   def image_kind_label("avatar", "it"), do: "la tua immagine del profilo"
   def image_kind_label("cover", "it"), do: "la tua immagine di copertina"
   def image_kind_label("post_image", "it"), do: "un'immagine di uno dei tuoi post"
@@ -1033,6 +1054,23 @@ defmodule VutuvWeb.UserHelpers do
     case present(user.first_name) do
       nil -> "Hi"
       first_name -> "Hi #{first_name}"
+    end
+  end
+
+  # French addresses members as *vous*, so it takes the German shape rather than
+  # the English one: the gendered honorific with the surname, and the same
+  # neutral branch for everybody else. "Cher Jean" over a mail that then says
+  # "vous" is the mismatch the Italian clause below describes, the other way
+  # round.
+  #
+  # The neutral opener is "Bonjour" and not a genderless "Cher/Chère" — French
+  # has no third form either, and the two gendered ones differ in spelling
+  # rather than in a word that could be left out.
+  def email_greeting(%User{locale: "fr"} = user) do
+    case {user.gender, present(user.last_name)} do
+      {"female", surname} when is_binary(surname) -> "Chère Madame #{surname}"
+      {"male", surname} when is_binary(surname) -> "Cher Monsieur #{surname}"
+      _ -> neutral_greeting("Bonjour", user)
     end
   end
 
@@ -1192,6 +1230,7 @@ defmodule VutuvWeb.UserHelpers do
     word =
       case locale do
         "de" -> "Hallo"
+        "fr" -> "Bonjour"
         "it" -> "Salve"
         _ -> "Hi"
       end

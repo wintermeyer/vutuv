@@ -155,7 +155,7 @@ defmodule VutuvWeb.Plug.LocaleTest do
 
     test "nil and unrelated codes are not supported" do
       refute Locale.locale_supported?(nil)
-      refute Locale.locale_supported?("fr")
+      refute Locale.locale_supported?("zz")
       refute Locale.locale_supported?("generic")
     end
   end

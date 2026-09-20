@@ -124,6 +124,45 @@ defmodule VutuvWeb.UITest do
       Gettext.put_locale(VutuvWeb.Gettext, "de")
       assert UI.delimited_count(60_123) == "60.123"
     end
+
+    test "groups with a narrow no-break space under the French locale" do
+      Gettext.put_locale(VutuvWeb.Gettext, "fr")
+
+      # French is the locale that broke the de-against-everything-else split
+      # this used to be: it takes German's decimal comma but groups with
+      # U+202F, so folding it into either branch gets one separator wrong.
+      assert UI.delimited_count(60_123) == "60 123"
+      assert UI.euro_cents(41_650) == "416,50"
+
+      # The space must be the NARROW NO-BREAK one, not a plain space: a browser
+      # breaks a line at a plain space, and half a number at the end of a line
+      # is not a number.
+      refute UI.delimited_count(60_123) =~ " "
+    end
+
+    test "Italian keeps the German separators, not the French ones" do
+      # Both take the decimal comma, which is what made it tempting to answer
+      # them with one branch; only German and Italian also group with a dot.
+      Gettext.put_locale(VutuvWeb.Gettext, "it")
+      assert UI.delimited_count(60_123) == "60.123"
+    end
+  end
+
+  describe "decimal_separator/0" do
+    test "is the decimal half of the locale's separator pair" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      assert UI.decimal_separator() == "."
+    end
+
+    test "is a comma for every locale that writes one, French included" do
+      # The three call sites outside this module (two file sizes, one click
+      # rate) each used to carry their own `in ~w(de it)` copy of this rule,
+      # which is half-right for French and reads as if it were whole.
+      for locale <- ~w(de fr it) do
+        Gettext.put_locale(VutuvWeb.Gettext, locale)
+        assert UI.decimal_separator() == ",", "wrong decimal separator for #{locale}"
+      end
+    end
   end
 
   describe "post_time/1" do

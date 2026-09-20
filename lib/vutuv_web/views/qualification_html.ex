@@ -316,7 +316,7 @@ defmodule VutuvWeb.QualificationHTML do
 
   defp file_size_label(bytes) do
     tenths = div(bytes, 100_000)
-    separator = if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it), do: ",", else: "."
+    separator = decimal_separator()
     "#{div(tenths, 10)}#{separator}#{rem(tenths, 10)} MB"
   end
 

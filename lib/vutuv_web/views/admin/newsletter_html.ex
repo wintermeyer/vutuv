@@ -32,9 +32,9 @@ defmodule VutuvWeb.Admin.NewsletterHTML do
   @doc "The click-log page size, shared by the query and the pager."
   def clicks_per_page, do: Newsletters.clicks_per_page()
 
-  @doc "A click rate as a one-decimal percentage string, German with a decimal comma."
+  @doc "A click rate as a one-decimal percentage string, with the reader's decimal mark."
   def percent(rate) when is_number(rate) do
-    decimal = if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it), do: ",", else: "."
+    decimal = decimal_separator()
 
     string =
       rate

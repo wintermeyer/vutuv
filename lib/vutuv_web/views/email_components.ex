@@ -431,9 +431,11 @@ defmodule VutuvWeb.EmailComponents do
   end
 
   defp signature_line1("de"), do: "Viele Grüße"
+  defp signature_line1("fr"), do: "Cordialement"
   defp signature_line1("it"), do: "Cordiali saluti"
   defp signature_line1(_), do: "Regards"
   defp signature_line2("de"), do: "Ihr vutuv Team"
+  defp signature_line2("fr"), do: "L'équipe vutuv"
   defp signature_line2("it"), do: "Il team di vutuv"
   defp signature_line2(_), do: "The vutuv team"
 
@@ -450,6 +452,15 @@ defmodule VutuvWeb.EmailComponents do
     <.email_muted>
       Diese Benachrichtigungs-E-Mails können Sie
       <.email_link href={@unsubscribe_url}>hier abschalten</.email_link>.
+    </.email_muted>
+    """
+  end
+
+  def email_unsubscribe_note(%{locale: "fr"} = assigns) do
+    ~H"""
+    <.email_muted>
+      Vous pouvez désactiver ces e-mails de notification
+      <.email_link href={@unsubscribe_url}>ici</.email_link>.
     </.email_muted>
     """
   end
