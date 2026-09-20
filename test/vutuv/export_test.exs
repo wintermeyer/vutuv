@@ -8,6 +8,38 @@ defmodule Vutuv.ExportTest do
   use Vutuv.DataCase, async: true
   alias Vutuv.Export
 
+  test "a conversation with another network names the account on both sides" do
+    user = insert(:activated_user, fediverse_followers?: true)
+
+    account =
+      Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+        actor_uri: "https://social.example/users/alice",
+        inbox_uri: "https://social.example/users/alice/inbox",
+        host: "social.example",
+        handle: "alice",
+        name: "Alice Anders"
+      })
+
+    {:ok, conversation} = Vutuv.Chat.fediverse_conversation(user, account, :remote)
+
+    {:ok, _} =
+      Vutuv.Chat.record_fediverse_message(conversation, %{
+        direction: :in,
+        body: "Hallo!",
+        remote_object_uri: "https://social.example/statuses/1"
+      })
+
+    data = Export.build(user)
+
+    # Nobody over there has a participant row, so both the counterpart and the
+    # author have to be read off the conversation and the message instead — or
+    # a member asking what vutuv holds about them gets an exchange with nobody
+    # in it and a message from nobody.
+    assert [%{with: ["alice@social.example"], messages: [message]}] = data.conversations
+    assert message.from == "alice@social.example"
+    assert message.body == "Hallo!"
+  end
+
   test "connections are derived from mutual follows, one-way follows excluded" do
     user = insert(:activated_user)
     mutual = insert(:activated_user)

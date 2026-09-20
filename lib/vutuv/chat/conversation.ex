@@ -15,14 +15,23 @@ defmodule Vutuv.Chat.Conversation do
     #   member <-> page:   user_a is the member, user_b NULL, organization set.
     #     No sorting, because two ids from DIFFERENT tables carry no such
     #     symmetry — the pair is already canonical.
+    #   member <-> remote: user_a is the member, remote_account set — a private
+    #     message to or from another network (issue: DMs into the Fediverse).
     #
-    # A CHECK says the other side is exactly one of the two. All of these are
+    # A CHECK says the other side is exactly one of the three. All of these are
     # set programmatically, never cast.
     belongs_to(:user_a, Vutuv.Accounts.User)
     belongs_to(:user_b, Vutuv.Accounts.User)
     belongs_to(:organization, Vutuv.Organizations.Organization)
+    belongs_to(:remote_account, Vutuv.Fediverse.RemoteAccount)
     # The party who opened the conversation (set when the first message is
     # sent). A standing role on the conversation, not a per-message field.
+    #
+    # **Nullable, and NULL means the remote side started it** — an account on
+    # another network is not a row in `users`. Every rule that reads
+    # "initiator is not me" has to spell that as `is_nil(...) or ... != me`,
+    # because `NULL != <id>` is NULL and not true, which would silently deny
+    # the member the right to accept the request.
     belongs_to(:initiator, Vutuv.Accounts.User)
 
     field(:status, :string, default: "pending")

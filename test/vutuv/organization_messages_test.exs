@@ -67,6 +67,25 @@ defmodule Vutuv.OrganizationMessagesTest do
     end
   end
 
+  test "the shell badge counts a page's reply" do
+    {page, owner} = page_with_publisher()
+    member = insert(:activated_user)
+
+    {:ok, conversation} = Chat.find_or_create_conversation(member, page)
+    {:ok, _} = Chat.send_message(member, conversation.id, "Hallo")
+    Chat.mark_read(member, conversation.id)
+
+    {:ok, _} = Chat.send_message_as_organization(page, owner, conversation.id, "Guten Tag")
+
+    # Calibrated against `m.sender_id <> ?` in `unread_conversations_count/1`,
+    # which is what stood there: a page's message has no `sender_id`, so the
+    # comparison answered NULL rather than true and the badge stayed at zero
+    # while the member had unread mail — the same NULL trap the per-row
+    # `unread_counts/2` documents beside it, missed in the count the shell
+    # actually shows.
+    assert Chat.unread_conversations_count(member) == 1
+  end
+
   test "a member opens a conversation with a page, once" do
     {page, _owner} = page_with_publisher()
     member = insert(:activated_user)

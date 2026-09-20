@@ -172,4 +172,61 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   def label(%__MODULE__{} = account) do
     display_name(account) || display_handle(account) || account.actor_uri
   end
+
+  # The third identity kind the messages page can show (private messages to
+  # and from another network), and exactly what `Vutuv.Identity` was written
+  # for: a surface asks the identity instead of pattern-matching the party
+  # columns again.
+  #
+  # Two answers differ from the local kinds on purpose. `path/1` points at the
+  # account page here, not at a profile out there — a reader who taps a name
+  # in their own inbox should land somewhere they can act (follow, mute,
+  # write), with the origin one further click away. And `hidden?`/`indexable?`
+  # are always true/false: this is somebody else's identity on somebody else's
+  # server, so nothing here is ours to publish or to have crawled.
+  defimpl Vutuv.Identity, for: Vutuv.Fediverse.RemoteAccount do
+    alias Vutuv.Fediverse.Handle
+    alias Vutuv.Fediverse.RemoteAccount
+
+    def kind(_account), do: :remote_account
+
+    def id(account), do: account.id
+
+    def display_name(account), do: RemoteAccount.label(account)
+
+    # The `@`-less full address, through the one module that owns how an
+    # account is written (`Vutuv.Fediverse.Handle`): a bare "alice" would name
+    # a different person on every server, and hand-composing it here would drop
+    # the fallbacks a server that omits `preferredUsername` needs — leaving a
+    # nil where a page then prints "@ wants to message you."
+    def handle(account) do
+      account
+      |> RemoteAccount.display_handle()
+      |> Handle.address()
+    end
+
+    def path(account), do: "/system/fediverse/account/#{account.id}"
+
+    def image(account), do: account.avatar
+
+    def hidden?(_account), do: true
+
+    def indexable?(_account), do: false
+
+    def topic(account), do: "fediverse_account:#{account.id}"
+
+    def ap_type(_account), do: "Person"
+
+    # The shape the local kinds publish (name, handle, absolute URL of `path/1`),
+    # because it ships to clients through `VutuvWeb.AgentDocs.person_ref/1` and
+    # a second shape there is a second thing to parse. The origin is one click
+    # on from that page.
+    def ref(account) do
+      %{
+        name: RemoteAccount.label(account),
+        handle: handle(account),
+        url: VutuvWeb.Endpoint.url() <> path(account)
+      }
+    end
+  end
 end

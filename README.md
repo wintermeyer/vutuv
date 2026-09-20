@@ -14,14 +14,13 @@ We use the [MIT License](LICENSE).
 
 ## What it does
 
-- Private Fediverse messages under your posts support private text replies
-  (up to 5,000 characters), sent only to the original sender. Saved answers
-  appear beneath the original message in the sender’s feed and thread, and on
-  the reply page. Only the sender can see them on vutuv. Attachments and editing
-  are not supported yet.
-  Outgoing private messages use separate storage with optional post and parent
-  references, ready for messages that start a conversation; the current UI
-  supports replies only.
+- Private messages reach accounts on other networks, in both directions, and
+  live in Messages beside your conversations with members: write from a remote
+  account's page, or answer a private reply where it arrived under your post.
+  Text only, up to 5,000 characters, delivered to that one account and to
+  nobody else. Somebody you do not follow lands in Requests, as a member would.
+  A private answer under a post stays there and also opens a conversation, each
+  view linking to the other.
 
 - A public post's beta reach analysis is public too, uses cached NodeInfo to
   show community size when available, and is available from its

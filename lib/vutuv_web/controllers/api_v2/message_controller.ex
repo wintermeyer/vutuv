@@ -208,8 +208,15 @@ defmodule VutuvWeb.ApiV2.MessageController do
       id: message.id,
       body_markdown: message.body,
       sent_at: message.inserted_at,
-      from: AgentDocs.person_ref(message.sender),
+      # Through `Chat.sender/1`, never off a column: a message can be written
+      # by a member, by a page or by an account on another network, and the
+      # one that answers `nil` here is a deleted account — for which
+      # `Vutuv.Identity.ref/1` has nothing to say and would raise.
+      from: message |> Chat.sender() |> author_ref(),
       mine: message.sender_id == me.id
     }
   end
+
+  defp author_ref(nil), do: nil
+  defp author_ref(identity), do: AgentDocs.person_ref(identity)
 end

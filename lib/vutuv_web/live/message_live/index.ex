@@ -18,12 +18,19 @@ defmodule VutuvWeb.MessageLive.Index do
   use VutuvWeb, :live_view
 
   import VutuvWeb.PendingPostComponents, only: [file_label: 1]
+  import VutuvWeb.PostComponents, only: [remote_avatar: 1, remote_initials: 1]
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Attachments
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Attachments.Format
   alias Vutuv.Chat
   alias Vutuv.Chat.{Conversation, Message}
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.PrivateMessage
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -211,6 +218,38 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
+  # The Fediverse account page's "Message" button. A conversation with an
+  # account on another network needs the member's own Fediverse standing, so
+  # the refusal is shown here rather than hidden: somebody who has not
+  # switched participation on must be able to find out that they can.
+  defp apply_action(socket, :new_fediverse, %{"id" => id} = params) do
+    viewer = socket.assigns.current_user
+
+    with %RemoteAccount{} = account <- Fediverse.get_remote_account(id),
+         :ok <- Fediverse.check_direct_message(viewer, account),
+         {:ok, conversation} <- Chat.fediverse_conversation(viewer, account, :member) do
+      push_navigate(socket, to: new_conversation_path(conversation.id, params["body"]))
+    else
+      {:error, :not_federating} ->
+        socket
+        |> put_flash(
+          :error,
+          gettext(
+            "Switch Fediverse participation on under Settings to write to accounts on other networks."
+          )
+        )
+        |> push_navigate(to: ~p"/settings/fediverse")
+
+      # An account this installation does not hold, a blocked server, an actor
+      # whose document names somebody else's inbox: one sentence, because none
+      # of them is the member's to act on.
+      _refused ->
+        socket
+        |> put_flash(:error, gettext("This account cannot receive messages."))
+        |> push_navigate(to: ~p"/messages")
+    end
+  end
+
   # A `?body=` param prefills the composer once, on open.
   defp seed_draft(socket, body) when is_binary(body) and body != "",
     do: assign(socket, :form, to_form(%{"body" => body}, as: :message))
@@ -231,8 +270,16 @@ defmodule VutuvWeb.MessageLive.Index do
   defp send_as(socket, body, attachment_ids) do
     # `socket.assigns.viewer` is the identity being SPOKEN AS; `current_user` is
     # always the human at the keyboard. A page's reply needs both.
-    case socket.assigns.viewer do
-      %Organization{} = page ->
+    #
+    # The one branch that is about the OTHER side rather than the viewer: a
+    # message to another network has to be signed and delivered, which is the
+    # Fediverse context's business — it writes the conversation's row itself
+    # once the delivery is queued.
+    case {socket.assigns.other, socket.assigns.viewer} do
+      {%RemoteAccount{} = account, _viewer} ->
+        Fediverse.send_direct_message(socket.assigns.current_user, account, body)
+
+      {_other, %Organization{} = page} ->
         Chat.send_message_as_organization(
           page,
           socket.assigns.current_user,
@@ -240,7 +287,7 @@ defmodule VutuvWeb.MessageLive.Index do
           body
         )
 
-      user ->
+      {_other, user} ->
         Chat.send_message(user, socket.assigns.conversation.id, body,
           attachment_ids: attachment_ids
         )
@@ -884,6 +931,20 @@ defmodule VutuvWeb.MessageLive.Index do
     """
   end
 
+  # An account on another network wears the same tile its replies wear under a
+  # post: initials (or its picture, once the gate cleared one) with the globe
+  # badge that says "not from here".
+  defp party_avatar(%{party: %RemoteAccount{}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:src, RemoteAccount.avatar_url(assigns.party))
+      |> assign(:initials, remote_initials(assigns.party))
+
+    ~H"""
+    <.remote_avatar initials={@initials} src={@src} size="sm" />
+    """
+  end
+
   defp party_avatar(assigns) do
     ~H"""
     <.avatar user={@party} size="sm" />
@@ -899,8 +960,15 @@ defmodule VutuvWeb.MessageLive.Index do
   # `Chat.request_recipient?/2` already give the right answer for it, and asking
   # the kind in front of them would put the same rule in two layers.
   defp member_party?(%Organization{}), do: false
+  defp member_party?(%RemoteAccount{}), do: false
   defp member_party?(nil), do: false
   defp member_party?(_), do: true
+
+  # Whether the other side reads this on another server, which is the one
+  # thing about a conversation the member has to be told: what they write
+  # leaves the building, and it is private but not encrypted.
+  defp remote_party?(%RemoteAccount{}), do: true
+  defp remote_party?(_), do: false
 
   # Exactly one of the two sender columns is filled, so each side asks about
   # its own; a bare `sender_id == id` would answer NULL for the other's rows.
@@ -912,6 +980,23 @@ defmodule VutuvWeb.MessageLive.Index do
 
   defp mine?(%Message{sender_id: sender_id}, %{id: user_id}),
     do: not is_nil(sender_id) and sender_id == user_id
+
+  # The post a Fediverse message hangs under, or nil for one that answers no
+  # post. The post is always the viewer's own — a private answer arrives under
+  # their post, and a sent one is their answer to it — so the id is all the
+  # permalink needs.
+  defp post_path(%Message{} = message, %User{} = viewer) do
+    case source_post_id(message) do
+      id when is_binary(id) -> Posts.path(viewer, id)
+      _none -> nil
+    end
+  end
+
+  defp post_path(_message, _viewer), do: nil
+
+  defp source_post_id(%Message{note: %Note{post_id: id}}), do: id
+  defp source_post_id(%Message{private_message: %PrivateMessage{post_id: id}}), do: id
+  defp source_post_id(_message), do: nil
 
   # The Accept/Decline pair, shared by the sidebar request rows and the
   # in-thread request banner.
@@ -1108,6 +1193,24 @@ defmodule VutuvWeb.MessageLive.Index do
           </button>
         </div>
 
+        <%!-- Said once per conversation, at the top, where somebody reads it
+        before writing rather than under every bubble: what leaves the building,
+        and that private here does not mean encrypted. --%>
+        <p
+          :if={remote_party?(@other)}
+          id="fediverse-privacy-note"
+          class="mx-4 mt-4 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:text-slate-300 dark:ring-slate-700"
+        >
+          <span aria-hidden="true">🔒</span>
+          <span>
+            {gettext(
+              "Only %{name} (%{host}) receives these messages. Like emails, they are not end-to-end encrypted.",
+              name: display_name(@other),
+              host: @other.host
+            )}
+          </span>
+        </p>
+
         <div id="message-thread" phx-update="stream" phx-hook="ScrollBottom" class="flex-1 space-y-2 overflow-y-auto p-4">
           <div
             :for={{dom_id, m} <- @streams.messages}
@@ -1147,6 +1250,20 @@ defmodule VutuvWeb.MessageLive.Index do
               <span :if={m.frozen_at} class="mt-1 block text-[10px] font-semibold text-white/80">
                 ⚑ <.link navigate={~p"/moderation/cases"} class="underline">{gettext("Hidden: reported, under review")}</.link>
               </span>
+              <%!-- The other half of "one truth, two views": this message is
+              also a note (or a sent reply) under one of the member's posts,
+              and this is the way back to it. --%>
+              <.link
+                :if={post_path(m, @viewer)}
+                id={"#{dom_id}-post"}
+                navigate={post_path(m, @viewer)}
+                class={[
+                  "mt-1 block text-[10px] font-semibold underline",
+                  if(mine?(m, @viewer), do: "text-white/80", else: "text-brand-700 dark:text-brand-300")
+                ]}
+              >
+                {gettext("To the post")}
+              </.link>
               <.local_time
                 id={"#{dom_id}-at"}
                 at={m.inserted_at}
@@ -1159,8 +1276,15 @@ defmodule VutuvWeb.MessageLive.Index do
             <%!-- The quiet per-message report flag, beside the other side's
             bubbles. Faint until the row is hovered or the flag is focused, so
             it never crowds the conversation; always tappable on touch. --%>
+            <%!-- Asked of `Moderation`, not of the party kind: a report
+            strikes the member who wrote the thing, and a message from another
+            network — or from a page — has none, so the flag would be a control
+            that always fails. What answers that complaint instead is the
+            note's own report under the post (`Fediverse.report_note/2`, which
+            also files a `Flag` with the origin server), muting the account, or
+            the operator's server block. --%>
             <.link
-              :if={not mine?(m, @viewer)}
+              :if={not mine?(m, @viewer) and Moderation.reportable?(m)}
               id={"#{dom_id}-report"}
               navigate={~p"/reports/new?#{[type: "message", id: m.id, return_to: "/messages/#{m.conversation_id}"]}"}
               title={gettext("Report this message")}
@@ -1207,7 +1331,7 @@ defmodule VutuvWeb.MessageLive.Index do
             id="request-banner"
             class="flex flex-wrap items-center justify-center gap-2 border-t border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300"
           >
-            <span>{gettext("@%{slug} wants to message you.", slug: @other.username)}</span>
+            <span>{gettext("@%{slug} wants to message you.", slug: Vutuv.Identity.handle(@other))}</span>
             <.request_actions id={@conversation.id} />
           </div>
         </div>
@@ -1311,7 +1435,7 @@ defmodule VutuvWeb.MessageLive.Index do
           id="awaiting-acceptance"
           class="border-t border-slate-200 p-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:border-slate-800"
         >
-          {gettext("@%{slug} has not accepted your message request yet.", slug: @other.username)}
+          {gettext("@%{slug} has not accepted your message request yet.", slug: Vutuv.Identity.handle(@other))}
         </p>
       </section>
 

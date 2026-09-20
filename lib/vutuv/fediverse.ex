@@ -48,6 +48,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
+  alias Vutuv.Chat
   alias Vutuv.Engagement
   alias Vutuv.Fediverse.Actor
   alias Vutuv.Fediverse.BlockedInstance
@@ -4684,7 +4685,16 @@ defmodule Vutuv.Fediverse do
       where:
         not exists(from(p in RemotePost, where: p.remote_account_id == parent_as(:account).id)),
       where: not exists(from(n in Note, where: n.actor_uri == parent_as(:account).actor_uri)),
-      where: not exists(from(r in Reaction, where: r.actor_uri == parent_as(:account).actor_uri))
+      where: not exists(from(r in Reaction, where: r.actor_uri == parent_as(:account).actor_uri)),
+      # A conversation is the fifth reason an account row exists, and the one
+      # whose loss a member would notice: purging it here would take their
+      # private correspondence with that account with it.
+      where:
+        not exists(
+          from(c in Vutuv.Chat.Conversation,
+            where: c.remote_account_id == parent_as(:account).id
+          )
+        )
     )
   end
 
@@ -6435,14 +6445,34 @@ defmodule Vutuv.Fediverse do
   def record_reply(%User{} = user, activity, actor) do
     with true <- enabled?(),
          true <- federated?(user),
-         true <- user.fediverse_replies?,
          %{} = object <- note_object(activity["object"]),
-         %Post{} = post <- resolve_reply_parent(user, activity, object, actor),
+         :ok <- check_inbound_cap(actor.uri) do
+      # Which of the two this is, decided **here** rather than by letting the
+      # post path fail and falling through: "this answers no post of mine" and
+      # "the post path refused" are different facts, and a reply to a post the
+      # member has switched replies off for, or has restricted, must not be
+      # quietly re-routed into their inbox as a plain message — a routing
+      # decision they never made. Deciding up front also means the inbound cap
+      # is charged once, where a fall-through charged it on both paths.
+      case resolve_reply_parent(user, activity, object, actor) do
+        %Post{} = post -> record_post_reply(user, post, activity, object, actor)
+        nil -> record_direct_message(user, activity, object, actor)
+      end
+    else
+      _ -> :skip
+    end
+  end
+
+  defp record_post_reply(%User{} = user, %Post{} = post, activity, object, actor) do
+    with true <- user.fediverse_replies?,
          false <- Posts.restricted?(post),
-         :ok <- check_inbound_cap(actor.uri),
          {:ok, note} <- insert_note(user, post, activity, object, actor) do
       Posts.broadcast_post_counters(post.id)
       Activity.notify_fediverse_reply(user, post, note)
+      # A note the sender addressed to this member alone is also one half of a
+      # conversation, so it opens one — see `record_note_message/3`. The note
+      # itself is untouched and keeps rendering under the post.
+      record_note_message(user, note, actor)
       :ok
     else
       _ -> :skip
@@ -6498,6 +6528,9 @@ defmodule Vutuv.Fediverse do
       })
       |> Repo.update()
 
+      # Both views or neither: the conversation holds a copy of a private
+      # note's text, so an author's edit has to reach it too.
+      Chat.rewrite_note_message(note.id, text)
       Posts.broadcast_post_counters(note.post_id)
     end
 
@@ -6648,7 +6681,19 @@ defmodule Vutuv.Fediverse do
       |> Repo.all()
       |> Enum.group_by(& &1.in_reply_to_uri)
 
-    Enum.map(notes, &%{&1 | private_replies: Map.get(messages, &1.object_uri, [])})
+    # Where each private note is also readable as a conversation, in one query
+    # for the whole page rather than one per card — the link the other view
+    # points back with (`Vutuv.Chat.messages_for_notes/1`).
+    direct = Enum.filter(notes, &(&1.audience == "direct"))
+    refs = direct |> Enum.map(& &1.id) |> Chat.messages_for_notes()
+
+    Enum.map(notes, fn note ->
+      %{
+        note
+        | private_replies: Map.get(messages, note.object_uri, []),
+          conversation_ref: Map.get(refs, note.id)
+      }
+    end)
   end
 
   # Notes carrying `account_id`: whether we hold a row for the actor who wrote
@@ -8590,15 +8635,12 @@ defmodule Vutuv.Fediverse do
     with %User{} = user <- Repo.get(User, user_id),
          %Note{} = note <- get_note(id),
          %Post{user_id: owner} when owner == user.id <- Posts.get_post(note.post_id) do
-      cond do
-        note.audience != "direct" -> {:error, :note_not_private}
-        not enabled?() -> {:error, :fediverse_disabled}
-        not federated?(user) -> {:error, :not_federating}
-        moved?(user) -> {:error, :moved}
-        instance_blocked?(note.actor_uri) -> {:error, :instance_blocked}
-        is_nil(own_inbox(%{uri: note.actor_uri, inbox: note.inbox_uri})) -> {:error, :no_inbox}
-        true -> :ok
-      end
+      # The one gate that is about the note, then the five every outbound
+      # private message passes (`check_remote_recipient/3`, shared with
+      # `check_direct_message/2` so the two cannot drift).
+      if note.audience != "direct",
+        do: {:error, :note_not_private},
+        else: check_remote_recipient(user, note.actor_uri, note.inbox_uri)
     else
       _ -> {:error, :not_visible}
     end
@@ -8636,12 +8678,38 @@ defmodule Vutuv.Fediverse do
   defp insert_private_reply(reply, user, note) do
     with {:ok, saved} <- Repo.insert(reply),
          {:ok, _actor} <- ensure_actor(user),
-         :ok <- enqueue(user, [note.inbox_uri], private_reply_activity(saved, user)) do
+         :ok <- enqueue(user, [note.inbox_uri], private_reply_activity(saved, user)),
+         :ok <- record_sent_reply_message(user, note, saved) do
       saved
     else
       {:error, error} -> Repo.rollback(error)
     end
   end
+
+  # The second view of an answer sent from the post page: the same words as a
+  # message in the conversation with that account, linked by
+  # `private_message_id`. The note and the sent reply keep rendering under the
+  # post exactly as before.
+  defp record_sent_reply_message(user, note, saved) do
+    record_message(user, note_actor(note), %{
+      direction: :out,
+      body: saved.body,
+      private_message: saved,
+      private_message_id: saved.id
+    })
+
+    # Deliberately `:ok` whatever came back: the answer is already stored and
+    # queued for delivery, and a frozen conversation must not roll that back.
+    :ok
+  end
+
+  defp note_actor(%Note{} = note),
+    do: %{
+      uri: note.actor_uri,
+      handle: note.handle,
+      name: note.display_name,
+      inbox: note.inbox_uri
+    }
 
   @doc "Only the sender can read their saved answers to this note."
   def list_private_replies(%User{id: user_id}, %Note{object_uri: uri}) do
@@ -8652,6 +8720,213 @@ defmodule Vutuv.Fediverse do
       )
     )
   end
+
+  ## Private messages as conversations
+
+  @doc """
+  Whether `user`'s own follow of `account` has been accepted out there.
+
+  Read as "this is not cold outreach": an incoming message from an account the
+  member chose to follow belongs in the list, not behind a request.
+  """
+  def follows_account?(%User{} = user, %RemoteAccount{id: account_id}),
+    do: Repo.exists?(accepted_follow_query(account_id, user))
+
+  @doc """
+  Whether `user` may write privately to `account`, and when not, which gate
+  refused — the vocabulary `check_private_reply/2` answers in, minus the two
+  gates that are about a note under a post.
+
+  Free of side effects, so a render may ask it: the page shows the refusal
+  instead of a control that fails.
+  """
+  def check_direct_message(%User{} = user, %RemoteAccount{} = account),
+    do: check_remote_recipient(user, account.actor_uri, account.inbox_uri)
+
+  # The five gates every outbound private message passes, whichever surface it
+  # was written on: the installation switch, the member's own standing, their
+  # move-out, the operator's blocklist, and an inbox that really belongs to the
+  # actor we are answering. `check_private_reply/2` adds the two that are about
+  # a note under a post and reads the same vocabulary back.
+  defp check_remote_recipient(%User{} = user, actor_uri, inbox_uri) do
+    cond do
+      not enabled?() -> {:error, :fediverse_disabled}
+      not federated?(user) -> {:error, :not_federating}
+      moved?(user) -> {:error, :moved}
+      instance_blocked?(actor_uri) -> {:error, :instance_blocked}
+      is_nil(own_inbox(%{uri: actor_uri, inbox: inbox_uri})) -> {:error, :no_inbox}
+      true -> :ok
+    end
+  end
+
+  @doc """
+  Writes one private message from `user` to `account` and queues its delivery.
+
+  Three rows in one transaction, and each has a job the others cannot do: the
+  `PrivateMessage` is what left the building (and what a revocation would have
+  to reach), the `Delivery` is the queue entry the deliverer retries after a
+  crash or a deploy, and the `Chat.Message` is the member's own conversation.
+
+  It is addressed to that one actor and to **nobody else**: no public
+  collection, no followers, which is what makes it a private mention on the
+  receiving server rather than a post. Threading follows the last thing the
+  other side said (`inReplyTo`), so clients over there show it as one
+  conversation rather than as loose mentions.
+
+  Shares the hourly outbound budget with public replies on purpose — the same
+  act, a member's own words leaving for a server that never followed them.
+  """
+  def send_direct_message(%User{} = user, %RemoteAccount{} = account, body) do
+    # The member is re-read, the account is not: the gates below are about this
+    # member's standing right now (suspended, frozen, moved), while the account
+    # is a row the caller just loaded and nothing about it decides anything we
+    # do not check here anyway.
+    with %User{} = user <- Repo.get(User, user.id),
+         :ok <- check_direct_message(user, account),
+         {:ok, _} <-
+           Ecto.Changeset.apply_action(direct_message_draft(user, account, body), :insert),
+         {:ok, conversation} <- Chat.fediverse_conversation(user, account, :member),
+         :ok <- claim_reply_budget(user) do
+      Repo.transaction(fn -> insert_direct_message(user, account, conversation, body) end)
+    else
+      nil -> {:error, :not_visible}
+      error -> error
+    end
+  end
+
+  defp direct_message_draft(user, account, body) do
+    id = UUIDv7.generate()
+
+    %PrivateMessage{
+      id: id,
+      user_id: user.id,
+      object_uri: Docs.actor_url(user) <> "/private-messages/" <> id,
+      recipient_actor_uri: account.actor_uri
+    }
+    |> PrivateMessage.changeset(%{body: body})
+  end
+
+  defp insert_direct_message(user, account, conversation, body) do
+    threaded =
+      user
+      |> direct_message_draft(account, body)
+      |> Ecto.Changeset.put_change(
+        :in_reply_to_uri,
+        Chat.last_remote_object_uri(conversation)
+      )
+
+    with {:ok, saved} <- Repo.insert(threaded),
+         {:ok, _actor} <- ensure_actor(user),
+         :ok <-
+           enqueue(
+             user,
+             [own_inbox(%{uri: account.actor_uri, inbox: account.inbox_uri})],
+             private_reply_activity(saved, user)
+           ),
+         {:ok, %Chat.Message{} = message} <-
+           Chat.record_fediverse_message(conversation, %{
+             direction: :out,
+             body: saved.body,
+             private_message: saved,
+             private_message_id: saved.id
+           }) do
+      message
+    else
+      {:ok, :duplicate} -> Repo.rollback(:duplicate)
+      {:error, error} -> Repo.rollback(error)
+    end
+  end
+
+  # An incoming `Create` addressed to the member alone that answers none of
+  # their posts: a plain private message. `record_reply/3` tries the post path
+  # first and falls through to here, so nothing about what already arrives
+  # under a post changes.
+  #
+  # Deliberately **not** behind `users.fediverse_replies?`: that switch is
+  # about strangers' words appearing under a member's posts, in public, where
+  # everybody with the link reads them. A message addressed to one person is
+  # their mail, and a member who federates at all can receive mail; an account
+  # they do not follow lands behind the request wall instead, which is the
+  # answer `Vutuv.Chat` already gives for cold outreach between members.
+  defp record_direct_message(%User{} = user, activity, object, actor) do
+    with "direct" <- audience(user, activity, object),
+         uri when is_binary(uri) and uri != "" <- object["id"],
+         text when text not in [nil, ""] <-
+           remote_text(object["content"], Note.max_content(), object["tag"]),
+         {:ok, %Chat.Message{}} <-
+           record_message(user, actor, %{
+             direction: :in,
+             body: text,
+             remote_object_uri: uri
+           }) do
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  # The conversation half of a private answer that *did* answer a post. The
+  # note stays exactly where it was and keeps rendering there; this only adds
+  # the second view, linked to it by `note_id`. A failure here must never cost
+  # the note, so it is deliberately swallowed — a frozen conversation is not a
+  # reason to drop what somebody wrote under a member's post.
+  defp record_note_message(%User{} = user, %Note{audience: "direct"} = note, actor) do
+    record_message(user, actor, %{
+      direction: :in,
+      body: note.content_text,
+      note: note,
+      note_id: note.id,
+      remote_object_uri: note.object_uri
+    })
+
+    :ok
+  end
+
+  defp record_note_message(_user, _note, _actor), do: :ok
+
+  # One conversation message, in either direction: the account row, the
+  # conversation it hangs off, then the message. Four call sites shared this
+  # sequence with slightly different error handling, which is how a frozen
+  # conversation came to roll back a member's private reply under their own
+  # post; failures are the caller's to swallow or to report, never a surprise.
+  defp record_message(%User{} = user, actor, attrs) do
+    with {:ok, account} <- message_account(actor),
+         {:ok, conversation} <- Chat.fediverse_conversation(user, account, started_by(attrs)) do
+      Chat.record_fediverse_message(conversation, Map.put(attrs, :account, account))
+    end
+  end
+
+  defp started_by(%{direction: :in}), do: :remote
+  defp started_by(%{direction: :out}), do: :member
+
+  # The account row a conversation hangs off. Most senders are already stored
+  # (they replied, reacted or are followed); a first-time writer is minted here
+  # from what the inbox already verified, without a second request — through the
+  # same upsert every other inbound path uses, so two deliveries arriving at
+  # once cannot race into a unique-index error.
+  defp message_account(%{uri: actor_uri} = actor) when is_binary(actor_uri) do
+    case Repo.get_by(RemoteAccount, actor_uri: actor_uri) do
+      %RemoteAccount{} = account ->
+        {:ok, account}
+
+      nil ->
+        %RemoteAccount{}
+        |> RemoteAccount.changeset(%{
+          actor_uri: actor_uri,
+          host: BlockedInstance.normalize_host(actor_uri),
+          handle: actor[:handle],
+          name: actor[:name],
+          inbox_uri: own_inbox(actor)
+        })
+        |> Repo.insert(
+          on_conflict: {:replace, [:updated_at]},
+          conflict_target: [:actor_uri],
+          returning: true
+        )
+    end
+  end
+
+  defp message_account(_actor), do: {:error, :no_actor}
 
   defp private_reply_activity(reply, user) do
     actor = Docs.actor_url(user)

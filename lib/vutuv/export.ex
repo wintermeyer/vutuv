@@ -14,6 +14,7 @@ defmodule Vutuv.Export do
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
   alias Vutuv.Ads.Sighting
+  alias Vutuv.Chat
   alias Vutuv.Chat.{Conversation, Participant}
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
@@ -21,6 +22,7 @@ defmodule Vutuv.Export do
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Images
   alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.{OrganizationBookmark, OrganizationLike}
   alias Vutuv.Posts.{Post, PostBookmark, PostDraft, PostLike, PostRepost}
   alias Vutuv.PressKit
@@ -565,25 +567,55 @@ defmodule Vutuv.Export do
       join: part in Participant,
       on: part.conversation_id == c.id and part.user_id == ^user.id,
       order_by: [asc: c.id],
-      preload: [participants: :user, messages: :sender]
+      preload: [
+        :remote_account,
+        participants: :user,
+        messages: [:sender, :sender_organization, :sender_remote_account]
+      ]
     )
     |> Repo.all()
     |> Enum.map(fn c ->
-      others =
-        for p <- c.participants, p.user_id != user.id, p.user, do: p.user.username
-
       %{
-        with: others,
+        with: counterparts(c, user),
         status: c.status,
         started_at: c.inserted_at,
-        messages:
-          Enum.map(
-            c.messages,
-            &%{from: &1.sender && &1.sender.username, body: &1.body, at: &1.inserted_at}
-          )
+        messages: Enum.map(c.messages, &exported_message/1)
       }
     end)
   end
+
+  # Who the member was writing with. An account on another network has no
+  # participant row — nobody over there reads anything here — so it is named
+  # off the conversation itself, or a member asking what vutuv holds about them
+  # would be handed an exchange with nobody in it.
+  defp counterparts(%Conversation{remote_account: %RemoteAccount{} = account}, _user),
+    do: [author_name(account)]
+
+  defp counterparts(conversation, user),
+    do: for(p <- conversation.participants, p.user_id != user.id, p.user, do: p.user.username)
+
+  # Through `Chat.sender/1`, never off a column: a message here can be written
+  # by a member, by a page or by an account on another network, and reading
+  # `sender.username` answered `nil` for the two that are not a member — so a
+  # page's own reply exported as "from: null".
+  defp exported_message(message) do
+    %{
+      from: message |> Chat.sender() |> author_name(),
+      body: message.body,
+      at: message.inserted_at
+    }
+  end
+
+  # The address rather than the display name: an export is a record, and a name
+  # is whatever somebody typed into their profile this week. Every kind answers
+  # through `Vutuv.Identity.handle/1`, with the one fallback that kind has when
+  # it carries no handle at all.
+  defp author_name(%RemoteAccount{} = account),
+    do: Vutuv.Identity.handle(account) || RemoteAccount.label(account)
+
+  defp author_name(%User{username: username}), do: username
+  defp author_name(%Organization{} = page), do: Vutuv.Identity.handle(page) || page.slug
+  defp author_name(nil), do: nil
 
   defp ad_bookings(user) do
     from(a in Ad, where: a.user_id == ^user.id, order_by: [asc: a.day])

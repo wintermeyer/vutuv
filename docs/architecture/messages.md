@@ -144,3 +144,101 @@ which is NULL and not true for a page's message, so its reply counted as unread
 nowhere and its notification mail never went out. `Chat.other_party/2` and
 `Chat.own_message/1` are the two functions that now own those questions; a call
 site naming either column directly is the bug to look for.
+
+## Writing to another network
+
+A conversation can also have an **account on another network** on the other
+side, so a member writes to somebody on Mastodon the way they write to a member
+here: from that account's page, in `/messages`, in the same thread.
+
+    member <-> member: user_a_id + user_b_id (sorted)
+    member <-> page:   user_a_id + organization_id
+    member <-> remote: user_a_id + remote_account_id
+
+`user_a_id` is always the member, a CHECK says the other side is exactly one of
+the three, and the remote side has **no participant row**: nobody over there
+has a read state here, and inventing one would be a promise nothing keeps.
+
+**`initiator_id` became nullable, and NULL means the remote side started it.**
+That is what makes the member the recipient of a request they can accept or
+decline. Every rule reading "the initiator is not me" then has to spell it as
+`is_nil(...) or ... != me`, because in SQL `NULL != <id>` is NULL and not true —
+the same trap the page milestone paid for twice, and it caught three queries
+here: `answer_request/3`, `list_requests/1` and the shell's own
+`unread_conversations_count/1`. That last one also tested `m.sender_id <> <id>`,
+NULL for a message written by a page **or** by a remote account, so the badge
+had been quietly ignoring a page's replies since #1336 as well.
+
+### One truth, two views
+
+A private answer from another network is a `fediverse_notes` row under the
+member's post and keeps rendering there exactly as before (#1069, #1071,
+#2215). What is new is the **second view**: the same words as a message in the
+conversation with that account, linked by `messages.note_id` (a sent answer by
+`messages.private_message_id`). Both links are `ON DELETE SET NULL`, so when the
+note ages out after 183 days the conversation keeps the text and only loses the
+way back to the post. The two views point at each other — the card carries "Open
+in messages", the message "To the post" — and `Vutuv.Chat.messages_for_notes/1`
+resolves that for a whole page of cards in one query
+(`Fediverse.conversation_refs/1`, onto the note's virtual `conversation_ref`).
+
+An author's edit upstream (`Update`) rewrites both copies; nothing else may
+write either one.
+
+### What arrives, and from whom
+
+`Fediverse.record_reply/3` tries the post path first, exactly as before, and
+falls through to `record_direct_message/3` for a `Create` addressed to the
+member alone that answers none of their posts — which the server used to drop
+on the floor. Three notes on the gates:
+
+  * It is **not** behind `users.fediverse_replies?`. That switch is about
+    strangers' words appearing under a member's posts, in public; a message
+    addressed to one person is their mail, and `federated?/1` (participation,
+    opt-in and off by default) already decides whether this member exists out
+    there at all.
+  * An account the member does not follow opens a **pending** conversation, the
+    request wall `Vutuv.Chat` already gives cold outreach between members.
+    Following that account is what makes the conversation accepted outright.
+  * A redelivery writes nothing twice: `messages.remote_object_uri` is unique
+    and asked before the insert.
+
+Outgoing, `Fediverse.send_direct_message/3` writes three rows in one
+transaction — the `PrivateMessage` (what left the building), the `Delivery` (the
+queue entry a crash or a deploy resumes) and the `Chat.Message` — addressed to
+that one actor with no public collection and no followers, threaded under the
+last thing the other side said so clients there show one conversation. It shares
+the hourly outbound budget with public replies.
+
+### What this conversation has that a local one does not
+
+One line at the top of the thread, said once rather than under every bubble:
+only this account receives these messages, and like emails they are not
+end-to-end encrypted. No file button (text only, 5,000 characters), no block
+item (blocking is about people here), no online dot. And the composer stays open
+after the first message: there is no acceptance to wait for on a server that
+knows nothing about requests, so the "not accepted yet" line a member would have
+been left staring at is never shown there.
+
+### Reporting, and what is deliberately missing
+
+A message from another network carries **no report flag**. `Moderation`'s
+report path strikes the member who wrote the thing, and here there is none, so
+the flag would be a control that always fails. The complaint has three real
+answers instead: the note's own report under the post
+(`Fediverse.report_note/2`, which deletes our copy and files a `Flag` with the
+origin server), muting the account, and the operator's server block. A message
+that answers no post — a plain DM — has only the last two; if that turns out to
+matter, the missing piece is a `Flag` path that does not hang off a note.
+
+### Housekeeping
+
+`purge_unreferenced_remote_accounts/0` treats a conversation as a fifth reason
+to keep an account row — without that, the hourly sweeper would take a member's
+correspondence with it. `messages.sender_remote_account_id` is nilified rather
+than cascaded, so an operator blocking a server does not delete what was said.
+
+The exchanges that existed before this were given their conversations by
+`20260920074019_backfill_fediverse_conversations`, whose `run/1` is driven
+directly by a test: a data migration's row-touching branches never execute
+against a fresh test database, which is how a backfill ships broken.

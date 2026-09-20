@@ -1184,6 +1184,11 @@ defmodule VutuvWeb.Router do
       # reusing `/with/:slug`: a page's slug and a member's handle are
       # different namespaces, so one path could name both.
       live("/messages/organization/:slug", MessageLive.Index, :new_organization)
+      # And for an account on another network, keyed by the stored row's id
+      # rather than by an address: a path taking an address would be an
+      # open-ended "go and fetch this" surface, the same call the account page
+      # makes (`FediverseAccountLive`).
+      live("/messages/fediverse/:id", MessageLive.Index, :new_fediverse)
       live("/messages/:id", MessageLive.Index, :show)
 
       # The post editor ("posts" is a ReservedSlug). Auth is checked in the

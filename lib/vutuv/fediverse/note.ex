@@ -68,6 +68,11 @@ defmodule Vutuv.Fediverse.Note do
 
   schema "fediverse_notes" do
     field(:private_replies, {:array, :map}, virtual: true, default: [])
+    # Where this note is also readable as a message — `%{conversation_id:,
+    # message_id:}` for a private one the loader found a conversation for, nil
+    # otherwise. Virtual and batch-filled for the same reason `account_id` is:
+    # a lookup per card is a page of queries.
+    field(:conversation_ref, :map, virtual: true)
     field(:object_uri, :string)
     field(:actor_uri, :string)
     field(:origin_url, :string)

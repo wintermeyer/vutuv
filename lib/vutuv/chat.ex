@@ -25,6 +25,9 @@ defmodule Vutuv.Chat do
   alias Vutuv.Attachments
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Chat.{Conversation, Message, Participant}
+  alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.PrivateMessage
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Images
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations
@@ -174,6 +177,216 @@ defmodule Vutuv.Chat do
       {:error, :exists} ->
         {:ok, Repo.get_by(Conversation, user_a_id: me.id, organization_id: page.id)}
     end
+  end
+
+  ## Conversations with another network
+
+  @doc """
+  The conversation between `user` and an account on another network, created
+  on first use.
+
+  `started_by` decides two things that cannot be read off the row afterwards:
+  who the request belongs to, and whether there is one at all.
+
+    * `:member` — the member wrote first. `initiator_id` is theirs, and the
+      conversation only counts as accepted once the other side answers, unless
+      that account already follows them (the member↔member rule, read off the
+      follower table instead of `Social`).
+    * `:remote` — the message came in. `initiator_id` stays **NULL**, which is
+      what marks the member as the recipient and lets them accept or decline;
+      it is accepted outright when they already follow that account, because
+      then the mail is not cold outreach.
+
+  Nobody on the other side has a read state here, so there is exactly **one**
+  participant row: the member's. A conversation is never created frozen, and a
+  frozen one refuses, the same answer the page path gives.
+  """
+  def fediverse_conversation(%User{} = user, %RemoteAccount{} = account, started_by)
+      when started_by in [:member, :remote] do
+    case Repo.get_by(Conversation, user_a_id: user.id, remote_account_id: account.id) do
+      %Conversation{frozen_at: %NaiveDateTime{}} -> {:error, :frozen}
+      %Conversation{} = conversation -> {:ok, conversation}
+      nil -> insert_fediverse_conversation(user, account, started_by)
+    end
+  end
+
+  defp insert_fediverse_conversation(user, account, started_by) do
+    changeset =
+      %Conversation{
+        user_a_id: user.id,
+        remote_account_id: account.id,
+        initiator_id: if(started_by == :member, do: user.id),
+        status: fediverse_status(user, account, started_by)
+      }
+      |> Conversation.changeset()
+
+    result =
+      Repo.transaction(fn ->
+        case Repo.insert(changeset) do
+          {:ok, conversation} ->
+            Repo.insert!(%Participant{conversation_id: conversation.id, user_id: user.id})
+            conversation
+
+          {:error, _changeset} ->
+            Repo.rollback(:exists)
+        end
+      end)
+
+    case result do
+      {:ok, conversation} ->
+        {:ok, conversation}
+
+      {:error, :exists} ->
+        {:ok, Repo.get_by(Conversation, user_a_id: user.id, remote_account_id: account.id)}
+    end
+  end
+
+  defp fediverse_status(user, account, :remote) do
+    if Vutuv.Fediverse.follows_account?(user, account), do: "accepted", else: "pending"
+  end
+
+  # Nothing over there can accept a request, so a member writing outward opens
+  # an accepted conversation — the same call `insert_organization_conversation/2`
+  # makes for a page, and for the same reason. A "pending" here would be a state
+  # no event can ever leave, which `display_status/1` would then report to the
+  # API forever and `can_send?/2` would have to override.
+  defp fediverse_status(_user, _account, :member), do: "accepted"
+
+  @doc """
+  Records one message of a Fediverse conversation, in either direction.
+
+  The words are already stored where they belong — an incoming private answer
+  is a `fediverse_notes` row under the post, a sent one is a
+  `fediverse_private_messages` row — and this is their second view, not a
+  second truth: `note_id` / `private_message_id` link back, and both are
+  nilified rather than cascaded, so the conversation outlives the 183-day note
+  retention with its text intact.
+
+  `remote_object_uri` carries the AP id of an incoming activity and is unique,
+  so a redelivery answers `{:ok, :duplicate}` instead of writing the same
+  sentence twice. Delivery outward is the Fediverse context's business; this
+  writes the row, bumps the conversation and lights the member's badge.
+  """
+  def record_fediverse_message(%Conversation{} = conversation, attrs) do
+    incoming? = attrs[:direction] == :in
+
+    message = %Message{
+      conversation_id: conversation.id,
+      sender_id: unless(incoming?, do: conversation.user_a_id),
+      sender_remote_account_id: if(incoming?, do: conversation.remote_account_id),
+      note_id: attrs[:note_id],
+      private_message_id: attrs[:private_message_id]
+    }
+
+    message
+    |> Message.remote_changeset(%{
+      body: attrs[:body],
+      remote_object_uri: attrs[:remote_object_uri]
+    })
+    |> insert_fediverse_message(conversation, attrs)
+  end
+
+  defp insert_fediverse_message(changeset, conversation, attrs) do
+    Repo.transaction(fn ->
+      case Repo.insert(changeset) do
+        {:ok, message} ->
+          bump_conversation!(conversation, message)
+          broadcast_new_message(conversation, for_broadcast(message, attrs))
+          message
+
+        # A redelivery lands here rather than in a second SELECT before every
+        # insert: `remote_object_uri` is unique and the changeset carries the
+        # constraint, so the index we already pay for is what answers, and the
+        # rollback costs nothing (this is the transaction's first statement).
+        {:error, %Ecto.Changeset{errors: [{:remote_object_uri, _} | _]}} ->
+          :duplicate
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  defp bump_conversation!(conversation, message) do
+    stamp = NaiveDateTime.truncate(message.inserted_at, :second)
+
+    # An answer from whichever side did NOT open the conversation accepts it,
+    # exactly as a member's own reply does — in both directions, since either
+    # side can have started this one.
+    answered? =
+      conversation.status == "pending" and
+        is_nil(conversation.initiator_id) != is_nil(message.sender_id)
+
+    changes =
+      if answered?,
+        do: [last_message_at: stamp, status: "accepted"],
+        else: [last_message_at: stamp]
+
+    from(c in Conversation, where: c.id == ^conversation.id)
+    |> Repo.update_all(set: changes)
+  end
+
+  # What the open page needs off the struct it is handed, since a broadcast
+  # message never goes back through `thread_page/3`'s preloads. All four come
+  # from the caller, which already holds every one of them:
+  #
+  #   * the files, as the empty list every reader assumes is a list —
+  #     `MessageLive.Index` counts it (`length/1`), and an unloaded association
+  #     takes the whole page down with an ArgumentError;
+  #   * the author, so the bubble is not drawn as a deleted account;
+  #   * the note or the sent reply, so the "To the post" link is there at once
+  #     rather than after a reload.
+  defp for_broadcast(%Message{} = message, attrs) do
+    %{
+      message
+      | attachments: [],
+        sender_remote_account: attrs[:account] || message.sender_remote_account,
+        note: attrs[:note] || message.note,
+        private_message: attrs[:private_message] || message.private_message
+    }
+  end
+
+  @doc """
+  The AP id of the newest thing the other side said in this conversation, or
+  nil — what an outgoing message threads under, so the receiving server shows
+  one conversation instead of loose mentions.
+  """
+  def last_remote_object_uri(%Conversation{id: id}) do
+    Repo.one(
+      from(m in Message,
+        where: m.conversation_id == ^id and not is_nil(m.remote_object_uri),
+        # Ids are UUID v7, so id order is creation order and needs no second key.
+        order_by: [desc: m.id],
+        limit: 1,
+        select: m.remote_object_uri
+      )
+    )
+  end
+
+  @doc """
+  Where each of these notes is readable as a message: `note_id => %{conversation_id:, message_id:}`.
+
+  One query for a whole thread of cards, so the post view can link into the
+  conversation without a lookup per note.
+  """
+  def messages_for_notes([]), do: %{}
+
+  def messages_for_notes(note_ids) when is_list(note_ids) do
+    from(m in Message,
+      where: m.note_id in ^note_ids,
+      select: {m.note_id, %{conversation_id: m.conversation_id, message_id: m.id}}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  Rewrites the conversation's copy of a note whose author edited it upstream,
+  so the two views cannot drift apart.
+  """
+  def rewrite_note_message(note_id, body) when is_binary(note_id) do
+    from(m in Message, where: m.note_id == ^note_id)
+    |> Repo.update_all(set: [body: body, updated_at: NaiveDateTime.utc_now(:microsecond)])
   end
 
   @doc """
@@ -401,10 +614,22 @@ defmodule Vutuv.Chat do
   `nil`, which the display layer renders as "Deleted account" - the page's own
   reply attributed to a departed member.
 
-  Takes the preload when it is there (`thread_page/3` loads both sides) and
-  falls back to a lookup when it is not, rather than handing back an
+  Takes the preload when it is there (`thread_page/3` loads all three sides)
+  and falls back to a lookup when it is not, rather than handing back an
   `%Ecto.Association.NotLoaded{}`.
+
+  Since Fediverse conversations there is a third kind, and its clause comes
+  **first**: an incoming private message has neither sender column filled, so
+  it would otherwise match the "no sender at all" clause below and be drawn as
+  a deleted account.
   """
+  def sender(%Message{sender_remote_account_id: id} = message) when is_binary(id) do
+    case message.sender_remote_account do
+      %NotLoaded{} -> Repo.get(RemoteAccount, id)
+      account -> account
+    end
+  end
+
   def sender(%Message{sender_organization_id: nil, sender: %NotLoaded{}, sender_id: nil}), do: nil
 
   def sender(%Message{sender_organization_id: nil, sender: %NotLoaded{}, sender_id: id}),
@@ -439,6 +664,9 @@ defmodule Vutuv.Chat do
 
       {:organization, id} ->
         Repo.get!(Organization, id)
+
+      {:remote_account, id} ->
+        Map.fetch!(listing_remote_accounts_by_id([id]), id)
     end
   end
 
@@ -744,9 +972,16 @@ defmodule Vutuv.Chat do
     do: answer_request(me, conversation_id, "declined")
 
   # Only the recipient of a still-pending request may answer it.
+  #
+  # `is_nil(...) or ...` and not a bare `!=`: a request from another network
+  # has no local initiator, and `NULL != <id>` is NULL rather than true, so
+  # the member the message was addressed to would have been refused the right
+  # to accept it — silently, as `{:error, :not_recipient}`.
   defp answer_request(%User{id: me_id}, conversation_id, status) do
     recipient_pending = fn query ->
-      from(c in query, where: c.status == "pending" and c.initiator_id != ^me_id)
+      from(c in query,
+        where: c.status == "pending" and (is_nil(c.initiator_id) or c.initiator_id != ^me_id)
+      )
     end
 
     case fetch_as_participant(me_id, conversation_id, recipient_pending) do
@@ -815,7 +1050,9 @@ defmodule Vutuv.Chat do
     from(c in Conversation,
       where: c.user_a_id == ^me_id or c.user_b_id == ^me_id,
       where: is_nil(c.frozen_at),
-      where: c.status == "pending" and c.initiator_id != ^me_id,
+      # NULL is "somebody on another network started it", which makes the
+      # member the recipient — see `answer_request/3` for the trap.
+      where: c.status == "pending" and (is_nil(c.initiator_id) or c.initiator_id != ^me_id),
       where: not is_nil(c.last_message_at),
       order_by: [desc: c.last_message_at, desc: c.id]
     )
@@ -899,12 +1136,16 @@ defmodule Vutuv.Chat do
   end
 
   # Who is on the far side, as a `{kind, id}` key. `user_a_id` is always the
-  # member, so a page conversation reads the answer off a column rather than
-  # arriving at it by elimination.
+  # member, so a page or remote conversation reads the answer off a column
+  # rather than arriving at it by elimination.
   defp other_key(%Conversation{organization_id: page_id} = conversation, {:user, me_id})
        when is_binary(page_id) do
     if conversation.user_a_id == me_id, do: {:organization, page_id}, else: {:user, me_id}
   end
+
+  defp other_key(%Conversation{remote_account_id: account_id}, {:user, _me_id})
+       when is_binary(account_id),
+       do: {:remote_account, account_id}
 
   defp other_key(%Conversation{} = conversation, {:user, me_id}),
     do: {:user, other_user_id(conversation, me_id)}
@@ -924,7 +1165,12 @@ defmodule Vutuv.Chat do
       |> listing_organizations_by_id()
       |> Map.new(fn {id, page} -> {{:organization, id}, page} end)
 
-    Map.merge(users, pages)
+    accounts =
+      for({:remote_account, id} <- keys, do: id)
+      |> listing_remote_accounts_by_id()
+      |> Map.new(fn {id, account} -> {{:remote_account, id}, account} end)
+
+    users |> Map.merge(pages) |> Map.merge(accounts)
   end
 
   # "Sent by me", as a query fragment. Since issue #1336 exactly one of the two
@@ -963,6 +1209,30 @@ defmodule Vutuv.Chat do
     # sidebar is unpaged, so a member with three hundred conversations would
     # otherwise pay one lookup per row (issue #2027).
     |> Images.preload_avatars()
+    |> Map.new(&{&1.id, &1})
+  end
+
+  # And for an account on another network: the name, the handle and the host
+  # the row shows, plus the avatar columns its picture gate reads. Never the
+  # 10k-char self-description.
+  defp listing_remote_accounts_by_id([]), do: %{}
+
+  defp listing_remote_accounts_by_id(ids) do
+    from(a in RemoteAccount,
+      where: a.id in ^ids,
+      select:
+        struct(a, [
+          :id,
+          :actor_uri,
+          :host,
+          :handle,
+          :name,
+          :inbox_uri,
+          :avatar,
+          :avatar_moderation
+        ])
+    )
+    |> Repo.all()
     |> Map.new(&{&1.id, &1})
   end
 
@@ -1050,7 +1320,18 @@ defmodule Vutuv.Chat do
         # `:attachments` because a bubble renders its files (issue #2110), and
         # an unloaded association in a stream is a crash rather than a missing
         # chip.
-        preload: [:sender, :sender_organization, attachments: :pages]
+        preload: [
+          :sender,
+          :sender_organization,
+          :sender_remote_account,
+          # Where the same words also live, so the thread can link back to the
+          # post they hang under — two columns of each, never the rows: a note
+          # is thirty columns wide and a sent reply carries a 5,000-character
+          # body this page already has as `messages.body`.
+          note: ^from(n in Note, select: struct(n, [:id, :post_id])),
+          private_message: ^from(p in PrivateMessage, select: struct(p, [:id, :post_id])),
+          attachments: :pages
+        ]
       )
       |> before_cursor(cursor)
       |> Repo.all()
@@ -1182,12 +1463,16 @@ defmodule Vutuv.Chat do
       join: p in Participant,
       on: p.conversation_id == c.id and p.user_id == ^me_id,
       where: is_nil(c.frozen_at),
+      # Both NULL tests are the same trap, and both were silent: a request
+      # from another network has no local initiator, and a message written by
+      # a page or by a remote account has no `sender_id` — `NULL <> <id>` is
+      # NULL, so neither lit the badge.
       where:
         c.status == "accepted" or
-          (c.status == "pending" and c.initiator_id != ^me_id),
+          (c.status == "pending" and (is_nil(c.initiator_id) or c.initiator_id != ^me_id)),
       where:
         fragment(
-          "EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = ? AND m.sender_id <> ? AND m.frozen_at IS NULL AND (? IS NULL OR m.inserted_at > ?))",
+          "EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = ? AND (m.sender_id IS NULL OR m.sender_id <> ?) AND m.frozen_at IS NULL AND (? IS NULL OR m.inserted_at > ?))",
           c.id,
           type(^me_id, Vutuv.UUIDv7),
           p.last_read_at,
@@ -1480,6 +1765,18 @@ defmodule Vutuv.Chat do
     if is_nil(message.sender_organization_id),
       do: Repo.get(Organization, page_id),
       else: conversation.user_a_id
+  end
+
+  # Nobody here: an account on another network reads its mail on its own
+  # server, and the delivery that gets it there is the Fediverse context's job,
+  # not a PubSub broadcast. `nil` makes every consumer below a no-op, which is
+  # what `Activity.broadcast/2` and `Webhooks.emit/3` already expect.
+  defp recipient(
+         %Conversation{remote_account_id: account_id} = conversation,
+         %Message{} = message
+       )
+       when is_binary(account_id) do
+    if is_nil(message.sender_id), do: conversation.user_a_id, else: nil
   end
 
   defp recipient(%Conversation{} = conversation, %Message{} = message),

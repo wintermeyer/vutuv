@@ -437,6 +437,15 @@ defmodule VutuvWeb.FediverseAccountLive do
                   {gettext("Mute")}
                 <% end %>
               </.button>
+              <%!-- Writing privately is the same act as on a member's profile
+              and says so with the same word and the same glyph, whichever
+              network the account is on. It is offered to everybody: the
+              refusal (Fediverse participation is opt-in and off by default)
+              is explained on the other side, because hiding the control would
+              leave a member no way to find out that it exists. --%>
+              <.button id="message-account" variant="secondary" navigate={~p"/messages/fediverse/#{@account.id}"}>
+                {gettext("Message")}
+              </.button>
             </div>
           <% end %>
           <%!-- Outside the refusal branch: a member who cannot follow anybody

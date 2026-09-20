@@ -1532,11 +1532,28 @@ defmodule VutuvWeb.PostComponents do
             <.remote_restricted_note>{gettext("Your private reply")}</.remote_restricted_note>
             <p class="whitespace-pre-wrap break-words text-slate-700 dark:text-slate-200">{reply.body}</p>
           </div>
+          <%!-- The same exchange as a conversation. One truth, two views, so
+          each one says where the other is; the link is batch-loaded onto the
+          note (`conversation_ref`) rather than looked up per card. --%>
+          <.link
+            :if={@note.conversation_ref}
+            id={"note-conversation-#{@note.id}"}
+            data-note-conversation
+            navigate={conversation_link(@note.conversation_ref)}
+            class="mt-3 inline-block text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Open in messages")}
+          </.link>
         </div>
       </div>
     </article>
     """
   end
+
+  # The message this note also is, so the thread opens on the right line rather
+  # than at its end.
+  defp conversation_link(%{conversation_id: conversation_id, message_id: message_id}),
+    do: "#{~p"/messages/#{conversation_id}"}#message-#{message_id}"
 
   # ## The remote skin
   #
