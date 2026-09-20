@@ -1483,6 +1483,43 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  Accounts on other networks this installation already holds, matching `term`
+  by display name, handle or address — the typeahead half of "write to
+  somebody out there", beside `remote_account_by_address/1`'s exact answer.
+
+  Nothing is asked of anybody: these are rows we have because somebody here
+  follows them, answered them or was answered by them. An address nobody here
+  has met is not found by this and is **resolved** instead, which costs a
+  request and a slot of the member's hourly budget and therefore stays a
+  deliberate act (`resolve_remote_account/2`).
+
+  Returns `[]` below two characters, like the member typeahead beside it.
+  """
+  def search_accounts(term, limit \\ 6) when is_binary(term) do
+    term = String.trim(term)
+
+    if String.length(term) < 2 do
+      []
+    else
+      base = from(a in RemoteAccount, order_by: [asc: a.handle, asc: a.id], limit: ^limit)
+
+      case browse_search_parts(term) do
+        {:handle_and_host, name, host} ->
+          Repo.all(where(base, [a], ilike(a.handle, ^name) and ilike(a.host, ^host)))
+
+        {:anywhere, like} ->
+          Repo.all(
+            where(
+              base,
+              [a],
+              ilike(a.name, ^like) or ilike(a.handle, ^like) or ilike(a.actor_uri, ^like)
+            )
+          )
+      end
+    end
+  end
+
+  @doc """
   The stored remote accounts these actor URIs name, keyed by URI — one query
   for a whole page. A URI nobody here stored is simply absent, so callers
   fall back per actor.

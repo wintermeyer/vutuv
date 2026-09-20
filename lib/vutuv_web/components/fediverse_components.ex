@@ -63,13 +63,6 @@ defmodule VutuvWeb.FediverseComponents do
   attr(:error, :any, default: nil, doc: "the reason the last submit came back with, or nil")
   attr(:event, :string, required: true, doc: "the phx-submit event the host handles")
 
-  attr(:change, :string,
-    default: "typing",
-    doc:
-      "the phx-change event; a host that already answers `typing` for something else " <>
-        "(the messages page's typing indicator) passes its own name instead"
-  )
-
   attr(:submit, :string, required: true, doc: "what the button says")
   attr(:variant, :string, default: "primary")
 
@@ -96,7 +89,7 @@ defmodule VutuvWeb.FediverseComponents do
     <form
       id={"#{@id}-form"}
       phx-submit={@event}
-      phx-change={@change}
+      phx-change="typing"
       class={["flex flex-wrap items-end gap-3", @class]}
     >
       <div class="min-w-56 grow">

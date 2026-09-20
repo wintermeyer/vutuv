@@ -2790,6 +2790,54 @@ defmodule Vutuv.Accounts do
   defp filter_flag(query, "spam"), do: where(query, [u], u.moderation_reason == "spam")
   defp filter_flag(query, _all), do: query
 
+  @doc """
+  Person typeahead: activated members matching `term`, `me` excluded, ordered
+  by name. Returns `[]` below two characters, so one keystroke never runs a
+  `%like%` over the whole table.
+
+  Matches a **first name, a last name, both in either order, or a handle** —
+  `SearchText.name_ilike/3` covers "Jan", "Petersen" and "Jan Petersen", and
+  the reversed pair is asked for separately because somebody looking for a
+  colleague types the name the way they hold it in their head, which in a
+  German office is as often "Petersen Jan".
+
+  It lives here rather than in the context that first needed it (`Vutuv.Posts`
+  grew one for the composer's "Hide from…" sheet): finding a member by name is
+  an Accounts question, and the messages page asks exactly the same one.
+  """
+  def search_people(%User{id: me_id}, term, limit \\ 8) when is_binary(term) do
+    term = String.trim(term)
+
+    if String.length(term) < 2 do
+      []
+    else
+      like = contains(term)
+      reversed = reversed_name(term)
+
+      Repo.all(
+        from(u in User,
+          where: u.id != ^me_id,
+          where: account_confirmed_row(u),
+          where:
+            name_ilike(u.first_name, u.last_name, ^like) or ilike(u.username, ^like) or
+              name_ilike(u.first_name, u.last_name, ^reversed),
+          order_by: [u.first_name, u.last_name],
+          limit: ^limit
+        )
+      )
+    end
+  end
+
+  # "Petersen Jan" as "Jan Petersen", so the pair matches whichever way round
+  # it was typed. Anything that is not exactly two words searches for itself
+  # twice, which costs nothing and keeps the query one shape.
+  defp reversed_name(term) do
+    case String.split(term, ~r/\s+/, trim: true) do
+      [first, last] -> contains(last <> " " <> first)
+      _other -> contains(term)
+    end
+  end
+
   defp search_members(query, nil), do: query
 
   defp search_members(query, term) do

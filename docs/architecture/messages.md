@@ -212,16 +212,29 @@ the hourly outbound budget with public replies.
 
 ### Starting one, and finding the way back
 
-Every other conversation here starts from somebody's page. An account nobody
-on this installation has ever heard of has no page, so `/messages` carries a
-**New message to another network** box: an address in, that account's
-conversation out. Resolving costs an outbound request and a slot of the
-member's hourly budget, so it is a submit they make on purpose — a native
-`<details>` (`data-keep-open`, or a ticking badge folds it shut over a
-half-typed address) around the shared `<.address_form>`, whose `change` event
-this page has to name for itself because `typing` already means the typing
-indicator here. Without Fediverse participation the box explains where the
-switch is instead of taking an address it could not send.
+Every other conversation here starts from somebody's page — a profile, an
+account page, a private answer under a post. `/messages` therefore carries a
+**finder** above the list, and it asks the member's real question ("who?")
+rather than ours ("on which server?"): one field, always on screen, that
+searches **both worlds at once**.
+
+  * **Members**, by first name, last name, both in either order, or a handle
+    (`Vutuv.Accounts.search_people/3`, which is where the composer's old
+    `Posts.search_users/3` question belongs; `SearchText.name_ilike/3` covers
+    the pair, and the reversed pair is asked for separately, because in a
+    German office "Petersen Jan" is as likely as "Jan Petersen").
+  * **Accounts on other networks this installation already holds**
+    (`Fediverse.search_accounts/2`) — rows we have because somebody follows
+    them, answered them or was answered by them. No request to anybody.
+  * **An address nobody here has met**, as one offered row: "Look this address
+    up". That is the only part that leaves the building, so it is a press of
+    its own, never something the page does while somebody types.
+
+Two characters before anything is searched, `phx-debounce="250"` on the field,
+and both halves are named in one line under it, because neither is guessable
+from a placeholder. Without Fediverse participation the finder says so and
+searches vutuv alone — a field that took an address it could not send would
+have wasted the typing.
 
 The two views link to each other **by anchor**, not merely to each other's
 page: `Fediverse.reply_anchor/1` for a note and `private_reply_anchor/1` for a

@@ -17,9 +17,10 @@ defmodule VutuvWeb.MessageLive.Index do
   """
   use VutuvWeb, :live_view
 
-  import VutuvWeb.FediverseComponents, only: [address_form: 1]
   import VutuvWeb.PendingPostComponents, only: [file_label: 1]
   import VutuvWeb.PostComponents, only: [remote_avatar: 1, remote_initials: 1]
+
+  alias Vutuv.Accounts
 
   alias Vutuv.Accounts.User
   alias Vutuv.Attachments
@@ -31,6 +32,7 @@ defmodule VutuvWeb.MessageLive.Index do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.PrivateMessage
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -66,11 +68,15 @@ defmodule VutuvWeb.MessageLive.Index do
      |> assign(:online_ids, Presence.online_ids())
      |> assign(:conversation, nil)
      |> assign(:other, nil)
-     # The "write to an address" box: what is typed, the last refusal, and
-     # whether the act is available at all. The gate is the member's own
-     # Fediverse standing, asked once per mount — a box that took an address
-     # and then explained it cannot send is a box that wasted the typing.
-     |> assign(:lookup_address, "")
+     # The recipient finder above the list: what is typed, what it found on
+     # each side, an address it could offer to look up, and the last refusal.
+     # `can_write_remote?` is the member's own Fediverse standing, asked once
+     # per mount — a field that takes an address and then explains it cannot
+     # send is a field that wasted the typing.
+     |> assign(:recipient_query, "")
+     |> assign(:recipient_members, [])
+     |> assign(:recipient_accounts, [])
+     |> assign(:recipient_lookup, nil)
      |> assign(:lookup_error, nil)
      |> assign(:can_write_remote?, Fediverse.federated?(user))
      |> assign(:more?, false)
@@ -90,6 +96,31 @@ defmodule VutuvWeb.MessageLive.Index do
      )
      |> assign_form()}
   end
+
+  # An `@name@server` this installation does not already hold, or nil. What it
+  # answers for is the row that offers to go and ask; everything it finds in
+  # the table above needs no request at all.
+  defp unknown_address(term) do
+    address = String.trim(term)
+
+    with {:ok, _parts} <- RemoteFollow.parse_address(address),
+         nil <- Fediverse.remote_account_by_address(address) do
+      address
+    else
+      _known_or_invalid -> nil
+    end
+  end
+
+  defp open_conversation(socket, {:ok, %Conversation{} = conversation}),
+    do: {:noreply, push_navigate(socket, to: ~p"/messages/#{conversation.id}")}
+
+  defp open_conversation(socket, {:error, :rate_limited}),
+    do:
+      {:noreply,
+       put_flash(socket, :error, gettext("Too many new conversations. Please try again later."))}
+
+  defp open_conversation(socket, {:error, _reason}),
+    do: {:noreply, put_flash(socket, :error, gettext("This account cannot receive messages."))}
 
   # Whose inbox this is. A publisher who switched into a page (issue #1335)
   # reads the PAGE's messages at this same URL and answers in its name; anybody
@@ -302,32 +333,64 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
-  # An address in, a conversation with that account out (the new-message box in
-  # the sidebar). Resolving costs an outbound request and a slot of the
-  # member's hourly budget, which is why this is a submit and not a keystroke.
+  # Who the member might mean, on both sides at once. Two cheap queries per
+  # keystroke (debounced in the markup), and **no** request to anybody: an
+  # address nobody here has met only ever becomes an offer to look it up.
+  #
+  # Its own event name, and not `typing`: this page already answers that one
+  # with the thread's typing indicator.
   @impl true
-  def handle_event("write-to-address", %{"address" => address}, socket) do
+  def handle_event("find-recipient", %{"q" => term}, socket) do
+    user = socket.assigns.current_user
+    remote? = socket.assigns.can_write_remote?
+
+    {:noreply,
+     socket
+     |> assign(:recipient_query, term)
+     |> assign(:lookup_error, nil)
+     |> assign(:recipient_members, Accounts.search_people(user, term, 6))
+     |> assign(:recipient_accounts, if(remote?, do: Fediverse.search_accounts(term), else: []))
+     |> assign(:recipient_lookup, remote? && unknown_address(term))}
+  end
+
+  def handle_event("write-to-member", %{"id" => id}, socket) do
+    case Accounts.get_user(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Member not found."))}
+
+      member ->
+        open_conversation(
+          socket,
+          Chat.find_or_create_conversation(socket.assigns.current_user, member)
+        )
+    end
+  end
+
+  def handle_event("write-to-account", %{"id" => id}, socket) do
+    user = socket.assigns.current_user
+
+    with %RemoteAccount{} = account <- Fediverse.get_remote_account(id),
+         :ok <- Fediverse.check_direct_message(user, account) do
+      open_conversation(socket, Chat.fediverse_conversation(user, account, :member))
+    else
+      _refused ->
+        {:noreply, assign(socket, :lookup_error, :not_found)}
+    end
+  end
+
+  # The one act in the finder that leaves the building, which is why it is a
+  # press of its own rather than part of the search above it.
+  def handle_event("look-up-address", %{"address" => address}, socket) do
     user = socket.assigns.current_user
 
     with true <- socket.assigns.can_write_remote?,
          {:ok, account} <- Fediverse.resolve_remote_account(user, address),
-         :ok <- Fediverse.check_direct_message(user, account),
-         {:ok, conversation} <- Chat.fediverse_conversation(user, account, :member) do
-      {:noreply, push_navigate(socket, to: ~p"/messages/#{conversation.id}")}
+         :ok <- Fediverse.check_direct_message(user, account) do
+      open_conversation(socket, Chat.fediverse_conversation(user, account, :member))
     else
-      false ->
-        {:noreply, socket}
-
-      {:error, reason} ->
-        {:noreply, socket |> assign(:lookup_address, address) |> assign(:lookup_error, reason)}
+      false -> {:noreply, socket}
+      {:error, reason} -> {:noreply, assign(socket, :lookup_error, reason)}
     end
-  end
-
-  # Typing again clears the last refusal, so the box is not still shouting
-  # about an address the member has since corrected. Its own event name: the
-  # thread's composer already answers `typing` with the other meaning.
-  def handle_event("address-typing", %{"address" => address}, socket) do
-    {:noreply, socket |> assign(:lookup_address, address) |> assign(:lookup_error, nil)}
   end
 
   def handle_event("send", %{"message" => params}, socket) do
@@ -1095,36 +1158,51 @@ defmodule VutuvWeb.MessageLive.Index do
           @conversation && "hidden"
         ]}
       >
-        <%!-- Writing to somebody this installation has never heard of. The
-        conversations below all start somewhere — a profile, an account page, a
-        private answer — and an address nobody here holds had no way in at all.
-        A native `<details>` so it costs no socket state, `data-keep-open` so a
-        badge ticking in the shell cannot fold it shut over a half-typed
-        address. Resolving spends an outbound request, so it stays a submit the
-        member makes on purpose, never something the page does on arrival. --%>
-        <details
-          :if={!@conversation || @loaded?}
-          id="new-fediverse-message"
-          data-keep-open
-          class="border-b border-slate-200 px-4 py-3 dark:border-slate-800"
-        >
-          <summary class="cursor-pointer text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-            {gettext("New message to another network")}
-          </summary>
+        <%!-- Finding somebody to write to. One field for both worlds, because
+        the member's question is "who", never "on which server": a name finds
+        members here (first, last, both, either way round — `search_people/3`),
+        an `@name@server` finds accounts on other networks, and an address
+        nobody here has met yet gets its own row offering to look it up. That
+        last one is a request to a foreign server and a slot of the hourly
+        budget, so it stays something the member presses, never something the
+        page does while they type.
 
-          <%= if @can_write_remote? do %>
-            <.address_form
-              id="new-fediverse"
-              address={@lookup_address}
-              error={@lookup_error}
-              event="write-to-address"
-              change="address-typing"
-              submit={gettext("Write")}
-              label_hidden
-              class="mt-3"
+        The field is always on screen rather than behind a control: the list
+        under it is the one place a conversation starts, and a disclosure only
+        added a click in front of the commonest act. --%>
+        <div class="border-b border-slate-200 px-4 pb-3 pt-2 dark:border-slate-800">
+          <form
+            id="recipient-search-form"
+            phx-change="find-recipient"
+            phx-submit="find-recipient"
+            autocomplete="off"
+          >
+            <label for="recipient-search" class="sr-only">{gettext("Find somebody to write to")}</label>
+            <input
+              type="text"
+              name="q"
+              id="recipient-search"
+              value={@recipient_query}
+              phx-debounce="250"
+              inputmode="email"
+              autocapitalize="none"
+              autocorrect="off"
+              spellcheck="false"
+              placeholder={gettext("Name or @name@server")}
+              class={input_class()}
             />
-          <% else %>
-            <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+          </form>
+
+          <%!-- What this field can do, said once and plainly — the two halves
+          are not guessable from a placeholder, and the Fediverse half is not
+          available to everybody. --%>
+          <p class="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+            <%= if @can_write_remote? do %>
+              {gettext(
+                "Search members by first name, last name or both — or enter an address like @name@server to reach somebody on another network."
+              )}
+            <% else %>
+              {gettext("Search members by first name, last name or both.")}
               {gettext("Switch Fediverse participation on to write to accounts on other networks.")}
               <.link
                 navigate={~p"/settings/fediverse"}
@@ -1132,9 +1210,106 @@ defmodule VutuvWeb.MessageLive.Index do
               >
                 {gettext("Open the setting")}
               </.link>
+            <% end %>
+          </p>
+
+          <p
+            :if={@lookup_error}
+            id="recipient-error"
+            role="alert"
+            class="mt-2 text-sm font-medium text-red-700 dark:text-red-300"
+          >
+            {VutuvWeb.FediverseComponents.refusal_message(@lookup_error)}
+          </p>
+        </div>
+
+        <%!-- The results, above the conversations and only while something is
+        typed: members first (they are who most searches are for), then the
+        accounts this installation already holds, then the offer to look an
+        unknown address up. --%>
+        <div :if={@recipient_query != ""} id="recipient-results" class="border-b border-slate-200 dark:border-slate-800">
+          <div :if={@recipient_members != []} class="grp-people">
+            <p class="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              {gettext("Members")}
             </p>
-          <% end %>
-        </details>
+            <button
+              :for={member <- @recipient_members}
+              type="button"
+              phx-click="write-to-member"
+              phx-value-id={member.id}
+              data-recipient="member"
+              class="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <.avatar user={member} size="sm" />
+              <span class="min-w-0">
+                <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                  {Vutuv.Identity.display_name(member)}
+                </span>
+                <span class="block truncate text-xs text-slate-600 dark:text-slate-400">
+                  @{member.username}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div :if={@recipient_accounts != []}>
+            <p class="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              {gettext("Other networks")}
+            </p>
+            <button
+              :for={account <- @recipient_accounts}
+              type="button"
+              phx-click="write-to-account"
+              phx-value-id={account.id}
+              data-recipient="account"
+              class="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <.remote_avatar initials={remote_initials(account)} src={RemoteAccount.avatar_url(account)} size="sm" />
+              <span class="min-w-0">
+                <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                  {Vutuv.Identity.display_name(account)}
+                </span>
+                <span class="block truncate text-xs text-slate-600 dark:text-slate-400">
+                  {RemoteAccount.display_handle(account)}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <%!-- An address this installation has never seen. Offered as a row
+          rather than resolved on the keystroke, because it leaves the
+          building. --%>
+          <button
+            :if={@recipient_lookup}
+            type="button"
+            phx-click="look-up-address"
+            phx-value-address={@recipient_lookup}
+            phx-disable-with={gettext("Looking it up…")}
+            data-recipient="lookup"
+            class="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+          >
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <.detail_icon name="globe" class="h-4 w-4" />
+            </span>
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                {gettext("Look this address up")}
+              </span>
+              <span class="block truncate text-xs text-slate-600 dark:text-slate-400">
+                {@recipient_lookup}
+              </span>
+            </span>
+          </button>
+
+          <p
+            :if={@recipient_members == [] and @recipient_accounts == [] and is_nil(@recipient_lookup)}
+            class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400"
+          >
+            {if String.length(@recipient_query) < 2,
+              do: gettext("Type at least two characters."),
+              else: gettext("Nobody found.")}
+          </p>
+        </div>
 
         <%!-- The lists load only once the socket has joined (see
         `assign_sidebar/1`), and on a slow line that leaves this card blank for

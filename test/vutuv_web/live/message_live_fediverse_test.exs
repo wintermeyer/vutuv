@@ -11,6 +11,7 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
   """
   use VutuvWeb.ConnCase, async: false
 
+  import Ecto.Query, only: [from: 2]
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
 
@@ -236,27 +237,79 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
     assert html_response(conn, 200) =~ ~s(id="#{Fediverse.private_reply_anchor(reply.id)}")
   end
 
-  describe "writing to an address nobody here holds" do
-    test "resolving the address opens the conversation", %{conn: conn, user: user} do
-      {:ok, _actor} = Fediverse.ensure_actor(user)
-      stub_account()
+  describe "the recipient finder" do
+    test "finds members by first name, last name and both, in either order", %{conn: conn} do
+      insert(:activated_user, first_name: "Jan", last_name: "Petersen", username: "janpetersen")
+      {:ok, view, _html} = live(conn, ~p"/messages")
 
-      {:ok, view, html} = live(conn, ~p"/messages")
-      assert html =~ "New message to another network"
+      for term <- ["Jan", "Petersen", "Jan Petersen", "Petersen Jan", "janpet"] do
+        html = view |> form("#recipient-search-form", %{"q" => term}) |> render_change()
+        assert html =~ "Jan Petersen", "searching for #{inspect(term)} found nobody"
+      end
+
+      # One keystroke never runs a %like% over the whole table.
+      html = view |> form("#recipient-search-form", %{"q" => "J"}) |> render_change()
+      refute html =~ "Jan Petersen"
+    end
+
+    test "writing to a member opens the conversation", %{conn: conn, user: user} do
+      other = insert(:activated_user, first_name: "Jana", last_name: "Brandt")
+      {:ok, view, _html} = live(conn, ~p"/messages")
+
+      view |> form("#recipient-search-form", %{"q" => "Jana"}) |> render_change()
 
       assert {:error, {:live_redirect, %{to: to}}} =
                view
-               |> form("#new-fediverse-form", %{"address" => "@them@social.example"})
-               |> render_submit()
+               |> element(~s([phx-click="write-to-member"][phx-value-id="#{other.id}"]))
+               |> render_click()
 
-      conversation = Repo.get_by!(Vutuv.Chat.Conversation, user_a_id: user.id)
+      conversation = Repo.get_by!(Vutuv.Chat.Conversation, user_a_id: min(user.id, other.id))
       assert to == "/messages/#{conversation.id}"
+    end
 
-      account = Repo.get!(RemoteAccount, conversation.remote_account_id)
-      assert account.actor_uri == "https://social.example/users/them"
+    test "an account this installation already holds needs no request", %{
+      conn: conn,
+      account: account
+    } do
+      stub_remote(fn _conn -> raise "a stored account must not be looked up again" end)
 
-      {:ok, _view, html} = live(conn, to)
-      assert html =~ "Them"
+      {:ok, view, _html} = live(conn, ~p"/messages")
+      html = view |> form("#recipient-search-form", %{"q" => "alice"}) |> render_change()
+
+      assert html =~ "Alice Anders"
+      refute html =~ "Look this address up"
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s([phx-click="write-to-account"][phx-value-id="#{account.id}"]))
+               |> render_click()
+
+      conversation = Repo.get_by!(Vutuv.Chat.Conversation, remote_account_id: account.id)
+      assert to == "/messages/#{conversation.id}"
+    end
+
+    test "an unknown address is offered for lookup, and opens the conversation", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+      stub_account()
+
+      {:ok, view, _html} = live(conn, ~p"/messages")
+
+      html =
+        view
+        |> form("#recipient-search-form", %{"q" => "@them@social.example"})
+        |> render_change()
+
+      assert html =~ "Look this address up"
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view |> element(~s([phx-click="look-up-address"])) |> render_click()
+
+      account = Repo.get_by!(RemoteAccount, actor_uri: "https://social.example/users/them")
+      conversation = Repo.get_by!(Vutuv.Chat.Conversation, remote_account_id: account.id)
+      assert to == "/messages/#{conversation.id}"
     end
 
     test "an address nothing answers for says so and opens no conversation", %{conn: conn} do
@@ -265,22 +318,33 @@ defmodule VutuvWeb.MessageLiveFediverseTest do
       {:ok, view, _html} = live(conn, ~p"/messages")
 
       view
-      |> form("#new-fediverse-form", %{"address" => "@nobody@social.example"})
-      |> render_submit()
+      |> form("#recipient-search-form", %{"q" => "@nobody@social.example"})
+      |> render_change()
 
-      assert has_element?(view, "#new-fediverse-error")
-      assert Repo.aggregate(Vutuv.Chat.Conversation, :count) == 0
+      view |> element(~s([phx-click="look-up-address"])) |> render_click()
+
+      assert has_element?(view, "#recipient-error")
+
+      refute Repo.exists?(
+               from(c in Vutuv.Chat.Conversation, where: not is_nil(c.remote_account_id))
+             )
     end
 
-    test "a member who does not federate is told where the switch is", %{conn: conn, user: user} do
+    test "a member who does not federate searches vutuv alone", %{conn: conn, user: user} do
       user
       |> Ecto.Changeset.change(%{fediverse_followers?: false})
       |> Repo.update!()
 
       {:ok, view, html} = live(conn, ~p"/messages")
-
       assert html =~ "Switch Fediverse participation on"
-      refute has_element?(view, "#new-fediverse-form")
+
+      html =
+        view
+        |> form("#recipient-search-form", %{"q" => "@them@social.example"})
+        |> render_change()
+
+      refute html =~ "Look this address up"
+      refute html =~ "Alice Anders"
     end
   end
 
