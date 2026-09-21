@@ -16,7 +16,9 @@ defmodule Vutuv.Organizations do
   import Ecto.Query, warn: false
   import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
   import Vutuv.Organizations.Query, only: [organization_public_row: 1]
-  import Vutuv.SearchText, only: [contains: 1, normalize_search: 1]
+
+  import Vutuv.SearchText,
+    only: [cap: 1, contains: 1, name_ilike: 3, normalize_search: 1, person_ilike: 4]
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
@@ -1951,12 +1953,34 @@ defmodule Vutuv.Organizations do
   list, and "hide me from humans" here: a member vanished from their own
   employer's page, from colleagues and from themselves. The opt-out is about
   search results, so it buys the `rel` on the row and nothing else.
+
+  `query:` narrows the count to members whose name or username contains every
+  word of it, the same filter `organization_people_page/2` takes.
   """
-  def organization_people_count(%Organization{id: id}) do
-    people_base(id)
+  def organization_people_count(%Organization{id: id}, opts \\ []) do
+    people_base(id, opts[:query])
     |> select([_w, u], u.id)
     |> subquery()
     |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  `organization_people_count/1` for several organizations in one query, as
+  `%{organization_id => count}`. An organization nobody lists is absent from the
+  map rather than present with a zero. The search page asks it for every
+  organization on a result page, which one query per row would turn into two
+  dozen.
+  """
+  def people_counts([]), do: %{}
+
+  def people_counts(organization_ids) when is_list(organization_ids) do
+    from([w, u] in listed_links(),
+      where: w.organization_id in ^organization_ids,
+      group_by: w.organization_id,
+      select: {w.organization_id, count(u.id, :distinct)}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   @doc """
@@ -1969,15 +1993,16 @@ defmodule Vutuv.Organizations do
   organization). Privacy is `people_base/1`'s gate (see
   `organization_people_count/1`): an unconfirmed or moderation-hidden member
   never appears, a member who opted out of search engines does — the same set
-  the agent-format people list carries. Returns
-  `%{entries:, more?:, next_offset:}`.
+  the agent-format people list carries. `query:` keeps only members whose name
+  or username contains every word of it (the search page's "somebody at this
+  organization"). Returns `%{entries:, more?:, next_offset:}`.
   """
   def organization_people_page(%Organization{id: organization_id}, opts \\ []) do
     limit = Keyword.get(opts, :limit, @people_per_page)
     offset = Keyword.get(opts, :offset, 0)
 
     rows =
-      people_base(organization_id)
+      people_base(organization_id, opts[:query])
       |> select([w, u], %{user_id: u.id, current?: fragment("bool_or(? IS NULL)", w.end_year)})
       |> order_by([w, u], [
         {:desc, fragment("bool_or(? IS NULL)", w.end_year)},
@@ -2010,15 +2035,37 @@ defmodule Vutuv.Organizations do
 
   # One row per listable member with a linked experience at the organization, grouped
   # so the current?/title aggregates collapse a member's several roles into one.
-  defp people_base(organization_id) do
+  defp people_base(organization_id, query) do
+    from([w, u] in listed_links(),
+      where: w.organization_id == ^organization_id,
+      group_by: u.id
+    )
+    |> filter_people_by_name(query |> cap() |> normalize_search())
+  end
+
+  # Every linked work experience whose member may be listed, bound `[w, u]`:
+  # the one gate both an organization's People list and the counts beside its
+  # search row read, so the "N people" a row promises is the list it opens.
+  defp listed_links do
     from(w in WorkExperience,
       join: u in User,
       on: u.id == w.user_id,
-      where:
-        w.organization_id == ^organization_id and account_confirmed_row(u) and
-          not account_hidden_row(u),
-      group_by: u.id
+      where: account_confirmed_row(u) and not account_hidden_row(u)
     )
+  end
+
+  # Every word has to match the person somewhere (a name, the full name, the
+  # username), so "anna mei" finds Anna Meier in either order. The rows are
+  # already the organization's own, so no index needs protecting here.
+  defp filter_people_by_name(query, nil), do: query
+
+  defp filter_people_by_name(query, text) do
+    text
+    |> String.split()
+    |> Enum.reduce(query, fn word, acc ->
+      pattern = contains(word)
+      from([_w, u] in acc, where: person_ilike(u.first_name, u.last_name, u.username, ^pattern))
+    end)
   end
 
   defp load_people(ids), do: Repo.all(from(u in User, where: u.id in ^ids))
@@ -2064,21 +2111,23 @@ defmodule Vutuv.Organizations do
 
   @doc """
   A page of the public directory: active, non-frozen organizations, ordered by name,
-  optionally filtered by a search over name AND city. Returns a map with
-  `:entries`, `:page`, `:total_pages`, `:total`, `:per_page`.
+  optionally filtered by a search over name AND city. `per_page:` overrides the
+  page size (the search page previews three). Returns a map with `:entries`,
+  `:page`, `:total_pages`, `:total`, `:per_page`.
   """
   def directory_page(opts \\ []) do
     search = normalize_search(opts[:search])
+    per_page = opts[:per_page] || @directory_per_page
     query = directory_query(search)
     total = Repo.aggregate(query, :count, :id)
-    total_pages = max(1, ceil(total / @directory_per_page))
+    total_pages = max(1, ceil(total / per_page))
     page = (opts[:page] || 1) |> max(1) |> min(total_pages)
 
     entries =
       query
       |> order_by([c], asc: fragment("lower(?)", c.name))
-      |> limit(^@directory_per_page)
-      |> offset(^((page - 1) * @directory_per_page))
+      |> limit(^per_page)
+      |> offset(^((page - 1) * per_page))
       |> Repo.all()
 
     %{
@@ -2086,7 +2135,7 @@ defmodule Vutuv.Organizations do
       page: page,
       total_pages: total_pages,
       total: total,
-      per_page: @directory_per_page
+      per_page: per_page
     }
   end
 

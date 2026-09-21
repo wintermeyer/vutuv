@@ -91,7 +91,7 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 | `Vutuv.Posts` | Post, PostDenial, PostImage, PostTag, PostLike, PostBookmark, PostRepost, PostReply | Posts, deny-model audiences, the feed, likes/bookmarks/reposts, replies/threads |
 | `Vutuv.Tags` | Tag, UserTag, UserTagEndorsement | Tagging and endorsements |
 | `Vutuv.PersonalNotes` | PersonalNote | Private notes a member keeps about other accounts (members, pages, remote accounts) |
-| `Vutuv.Search` | (none — reads `Accounts.SearchTerm`) | Search functionality (people/tags; post full-text via `Vutuv.Posts.search_public/2`). Stores nothing about a query |
+| `Vutuv.Search` | (none — reads `Accounts.SearchTerm`) | Search functionality (people by name and CV, organizations, tags; post full-text via `Vutuv.Posts.search_public/2`). Stores nothing about a query |
 | `Vutuv.Chat` | Conversation, Participant, Message | 1:1 direct messages, message requests, unread email notifier |
 | `Vutuv.Moderation` | Case, Report, Strike | Reports, the content freezer, the strike ladder, reporter trust |
 | `Vutuv.Notifications` | Emailer | Email notifications |

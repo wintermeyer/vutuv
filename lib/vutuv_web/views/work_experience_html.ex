@@ -368,6 +368,20 @@ defmodule VutuvWeb.WorkExperienceHTML do
   end
 
   @doc """
+  A CV entry's date range as a plain string, or `nil` when it carries no dates
+  at all: `format_duration/5` would read an absent end date as "Present", a
+  claim an undated entry never made. Any entry with the four date columns, a
+  work experience or an education entry. (Oliver Andrich's, from PR #2217.)
+  """
+  def entry_period(%{start_month: nil, start_year: nil, end_month: nil, end_year: nil}), do: nil
+
+  def entry_period(entry) do
+    entry.start_month
+    |> format_duration(entry.start_year, entry.end_month, entry.end_year)
+    |> IO.iodata_to_binary()
+  end
+
+  @doc """
   Renders a role's date range. `order` controls month/year ordering within each
   endpoint: `:month_first` (default) yields `3/2018`, `:year_first` yields
   `2018/3`.

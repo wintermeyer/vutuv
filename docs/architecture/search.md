@@ -7,8 +7,8 @@ The **Search** page (`/search`) is a LiveView, part of the shared
 
 Search is search-as-you-type (results from three letters on, exact and
 similar-sounding name matches clearly separated, `?q=` plus the filters keeps
-the URL shareable) with scope chips (all/people/tags/posts), an exact-only
-toggle and query operators parsed by `Vutuv.Search.parse/2`:
+the URL shareable) with scope chips (all/people/organizations/tags/posts), an
+exact-only toggle and query operators parsed by `Vutuv.Search.parse/2`:
 `vorname:`/`nachname:` (aka `first:`/`last:`),
 `@handle`, double quotes for exact, the combinable filter `tag:`/`skill:`
 (has the tag) which finds **both people and posts** carrying it (issue #946),
@@ -19,6 +19,33 @@ honored only for a signed-in viewer, logged-out search ignores it and a
 `elixir status:open`. Only the people-only operators pin the scope to people
 (`scope_pinned?`); `tag:` leaves the scope free, so its chips still narrow to
 just people or just posts.
+
+## All is a preview, a kind is paged
+
+`Vutuv.Search.page/2` answers the page; `instant/2` stays the plain matcher the
+Mastodon API reads, so the API pays for none of what follows. Under "All" each
+kind shows its first three rows (ten tag chips) and an "All N …" link into its
+own scope, and a total is counted only when that preview came back full. A
+kind's own scope is paged (`?page=`, held inside the last page).
+
+**People** are the name matches, then the members whose CV names a matching
+employer or school: any work experience, ended or running, the name of a linked
+public organization page, any education entry. That CV set is a union of three
+one-table queries over trigram indexes
+(`20260921114842_add_cv_search_trigram_indexes`), because an OR across tables
+makes Postgres drop every index and scan; Oliver Andrich measured the shape for
+PR #2217 (54.8 ms as one OR, 0.645 ms as the union on a 100k-member copy). Such
+a row names the entry that matched (`Search.matched_entries/3`) instead of the
+member's current job. The CV matches are counted and fetched per page in SQL;
+the name matches load whole up to a cap (500 terms / 250 people in the people
+scope, 100 / 50 elsewhere), and a list that reaches it says "more than N"
+rather than print the cap as a total.
+
+**Organizations** are the public pages, found and paged by the same query as
+the directory at `/organizations`. Each row's "N people" is the count the
+organization page's own People list shows (`Organizations.people_counts/1`),
+and it opens `?org=<slug>`: that page's people, current before former, narrowed
+by the name in the box. Like `ort:`, it pins the scope to people.
 
 ## Nothing about a query is stored
 

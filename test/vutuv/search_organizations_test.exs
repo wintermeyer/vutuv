@@ -1,0 +1,263 @@
+defmodule Vutuv.SearchOrganizationsTest do
+  @moduledoc """
+  The search page's answer (`Vutuv.Search.page/2`): organizations as a kind of
+  result of their own, the people found through the employers and schools on
+  their CVs, and the totals and pages every kind carries once "All" previews
+  each kind and a kind's own scope pages through it.
+  """
+  use Vutuv.DataCase, async: true
+
+  import Vutuv.SearchHelpers
+
+  alias Vutuv.Organizations
+  alias Vutuv.Search
+
+  defp ids(users), do: users |> Enum.map(& &1.id) |> Enum.sort()
+
+  describe "people found through their CV" do
+    test "an employer a member lists finds them, a role they left as well as one they hold" do
+      current = insert(:activated_user)
+      former = insert(:activated_user)
+      insert(:work_experience, user: current, organization: "Quillmark Werke")
+
+      insert(:work_experience,
+        user: former,
+        organization: "Quillmark Werke",
+        start_year: 2010,
+        end_year: 2016
+      )
+
+      people = Search.page("quillmark").people
+
+      assert ids(people.cv) == ids([current, former])
+      assert people.names == []
+      assert people.main_total == 2
+    end
+
+    test "the name of a linked public page counts, a pending page's does not" do
+      page = insert(:organization, name: "Brightwater Logistik")
+      pending = insert(:organization, name: "Brightwater Pending", status: "pending")
+      linked = insert(:activated_user)
+      unlisted = insert(:activated_user)
+      insert(:work_experience, user: linked, organization: "BWL", organization_id: page.id)
+      insert(:work_experience, user: unlisted, organization: "BWP", organization_id: pending.id)
+
+      assert ids(Search.page("brightwater").people.cv) == [linked.id]
+    end
+
+    test "a school finds the people who studied there" do
+      student = insert(:activated_user)
+      insert(:education, user: student, school: "Hochschule Tannenfeld")
+
+      assert ids(Search.page("tannenfeld").people.cv) == [student.id]
+    end
+
+    test "somebody the name search already found is not listed twice" do
+      named = searchable_user("Marta", "Quellbach")
+      insert(:work_experience, user: named, organization: "Quellbach GmbH")
+
+      people = Search.page("quellbach").people
+
+      assert ids(people.names) == [named.id]
+      assert people.cv == []
+      assert people.main_total == 1
+    end
+
+    test "an unconfirmed or frozen member stays out" do
+      unconfirmed = insert(:user, email_confirmed?: false)
+      frozen = insert(:activated_user, frozen_at: ~N[2026-01-01 00:00:00])
+      insert(:work_experience, user: unconfirmed, organization: "Mirelle Gruppe")
+      insert(:work_experience, user: frozen, organization: "Mirelle Gruppe")
+
+      assert Search.page("mirelle").people.cv == []
+    end
+
+    test "the CV matches are counted whole, and a page of people fetches only its slice" do
+      named = searchable_user("Kestrel", "Ashwood")
+      insert(:work_experience, user: named, organization: "Kestrel Instruments")
+
+      employees =
+        for n <- 1..4 do
+          member = insert(:activated_user, last_name: "Mitarbeiter#{n}")
+          insert(:work_experience, user: member, organization: "Kestrel Instruments")
+          member
+        end
+
+      # "All" previews three rows but counts everybody.
+      all = Search.page("kestrel").people
+      assert ids(all.names) == [named.id]
+      assert length(all.cv) == 2
+      assert all.main_total == 5
+
+      # Page 2 of two per page: the name match and the first CV match filled
+      # page 1, so page 2 holds CV matches two and three.
+      second = Search.page("kestrel", scope: :people, page: 2, per_page: 2).people
+      assert second.page == 2
+      assert second.names == []
+      assert ids(second.cv) == ids(Enum.slice(employees, 1, 2))
+
+      # A page past the last one shows the last one.
+      assert Search.page("kestrel", scope: :people, page: 9, per_page: 2).people.page == 3
+    end
+
+    test "exact mode wants the whole employer name" do
+      member = insert(:activated_user)
+      insert(:work_experience, user: member, organization: "Ostwind Solar")
+
+      assert Search.page("ostwind", exact: true).people.cv == []
+      assert ids(Search.page("ostwind solar", exact: true).people.cv) == [member.id]
+    end
+
+    test "matched_entries/3 names the entry that answered, the running role first" do
+      member = insert(:activated_user)
+
+      insert(:work_experience,
+        user: member,
+        organization: "Pelikan Werft",
+        title: "Trainee",
+        start_year: 2008,
+        end_year: 2010
+      )
+
+      insert(:work_experience,
+        user: member,
+        organization: "Pelikan Werft",
+        title: "Werftleiterin",
+        start_year: 2015
+      )
+
+      insert(:work_experience, user: member, organization: "Somewhere Else", title: "Beraterin")
+
+      assert Search.matched_entries([member], "pelikan", false)[member.id].title ==
+               "Werftleiterin"
+    end
+
+    test "matched_entries/3 falls back to the school" do
+      member = insert(:activated_user)
+      insert(:education, user: member, school: "Akademie Lindenhof")
+
+      assert Search.matched_entries([member], "lindenhof", false)[member.id].school ==
+               "Akademie Lindenhof"
+    end
+
+    test "instant/2, which the Mastodon API reads, stays the plain name matcher" do
+      member = insert(:activated_user)
+      insert(:work_experience, user: member, organization: "Quellwerk Nord")
+
+      refute Map.has_key?(Search.instant("quellwerk"), :cv_people)
+      assert Search.instant("quellwerk").exact_people == []
+    end
+  end
+
+  describe "organizations as a kind of result" do
+    test "a public page is found by name, with the people its page lists" do
+      page = insert(:organization, name: "Silberfluss Energie")
+      insert(:organization, name: "Silberfluss Pending", status: "pending")
+      insert(:organization, name: "Silberfluss Frozen", frozen_at: ~N[2026-01-01 00:00:00])
+
+      for _ <- 1..2 do
+        insert(:work_experience, user: insert(:activated_user), organization_id: page.id)
+      end
+
+      organizations = Search.page("silberfluss").organizations
+
+      assert Enum.map(organizations.entries, & &1.id) == [page.id]
+      assert organizations.total == 1
+      assert organizations.people_counts[page.id] == 2
+    end
+
+    test "the organizations scope searches nothing else" do
+      insert(:organization, name: "Kranichsee Bau")
+      searchable_user("Kranich", "Tester")
+
+      results = Search.page("kranich", scope: :organizations)
+
+      assert [%{name: "Kranichsee Bau"}] = results.organizations.entries
+      assert results.people.names == []
+      assert results.tags.entries == []
+      assert results.posts.entries == []
+    end
+
+    test "a people-only operator keeps organizations out" do
+      insert(:organization, name: "Ortolan Werke")
+
+      assert Search.page("ortolan ort:berlin").organizations.entries == []
+    end
+  end
+
+  describe "totals and pages" do
+    test "tags carry their total, and a page of the tags scope skips the ones before it" do
+      base = unique_tag_name("Zirbe")
+
+      tags =
+        for suffix <- ~w(a b c) do
+          name = base <> suffix
+          insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
+        end
+
+      assert Search.page(String.downcase(base)).tags.total == 3
+
+      page_two = Search.page(String.downcase(base), scope: :tags, page: 2, per_page: 2).tags
+      assert page_two.total == 3
+      assert Enum.map(page_two.entries, & &1.id) == [List.last(tags).id]
+    end
+
+    test "posts carry their total, and a page of the posts scope skips the ones before it" do
+      author = insert(:activated_user)
+
+      posts =
+        for n <- 1..4 do
+          Vutuv.PostsHelpers.create_post!(author, %{body: "Hagebuttenmarmelade Nummer #{n}"})
+        end
+
+      # "All" previews three and, finding the preview full, counts the rest.
+      all = Search.page("hagebuttenmarmelade").posts
+      assert length(all.entries) == 3
+      assert all.total == 4
+
+      first = Search.page("hagebuttenmarmelade", scope: :posts, page: 1, per_page: 3).posts
+      second = Search.page("hagebuttenmarmelade", scope: :posts, page: 2, per_page: 3).posts
+
+      assert length(first.entries) == 3
+      assert length(second.entries) == 1
+      assert Enum.sort(Enum.map(first.entries ++ second.entries, & &1.id)) == ids(posts)
+    end
+  end
+
+  describe "an organization's people" do
+    test "people_counts/1 counts every page's listed people in one go" do
+      one = insert(:organization)
+      two = insert(:organization)
+      empty = insert(:organization)
+      member = insert(:activated_user)
+      insert(:work_experience, user: member, organization_id: one.id)
+      insert(:work_experience, user: member, organization_id: one.id, title: "Second role")
+      insert(:work_experience, user: insert(:activated_user), organization_id: two.id)
+
+      insert(:work_experience,
+        user: insert(:user, email_confirmed?: false),
+        organization_id: two.id
+      )
+
+      counts = Organizations.people_counts([one.id, two.id, empty.id])
+
+      assert counts[one.id] == 1
+      assert counts[two.id] == 1
+      assert Map.get(counts, empty.id, 0) == 0
+    end
+
+    test "a name narrows the page and its count" do
+      page = insert(:organization)
+      wanted = insert(:activated_user, first_name: "Ilvy", last_name: "Sandhagen")
+      other = insert(:activated_user, first_name: "Bruno", last_name: "Kessler")
+      insert(:work_experience, user: wanted, organization_id: page.id)
+      insert(:work_experience, user: other, organization_id: page.id)
+
+      result = Organizations.organization_people_page(page, query: "sandha")
+
+      assert Enum.map(result.entries, & &1.user.id) == [wanted.id]
+      assert Organizations.organization_people_count(page, query: "sandha") == 1
+      assert Organizations.organization_people_count(page) == 2
+    end
+  end
+end

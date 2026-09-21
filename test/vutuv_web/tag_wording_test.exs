@@ -52,9 +52,10 @@ defmodule VutuvWeb.TagWordingTest do
       {:ok, _view, html} = live(conn, ~p"/search")
 
       # Only the opening of the placeholder is pinned here: issue #1211 appended
-      # the Fediverse address to it, and what this test is about is the word
-      # "tags" being there and "skill" not.
-      assert html =~ "Search for people, tags"
+      # the Fediverse address to it and the organizations scope added a word,
+      # and what this test is about is the word "tags" being there and "skill"
+      # not.
+      assert html =~ "Search for people, organizations, tags"
       refute html =~ ~r/skill/i
     end
   end

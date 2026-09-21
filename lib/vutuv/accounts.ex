@@ -2071,6 +2071,32 @@ defmodule Vutuv.Accounts do
     blocked_by_owner?(owner_id, viewer_id) or on_exclusion_list?(owner_id, viewer_id)
   end
 
+  @doc """
+  `viewer_excluded?/2` for a whole result list: the ids among `owner_ids` whose
+  job-search status `viewer` may not see, as a `MapSet`. Two queries however
+  long the list, where asking per owner costs one or two each.
+  """
+  def excluded_owner_ids(_owner_ids, nil), do: MapSet.new()
+  def excluded_owner_ids([], _viewer), do: MapSet.new()
+
+  def excluded_owner_ids(owner_ids, %User{id: viewer_id}) do
+    blocked =
+      Repo.all(
+        from(b in Block,
+          where: b.blocker_id in ^owner_ids and b.blocked_id == ^viewer_id,
+          select: b.blocker_id
+        )
+      )
+
+    listed =
+      viewer_id
+      |> exclusion_rows(dynamic([x], x.user_id in ^owner_ids))
+      |> select([x], x.user_id)
+      |> Repo.all()
+
+    MapSet.new(blocked ++ listed) |> MapSet.delete(viewer_id)
+  end
+
   # A full block (Social.block_user) implies job-search exclusion. One indexed
   # exists? on the (blocker_id, blocked_id) unique index; checked first so a
   # blocked viewer short-circuits the exclusion-list query below.

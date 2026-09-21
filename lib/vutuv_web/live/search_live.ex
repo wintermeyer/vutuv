@@ -6,8 +6,14 @@ defmodule VutuvWeb.SearchLive do
   stays shareable and reloadable. Exact name matches and phonetically similar
   ones render as clearly separated groups.
 
-  Filters: scope chips (all / people / tags / posts) and an "exact matches
-  only" toggle. Power users get operators instead, parsed by
+  Filters: scope chips (all / people / organizations / tags / posts) and an
+  "exact matches only" toggle. **"All" is a preview**: the first few of every
+  kind, each with a link into its full list, and a chosen kind is paged
+  (`?page=`). People are found by name and also by the employers and schools
+  on their CVs, each such row naming the entry that matched. An organization
+  row's "N people" narrows the search to the people its page lists (`?org=`,
+  current ones first), which pins the scope to people the way `ort:` does.
+  Power users get operators instead, parsed by
   `Vutuv.Search.parse/2`: `vorname:`/`nachname:` (aliases `first:`/`last:`),
   `@handle`, double quotes for exact-only, and the combinable people filters
   `tag:`/`skill:` (has the tag) and `ort:`/`stadt:`/`city:` (has an address
@@ -41,16 +47,22 @@ defmodule VutuvWeb.SearchLive do
       refusal_message: 1
     ]
 
+  import VutuvWeb.OrganizationComponents, only: [kind_badge: 1, organization_row: 1]
   import VutuvWeb.SavedSearchComponents
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteFollow
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
+  alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Search
   alias Vutuv.SearchText
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
+  alias VutuvWeb.WorkExperienceHTML
 
   @impl true
   def mount(_params, _session, socket) do
@@ -80,7 +92,21 @@ defmodule VutuvWeb.SearchLive do
     q = params["q"] || ""
     scope = parse_scope(params["scope"])
     exact = params["exact"] == "1"
-    results = Search.instant(q, scope: scope, exact: exact, viewer: socket.assigns[:current_user])
+    page = Vutuv.Pages.page_param(params)
+    org = public_organization(params["org"], socket.assigns[:org])
+
+    # With an organization chosen the page lists its people and nothing else,
+    # so the general search is not run at all.
+    results =
+      if is_nil(org),
+        do:
+          Search.page(q,
+            scope: scope,
+            exact: exact,
+            page: page,
+            viewer: socket.assigns[:current_user]
+          )
+
     address = remote_address(q)
     post_url = remote_post_url(q)
 
@@ -89,14 +115,17 @@ defmodule VutuvWeb.SearchLive do
      |> assign(:q, q)
      |> assign(:scope, scope)
      |> assign(:exact, exact)
+     |> assign(:org, org)
+     |> assign(:page_query, pager_query(q, scope, exact, org))
      # A new query invalidates any open/confirmed save panel.
      |> assign(:show_save?, false)
      |> assign(:saved?, false)
      |> assign(:saveable?, saveable?(results))
      # Operators in the query override the scope chips; highlight what the
      # search actually did and disable the chips that can do nothing (#846).
-     |> assign(:effective_scope, (results && results.parsed.scope) || scope)
-     |> assign(:scope_pinned?, (results && results.parsed.scope_pinned?) || false)
+     # A chosen organization pins the scope to people the same way.
+     |> assign(:effective_scope, effective_scope(results, org, scope))
+     |> assign(:scope_pinned?, org != nil or (results != nil and results.parsed.scope_pinned?))
      |> assign(:results, results)
      |> assign(:remote_address, address)
      |> assign(:remote_post_url, post_url)
@@ -109,8 +138,28 @@ defmodule VutuvWeb.SearchLive do
      # member has since corrected.
      |> assign(:remote_post_error, kept_post_error(socket, post_url))
      |> assign_needles(results)
-     |> assign_people_maps(results)}
+     |> assign_people(results)
+     |> assign_org_people(org, page)}
   end
+
+  defp effective_scope(_results, %Organization{}, _scope), do: :people
+  defp effective_scope(%{parsed: parsed}, nil, _scope), do: parsed.scope
+  defp effective_scope(nil, nil, scope), do: scope
+
+  # Only a page every visitor may open: a pending or frozen one shows its name
+  # nowhere else, so an old `?org=` link must not list its people here either.
+  # Anything else simply is no filter. Typing inside the filter patches the URL
+  # on every keystroke, so the organization already loaded is kept.
+  defp public_organization(slug, %Organization{slug: slug} = loaded), do: loaded
+
+  defp public_organization(slug, _loaded) when is_binary(slug) and slug != "" do
+    case Organizations.get_organization_by_slug(slug) do
+      %Organization{} = org -> if Organizations.public_visible?(org), do: org
+      nil -> nil
+    end
+  end
+
+  defp public_organization(_slug, _loaded), do: nil
 
   defp kept_post_error(socket, post_url) do
     if post_url && post_url == socket.assigns[:remote_post_url],
@@ -226,10 +275,8 @@ defmodule VutuvWeb.SearchLive do
     do: {:noreply, save_current_search(socket, notify)}
 
   defp patch_search(socket, q) do
-    push_patch(socket,
-      to: search_path(q, socket.assigns.scope, socket.assigns.exact),
-      replace: true
-    )
+    %{scope: scope, exact: exact, org: org} = socket.assigns
+    push_patch(socket, to: search_path(q, scope, exact, org), replace: true)
   end
 
   # Whether the button is really there to press: a post address, a member, and
@@ -305,9 +352,11 @@ defmodule VutuvWeb.SearchLive do
   end
 
   # The non-default query params behind both the stored query string and the
-  # canonical /search URL: q, a non-default scope, and exact — blanks dropped.
-  defp search_params(q, scope, exact) do
-    [q: q, scope: scope != :all && scope, exact: exact && "1"]
+  # canonical /search URL: q, a non-default scope, exact and a chosen
+  # organization — blanks dropped. The page travels separately, on the pager's
+  # links, so any other change starts over on page one.
+  defp search_params(q, scope, exact, org \\ nil) do
+    [q: q, scope: scope != :all && scope, exact: exact && "1", org: org && org.slug]
     |> Enum.reject(fn {_k, v} -> v in ["", false, nil] end)
   end
 
@@ -315,35 +364,182 @@ defmodule VutuvWeb.SearchLive do
   # exact), so the sweeper and the "run now" link replay the same search.
   defp search_query(q, scope, exact), do: search_params(q, scope, exact) |> URI.encode_query()
 
-  @scopes ~w(all people tags posts)
+  @scopes ~w(all people organizations tags posts)
 
   defp parse_scope(scope) when scope in @scopes, do: String.to_existing_atom(scope)
   defp parse_scope(_scope), do: :all
 
   # The canonical /search URL for a query + filter combination; defaults stay
   # out of the query string so plain searches keep plain URLs.
-  defp search_path(q, scope, exact) do
-    params = search_params(q, scope, exact)
+  defp search_path(q, scope, exact, org \\ nil) do
+    params = search_params(q, scope, exact, org)
     if params == [], do: ~p"/search", else: ~p"/search?#{params}"
   end
 
-  # The page-wide maps `UserHTML.user_row/1` expects, built once per query
-  # (one query each) instead of per row.
-  defp assign_people_maps(socket, nil) do
-    assign(socket, work_info_by_id: %{}, following_by_id: %{})
+  # What the pager carries onto every page link, as the string-keyed map it wants.
+  defp pager_query(q, scope, exact, org) do
+    Map.new(search_params(q, scope, exact, org), fn {key, value} ->
+      {Atom.to_string(key), to_string(value)}
+    end)
   end
 
-  defp assign_people_maps(socket, results) do
-    people = results.exact_people ++ results.similar_people
+  # The people the page renders, and the page-wide maps `UserHTML.user_row/1`
+  # expects for them, built once per query (one query each) and only for those
+  # rows. `Search.page/2` has already cut them to this page or to the preview.
+  defp assign_people(socket, nil) do
+    assign(socket,
+      people: %{shown: [], similar: [], main_total: 0, total: 0, capped?: false, page: 1},
+      work_info_by_id: %{},
+      following_by_id: %{}
+    )
+  end
+
+  defp assign_people(socket, %{people: people, parsed: parsed}) do
+    lines =
+      people.cv
+      |> Search.matched_entries(parsed.text, parsed.exact?)
+      |> Map.new(fn {user_id, entry} -> {user_id, entry_line(entry)} end)
 
     assign(socket,
-      work_info_by_id: UserHelpers.work_information_map(people, 45),
-      following_by_id: UserHelpers.following_map(socket.assigns[:current_user], people)
+      people: Map.put(people, :shown, people.names ++ people.cv),
+      work_info_by_id:
+        UserHelpers.work_information_map(people.names ++ people.similar, 45)
+        |> Map.merge(lines),
+      following_by_id:
+        UserHelpers.following_map(
+          socket.assigns[:current_user],
+          people.names ++ people.cv ++ people.similar
+        )
     )
+  end
+
+  # The line under a person the search found through their CV: the entry that
+  # matched, not their current job, which would name a company the query never
+  # mentioned. The employer is named the way the profile names it, through
+  # `WorkExperience.linked_organization/1`.
+  defp entry_line(%WorkExperience{} = job) do
+    employer =
+      case WorkExperience.linked_organization(job) do
+        nil -> job.organization
+        page -> page.name
+      end
+
+    [job.title, employer]
+    |> Enum.reject(&(is_nil(&1) or String.trim(&1) == ""))
+    |> Enum.join(" @ ")
+    |> with_period(job)
+  end
+
+  defp entry_line(%Education{} = education),
+    do: (UserHelpers.education_headline(education, 80) || "") |> with_period(education)
+
+  defp with_period(text, entry) do
+    case WorkExperienceHTML.entry_period(entry) do
+      nil -> text
+      period -> text <> " · " <> period
+    end
+  end
+
+  # One page of the chosen organization's people, current ones first: the
+  # organization page's own People list (`Organizations.organization_people_page/2`),
+  # narrowed by the name in the box. Each row shows the role the member holds or
+  # held there.
+  defp assign_org_people(socket, nil, _page), do: assign(socket, :org_people, nil)
+
+  defp assign_org_people(socket, org, requested) do
+    query = SearchText.cap(socket.assigns.q)
+    per_page = Search.per_page(:people)
+    total = Organizations.organization_people_count(org, query: query)
+    page = min(requested, Vutuv.Pages.total_pages(total, per_page))
+
+    %{entries: entries} =
+      Organizations.organization_people_page(org,
+        query: query,
+        limit: per_page,
+        offset: (page - 1) * per_page
+      )
+
+    users = Enum.map(entries, & &1.user)
+
+    groups =
+      entries
+      |> Enum.chunk_by(& &1.current?)
+      |> Enum.map(fn [first | _] = group -> {first.current?, Enum.map(group, & &1.user)} end)
+
+    assign(socket,
+      org_people: %{groups: groups, total: total, page: page},
+      work_info_by_id: Map.new(entries, &{&1.user.id, &1.title || ""}),
+      following_by_id: UserHelpers.following_map(socket.assigns[:current_user], users)
+    )
+  end
+
+  # The people count in the heading. A list that ran into its cap does not know
+  # its total, so it says "more than" rather than printing the cap as a count.
+  defp people_total_label(%{capped?: true, total: total}),
+    do: gettext("more than %{formatted}", formatted: delimited_count(total))
+
+  defp people_total_label(%{total: total}), do: compact_count(total)
+
+  # A separate placeholder, because `ngettext/4` binds `%{count}` to the raw
+  # integer and a formatted number has to travel under another name.
+  defp people_count_label(count) do
+    ngettext("%{formatted} person", "%{formatted} people", count,
+      formatted: delimited_count(count)
+    )
+  end
+
+  # The link from a kind's preview under "All" into its full list.
+  defp all_label(:people, %{capped?: true}), do: gettext("All people")
+
+  defp all_label(:people, %{total: total}),
+    do: gettext("All %{formatted} people", formatted: delimited_count(total))
+
+  defp all_label(:organizations, %{total: total}),
+    do: gettext("All %{formatted} organizations", formatted: delimited_count(total))
+
+  defp all_label(:tags, %{total: total}),
+    do: gettext("All %{formatted} tags", formatted: delimited_count(total))
+
+  defp all_label(:posts, %{total: total}),
+    do: gettext("All %{formatted} posts", formatted: delimited_count(total))
+
+  attr(:kind, :atom, required: true)
+  attr(:scope, :atom, required: true)
+  attr(:more?, :boolean, required: true)
+  attr(:label, :string, required: true)
+  attr(:patch, :string, required: true)
+  attr(:page, :integer, required: true)
+  attr(:total, :integer, required: true)
+  attr(:per_page, :integer, default: nil)
+  attr(:query, :map, required: true)
+
+  # The foot of a kind's card: under "All" the way into its full list when there
+  # is more of it, under the kind's own scope its pager.
+  defp kind_footer(assigns) do
+    ~H"""
+    <.link
+      :if={@scope == :all and @more?}
+      id={"search-#{@kind}-all"}
+      patch={@patch}
+      class="mt-4 inline-flex min-h-10 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+    >
+      {@label} ›
+    </.link>
+    <div :if={@scope == @kind} id="search-pager">
+      <.pager
+        params={%{"page" => to_string(@page)}}
+        total={@total}
+        per_page={@per_page}
+        path={~p"/search"}
+        query={@query}
+      />
+    </div>
+    """
   end
 
   defp scope_label(:all), do: gettext("All")
   defp scope_label(:people), do: gettext("People")
+  defp scope_label(:organizations), do: gettext("Organizations")
   defp scope_label(:tags), do: gettext("Tags")
   defp scope_label(:posts), do: gettext("Posts")
 
@@ -449,19 +645,27 @@ defmodule VutuvWeb.SearchLive do
   # reads *before* typing; the tips below are read after, if at all.
   defp search_placeholder do
     if Fediverse.enabled?(),
-      do: gettext("Search for people, tags, posts, or paste a Fediverse address"),
-      else: gettext("Search for people, tags, or posts")
+      do: gettext("Search for people, organizations, tags, posts, or paste a Fediverse address"),
+      else: gettext("Search for people, organizations, tags, or posts")
   end
 
   # One intro sentence describing what the active scope searches. The generic
   # :all copy is the original two-scope sentence; the narrowed scopes name only
   # what they actually cover, so the tips stop over-promising (#887).
-  defp tips_intro(:people), do: gettext("Search for people by name, email, or username.")
+  defp tips_intro(:people),
+    do: gettext("Search for people by name, email, username, employer or school.")
+
+  defp tips_intro(:organizations),
+    do: gettext("Search for organizations by name, city or another name they go by.")
+
   defp tips_intro(:tags), do: gettext("Search for tags by name.")
   defp tips_intro(:posts), do: gettext("Search for words in public posts.")
 
   defp tips_intro(_all),
-    do: gettext("You can search for a name, email, or tag, or for words in public posts.")
+    do:
+      gettext(
+        "You can search for a name, email, employer, school, organization or tag, or for words in public posts."
+      )
 
   attr(:id, :string, required: true)
   attr(:patch, :string, required: true)
@@ -680,9 +884,27 @@ defmodule VutuvWeb.SearchLive do
         <button type="submit" class="sr-only">{gettext("Search")}</button>
       </form>
 
+      <%!-- The chosen organization, said in words and removable in one tap. It
+      keeps the text in the box, which from here on means a name at this
+      organization. --%>
+      <div :if={@org} id="search-org-filter" class="mt-3 flex">
+        <span class="inline-flex min-h-10 max-w-full items-center gap-2 rounded-xl bg-brand-50 py-1 pl-1.5 pr-1 text-sm font-semibold text-brand-800 ring-1 ring-brand-200 dark:bg-brand-800/60 dark:text-brand-100 dark:ring-brand-800">
+          <.organization_logo organization={@org} class="h-7 w-7 shrink-0" />
+          <span class="truncate">{gettext("Only at %{name}", name: @org.name)}</span>
+          <.link
+            id="search-org-filter-remove"
+            patch={search_path(@q, @scope, @exact)}
+            aria-label={gettext("Remove the organization filter")}
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-brand-100 dark:hover:bg-brand-800"
+          >
+            <span aria-hidden="true">×</span>
+          </.link>
+        </span>
+      </div>
+
       <div id="search-filters" class="mt-3 flex flex-wrap items-center gap-2">
         <.filter_chip
-          :for={scope <- [:all, :people, :tags, :posts]}
+          :for={scope <- [:all, :people, :organizations, :tags, :posts]}
           id={"search-scope-#{scope}"}
           patch={search_path(@q, scope, @exact)}
           active={@effective_scope == scope}
@@ -694,21 +916,32 @@ defmodule VutuvWeb.SearchLive do
 
         <span class="mx-1 hidden h-5 w-px bg-slate-200 sm:block dark:bg-slate-700"></span>
 
-        <.filter_chip id="search-exact-toggle" patch={search_path(@q, @scope, !@exact)} active={@exact}>
+        <%!-- Within an organization the box matches names only, so the toggle
+        would have nothing to change. --%>
+        <.filter_chip
+          id="search-exact-toggle"
+          patch={search_path(@q, @scope, !@exact, @org)}
+          active={@exact}
+          disabled={@org != nil}
+        >
           <span :if={@exact}>✓ </span>{gettext("Exact matches only")}
         </.filter_chip>
       </div>
 
       <p
-        :if={@scope_pinned?}
+        :if={@scope_pinned? and is_nil(@org)}
         id="search-scope-pinned-hint"
         class="mt-2 text-xs text-slate-600 dark:text-slate-400"
       >
         {gettext("Your search uses a people-only filter such as city: or status:, so it only finds people.")}
       </p>
 
+      <p :if={@org} id="search-org-hint" class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+        {gettext("Limited to people at %{name}, so only people are shown.", name: @org.name)}
+      </p>
+
       <p
-        :if={@results == nil and String.trim(@q) != ""}
+        :if={@results == nil and is_nil(@org) and String.trim(@q) != ""}
         id="search-hint"
         class="mt-3 text-sm text-slate-600 dark:text-slate-400"
       >
@@ -729,10 +962,59 @@ defmodule VutuvWeb.SearchLive do
         error={@remote_post_error}
       />
 
-      <.card :if={@q == ""} id="search-tips-empty" class="mt-6">
+      <.card :if={@q == "" and is_nil(@org)} id="search-tips-empty" class="mt-6">
         <.section_title>{gettext("Search Tips")}</.section_title>
         <div class="mt-3">
           <.search_tips scope={@effective_scope} />
+        </div>
+      </.card>
+
+      <.card :if={@org_people} id="search-org-people" class="mt-6">
+        <.section_title>
+          {gettext("People at %{name}", name: @org.name)} ({compact_count(@org_people.total)})
+        </.section_title>
+
+        <p
+          :if={@org_people.total == 0}
+          id="search-org-people-empty"
+          class="mt-3 mb-0 text-sm text-slate-600 dark:text-slate-400"
+        >
+          {gettext("Nobody found at %{name}.", name: @org.name)}
+        </p>
+
+        <%!-- Current before former, the order the organization page uses. A
+        page can hold the tail of one group and the head of the other, so each
+        group names itself. --%>
+        <div :for={{current?, users} <- @org_people.groups} class="mt-4 first:mt-3">
+          <h3
+            id={if(current?, do: "search-org-current", else: "search-org-former")}
+            class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400"
+          >
+            {if current?,
+              do: gettext("Currently at %{name}", name: @org.name),
+              else: gettext("Formerly at %{name}", name: @org.name)}
+          </h3>
+          <ul class="space-y-4">
+            <UserHTML.user_row
+              :for={user <- users}
+              user={user}
+              current_user={@current_user}
+              current_user_id={@current_user_id}
+              work_info_by_id={@work_info_by_id}
+              following_by_id={@following_by_id}
+              highlight={if(String.trim(@q) != "", do: String.split(@q))}
+            />
+          </ul>
+        </div>
+
+        <div id="search-pager">
+          <.pager
+            params={%{"page" => to_string(@org_people.page)}}
+            total={@org_people.total}
+            per_page={Search.per_page(:people)}
+            path={~p"/search"}
+            query={@page_query}
+          />
         </div>
       </.card>
 
@@ -769,14 +1051,16 @@ defmodule VutuvWeb.SearchLive do
           saved?={@saved?}
         />
 
-        <.card :if={@results.exact_people != [] or @results.similar_people != []} id="search-people">
+        <%!-- People: the name matches, then those found through their CV. "All"
+        previews a few and links into the list; the people scope pages. --%>
+        <.card :if={@people.total > 0} id="search-people">
           <.section_title>
-            {gettext("People")} ({compact_count(length(@results.exact_people) + length(@results.similar_people))})
+            {gettext("People")} ({people_total_label(@people)})
           </.section_title>
 
-          <ul :if={@results.exact_people != []} id="search-people-exact" class="mt-4 space-y-4">
+          <ul :if={@people.shown != []} id="search-people-exact" class="mt-4 space-y-4">
             <UserHTML.user_row
-              :for={user <- @results.exact_people}
+              :for={user <- @people.shown}
               user={user}
               current_user={@current_user}
               current_user_id={@current_user_id}
@@ -787,11 +1071,11 @@ defmodule VutuvWeb.SearchLive do
           </ul>
 
           <div
-            :if={@results.similar_people != []}
+            :if={@people.similar != []}
             id="search-people-similar"
             class={[
               "mt-5",
-              @results.exact_people != [] && "border-t border-slate-100 pt-4 dark:border-slate-800"
+              @people.shown != [] && "border-t border-slate-100 pt-4 dark:border-slate-800"
             ]}
           >
             <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400">
@@ -802,7 +1086,7 @@ defmodule VutuvWeb.SearchLive do
             </p>
             <ul class="mt-3 space-y-4">
               <UserHTML.user_row
-                :for={user <- @results.similar_people}
+                :for={user <- @people.similar}
                 user={user}
                 current_user={@current_user}
                 current_user_id={@current_user_id}
@@ -811,28 +1095,101 @@ defmodule VutuvWeb.SearchLive do
               />
             </ul>
           </div>
+
+          <.kind_footer
+            kind={:people}
+            scope={@effective_scope}
+            more?={@people.total > length(@people.shown) + length(@people.similar)}
+            label={all_label(:people, @people)}
+            patch={search_path(@q, :people, @exact)}
+            page={@people.page}
+            total={@people.main_total}
+            per_page={@people.per_page}
+            query={@page_query}
+          />
+
+          <%!-- The list ran into its cap, so it is not everybody: say so rather
+          than let the last page pass for the end of the matches. --%>
+          <p
+            :if={@effective_scope == :people and @people.capped?}
+            id="search-people-capped"
+            class="mt-4 mb-0 text-sm text-slate-600 dark:text-slate-400"
+          >
+            {gettext("This search matches more people than the list can show. Add a word to narrow it down.")}
+          </p>
         </.card>
 
-        <.card :if={@results.tags != []} id="search-tags">
+        <%!-- Organizations: the public pages, as the directory at /organizations
+        finds them. "N people" narrows the search to the people each one lists. --%>
+        <.card :if={@results.organizations.entries != []} id="search-organizations">
           <.section_title>
-            {gettext("Tags")} ({compact_count(length(@results.tags))})
+            {gettext("Organizations")} ({compact_count(@results.organizations.total)})
+          </.section_title>
+
+          <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+            <.organization_row :for={org <- @results.organizations.entries} organization={org}>
+              <.kind_badge kind={org.kind} class="mt-1" />
+              <:actions>
+                <.link
+                  :if={Map.get(@results.organizations.people_counts, org.id, 0) > 0}
+                  id={"search-org-people-#{org.slug}"}
+                  patch={search_path("", :all, @exact, org)}
+                  class="inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 text-sm font-semibold text-brand-700 ring-1 ring-slate-200 hover:bg-brand-50 dark:text-brand-300 dark:ring-slate-700 dark:hover:bg-slate-800"
+                >
+                  {people_count_label(Map.get(@results.organizations.people_counts, org.id, 0))} ›
+                </.link>
+              </:actions>
+            </.organization_row>
+          </ul>
+
+          <.kind_footer
+            kind={:organizations}
+            scope={@effective_scope}
+            more?={@results.organizations.total > length(@results.organizations.entries)}
+            label={all_label(:organizations, @results.organizations)}
+            patch={search_path(@q, :organizations, @exact)}
+            page={@results.organizations.page}
+            total={@results.organizations.total}
+            per_page={@results.organizations.per_page}
+            query={@page_query}
+          />
+        </.card>
+
+        <.card :if={@results.tags.entries != []} id="search-tags">
+          <.section_title>
+            {gettext("Tags")} ({compact_count(@results.tags.total)})
           </.section_title>
           <div class="mt-4 flex flex-wrap gap-2">
-            <.chip :for={tag <- @results.tags} navigate={~p"/tags/#{tag}"}>
+            <.chip :for={tag <- @results.tags.entries} navigate={~p"/tags/#{tag}"}>
               {highlight(tag.name, @tag_needle)}<span
-                :if={Map.get(@results.tag_member_counts, tag.id, 0) > 0}
+                :if={Map.get(@results.tags.member_counts, tag.id, 0) > 0}
                 class="font-normal"
-              > · {compact_count(@results.tag_member_counts[tag.id])}</span>
+              > · {compact_count(@results.tags.member_counts[tag.id])}</span>
             </.chip>
           </div>
+
+          <.kind_footer
+            kind={:tags}
+            scope={@effective_scope}
+            more?={@results.tags.total > length(@results.tags.entries)}
+            label={all_label(:tags, @results.tags)}
+            patch={search_path(@q, :tags, @exact)}
+            page={@results.tags.page}
+            total={@results.tags.total}
+            per_page={@results.tags.per_page}
+            query={@page_query}
+          />
         </.card>
 
-        <.card :if={@results.posts != []} id="search-posts">
+        <.card :if={@results.posts.entries != []} id="search-posts">
           <.section_title>
-            {gettext("Posts")} ({compact_count(length(@results.posts))})
+            {gettext("Posts")} ({compact_count(@results.posts.total)})
           </.section_title>
           <ul class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
-            <li :for={post <- @results.posts} class="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
+            <li
+              :for={post <- @results.posts.entries}
+              class="flex items-start gap-3 py-4 first:pt-0 last:pb-0"
+            >
               <%!-- A post is by a member or by an organization (issue #1334):
               an organization wears its logo and has no @handle line beside its
               name, which it may never have claimed. --%>
@@ -870,11 +1227,23 @@ defmodule VutuvWeb.SearchLive do
               </div>
             </li>
           </ul>
+
+          <.kind_footer
+            kind={:posts}
+            scope={@effective_scope}
+            more?={@results.posts.total > length(@results.posts.entries)}
+            label={all_label(:posts, @results.posts)}
+            patch={search_path(@q, :posts, @exact)}
+            page={@results.posts.page}
+            total={@results.posts.total}
+            per_page={@results.posts.per_page}
+            query={@page_query}
+          />
         </.card>
 
         <.card :if={
-          @results.exact_people == [] and @results.similar_people == [] and
-            @results.tags == [] and @results.posts == []
+          @people.total == 0 and @results.organizations.entries == [] and
+            @results.tags.entries == [] and @results.posts.entries == []
         }>
           <p id="search-empty" class="mb-0 text-center font-semibold text-slate-600 dark:text-slate-400">
             {gettext("No results for \"%{query}\"", query: @results.query)}
