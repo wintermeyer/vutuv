@@ -721,7 +721,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
       )
       |> Repo.update_all(
         set: [
-          status: "failed",
+          # A verdict, not a failure: nothing is left for the queue to do.
+          status: "skipped",
           moderation: "rejected",
           screenshot: nil,
           last_error: "moderation_rejected"

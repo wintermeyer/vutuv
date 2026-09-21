@@ -1961,7 +1961,10 @@ auto-generated screenshot of the linked page, captured off the request path so
 the save is never slowed. The subsystem is `Vutuv.Posts.Screenshots` with the
 `post_screenshots` table (one row per post, unique `post_id`), which is **both
 the durable queue and the attachment record**: a `pending`/`capturing`/`failed`
-row is work, a `ready` row carries the stored screenshot.
+row is work, a `ready` row carries the stored screenshot, and a `skipped` row
+was refused for good (a redirect off the site, a `4xx`, a blocklisted page, the
+AI scan's rejection). A skipped row is not work, but it stays: it is what keeps
+a re-save of the same URL from asking again.
 
 The queue serves **two owners**: a member's post (`post_id`) and a cached
 fediverse post from a followed account (`remote_post_id`,
@@ -2004,18 +2007,25 @@ falls back to the ordinary capture below. Tests stub the fetch via the
 the pre-existing banner captures is `Vutuv.Release.requeue_youtube_screenshots/0`
 (`Screenshots.requeue_youtube/0`).
 
-A link that does **not answer a plain HTTP 200** is rejected at capture time by
+A link that does **not end in a plain HTTP 200** is rejected at capture time by
 `ensure_http_ok/1`, a `redirect: false` GET probe the worker runs before Chromium
 (GET, not HEAD, so a server that 405s HEAD on a real 200 page isn't wrongly
 skipped; an internal host is caught here as `:internal_target` and never probed,
-so the probe is not an SSRF request). Only a `200` is captured — a redirect, a
-404 or any other status just shows the plain link. Reasons split permanent from
-transient for the retry cap: a `3xx` (`:redirect`) and a `4xx` (`{:bad_status,
-status}`) are permanent (they won't become a 200 for this URL), while a `5xx`
-(`{:server_error, status}`) and an unreachable probe (`:probe_failed`) are
-transient and retry with backoff — the durable-queue `permanent_failure?/1`
-decides. The probe's Req options come from the `:post_screenshot_req_options`
-app-env seam (tests inject a `plug:`).
+so the probe is not an SSRF request). It follows **at most two redirects, and
+only within the same site** (the host or its `www.` alias, never another
+subdomain), checking every hop against the SSRF guard: a newspaper's short link
+to its own article is the same page (taz.de's `/!6201058` takes exactly two hops
+to the titled path), while a bounce elsewhere lands on a login wall, a consent
+page or a shortener's target. Chromium is then handed the address the probe
+ended at. A redirect it will not follow, a 404 or any other status just shows
+the plain link. Reasons split permanent from transient for the retry cap: a
+refused redirect (`:redirect`) and a `4xx` (`{:bad_status, status}`) are
+permanent (they won't become a 200 for this URL) except a 408 or 429, while a
+`5xx` (`{:server_error, status}`) and an unreachable probe (`:probe_failed`)
+are transient and retry with backoff — the durable-queue `permanent_failure?/1`
+decides, and a permanent refusal marks the job `skipped` at once. The probe's
+Req options come from the `:post_screenshot_req_options` app-env seam (tests
+inject a `plug:`).
 
 `Vutuv.Posts.create_post/2` / `create_reply/3` / `update_post/2` call
 `Screenshots.reconcile/1`, which enqueues, refreshes (URL changed) or drops
@@ -2025,7 +2035,8 @@ app-env seam (tests inject a `plug:`).
 `resume_stuck/0` re-queues anything a crash left mid-capture — so a restart or
 re-deploy loses nothing and a missing screenshot is re-created. Transient
 failures retry with exponential backoff up to a cap, then `failed`; an
-SSRF-refused internal host fails permanently (like a profile link's `broken?`).
+SSRF-refused internal host is `skipped` at once (like a profile link's
+`broken?`).
 
 Chromium is bounded twice, because a page can hang the capture in two different
 places. The driver's own deadline (`Vutuv.PageScreenshot.Cdp`, 20s from
@@ -2061,12 +2072,14 @@ panned by scrolling, because on a phone the fitted overlay is no wider than
 the card it was opened from (`assets/js/lightbox.js`, `.lightbox.is-zoomed`).
 On capture the worker broadcasts
 `{:post_screenshot_ready, …}` to the author's + followers' activity topics, so an
-open feed/profile upgrades the card with no reload. Admins watch the queue and
-browse the gallery (each shot linked to its post, paginated) at
-`/admin/screenshots` (`VutuvWeb.Admin.ScreenshotLive`), and hand a `failed` job
-back to the worker there ("Retry" → `Screenshots.requeue/1` + a worker nudge).
-That button is the only way past the retry cap: a job that burned its attempts
-while capture itself was broken is never picked up again on its own.
+open feed/profile upgrades the card with no reload. Admins watch the queue,
+the skipped links (each with its reason, which is where a site that refuses
+every capture shows up for the blocklist) and the gallery (each shot linked to
+its post, paginated) at `/admin/screenshots` (`VutuvWeb.Admin.ScreenshotLive`),
+and hand a `failed` or `skipped` job back to the worker there ("Retry" →
+`Screenshots.requeue/1` + a worker nudge). That button is the only way past the
+retry cap: a job that burned its attempts while capture itself was broken is
+never picked up again on its own.
 
 The author can **remove a bad screenshot** (a cookie-banner-covered capture,
 say) from the post edit page (`VutuvWeb.PostLive.Edit`): the "Remove screenshot"

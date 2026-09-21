@@ -1,12 +1,17 @@
 defmodule VutuvWeb.Admin.ScreenshotLive do
   @moduledoc """
   The admin view over the post link-screenshot subsystem
-  (`Vutuv.Posts.Screenshots`), at `/admin/screenshots`. Four tabs:
+  (`Vutuv.Posts.Screenshots`), at `/admin/screenshots`. Five tabs:
 
     * **Queue** — the unfinished jobs (`pending` / `capturing` / `failed`), so an
       admin can see what is waiting, in flight, or gave up (with the last error),
       and hand a `failed` one back to the worker ("Retry"), which is the only
       way a job past the retry cap is ever captured again;
+    * **Skipped** — the links refused for good on the first answer (a redirect
+      off the site, a `4xx`, a blocklisted page, the AI scan's rejection), each
+      with its reason and the same Retry; kept out of the queue because none of
+      it is work, and kept in view because a site that refuses every capture
+      belongs on the blocklist;
     * **Gallery** — the captured screenshots, each a thumbnail linked to the
       external page beside a link to the post it belongs to;
     * **Blocklist** — the editor for the pages this installation never captures
@@ -16,8 +21,8 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     * **Trusted** — the sites whose captures skip the AI image scan
       (`Vutuv.ScreenshotTrust`): add one, drop one again.
 
-  Queue and Gallery are offset-paginated (`<.pager>`); the two lists are short
-  enough for an admin to read whole.
+  Queue, Skipped and Gallery are offset-paginated (`<.pager>`); the two lists
+  are short enough for an admin to read whole.
 
   Lives in the `:admin` live_session (`on_mount :require_admin`); the dead
   `:admin` pipeline 403s the disconnected render for non-admins.
@@ -59,11 +64,13 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
      |> load_trusted()}
   end
 
+  defp tab_param(%{"tab" => "skipped"}), do: "skipped"
   defp tab_param(%{"tab" => "gallery"}), do: "gallery"
   defp tab_param(%{"tab" => "blocklist"}), do: "blocklist"
   defp tab_param(%{"tab" => "trusted"}), do: "trusted"
   defp tab_param(_params), do: "queue"
 
+  defp load("skipped", params), do: Screenshots.skipped_page(params)
   defp load("gallery", params), do: Screenshots.gallery_page(params)
   # The two lists are short enough to read whole, so they have no pager.
   defp load(list, _params) when list in ["blocklist", "trusted"], do: {[], 0}
@@ -225,6 +232,14 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
         aria-current={@tab == "queue" && "page"}
       >
         {gettext("Queue")} <span class="tabular-nums">({compact_count(@counts.queue)})</span>
+      </.link>
+      <.link
+        id="tab-skipped"
+        patch={~p"/admin/screenshots?tab=skipped"}
+        class={tab_class(@tab == "skipped")}
+        aria-current={@tab == "skipped" && "page"}
+      >
+        {gettext("Skipped")} <span class="tabular-nums">({compact_count(@counts.skipped)})</span>
       </.link>
       <.link
         patch={~p"/admin/screenshots?tab=gallery"}
@@ -554,64 +569,24 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
               </p>
             </div>
           </div>
+          <% @tab == "skipped" -> %>
+            <h1>{gettext("Skipped")}</h1>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              {gettext(
+                "Links refused for good, with the reason: a redirect to another site, an error page, a blocklisted site or the AI check's rejection. The worker never asks again by itself; Retry does."
+              )}
+            </p>
+
+            <.job_table rows={@rows} empty={gettext("No link has been skipped.")} />
           <% true -> %>
             <h1>{gettext("Queue")}</h1>
-          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Jobs waiting, in flight, or given up. The worker retries transient failures with backoff and re-queues anything a restart left mid-capture.")}
-          </p>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              {gettext(
+                "Jobs waiting, in flight, or given up. The worker retries transient failures with backoff and re-queues anything a restart left mid-capture."
+              )}
+            </p>
 
-          <p :if={@rows == []} class="card__empty">{gettext("The queue is empty.")}</p>
-
-          <div :if={@rows != []} class="card__tablewrap">
-            <table class="pure-table">
-              <thead>
-                <tr>
-                  <th>{gettext("Status")}</th>
-                  <th>{gettext("URL")}</th>
-                  <th>{gettext("Post")}</th>
-                  <th>{gettext("Tries")}</th>
-                  <th>{gettext("Last error")}</th>
-                  <th>{gettext("Queued")}</th>
-                  <th><span class="sr-only">{gettext("Actions")}</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr :for={ps <- @rows} id={"job-#{ps.id}"}>
-                  <td><.status_badge status={ps.status} /></td>
-                  <td class="breakwrap">
-                    <a href={ps.url} target="_blank" rel="noopener">{ps.url}</a>
-                  </td>
-                  <td>
-                    <.link :if={ps.post} navigate={Posts.path(ps.post)}>
-                      {author_label(ps.post)}
-                    </.link>
-                    <a
-                      :if={ps.remote_post}
-                      href={RemotePost.origin(ps.remote_post)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {RemoteAccount.display_handle(ps.remote_post.remote_account)}
-                    </a>
-                  </td>
-                  <td class="tabular-nums">{ps.attempts}</td>
-                  <td class="breakwrap text-slate-600 dark:text-slate-400">{ps.last_error}</td>
-                  <td><.local_time at={ps.inserted_at} id={"queued-#{ps.id}"} /></td>
-                  <td>
-                    <.button
-                      :if={ps.status == "failed"}
-                      variant="secondary"
-                      phx-click="requeue"
-                      phx-value-id={ps.id}
-                      phx-disable-with={gettext("Retrying…")}
-                    >
-                      {gettext("Retry")}
-                    </.button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+            <.job_table rows={@rows} empty={gettext("The queue is empty.")} />
         <% end %>
 
         <.pager
@@ -654,10 +629,78 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   defp tab_class(true), do: button_class("primary")
   defp tab_class(false), do: button_class("secondary")
 
+  attr(:rows, :list, required: true)
+  attr(:empty, :string, required: true)
+
+  # The job table the Queue and Skipped tabs share, or their empty line. Retry
+  # is offered on every job that stopped (failed or skipped), never on one still
+  # being worked on.
+  defp job_table(%{rows: []} = assigns) do
+    ~H"""
+    <p class="card__empty">{@empty}</p>
+    """
+  end
+
+  defp job_table(assigns) do
+    ~H"""
+    <div class="card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Status")}</th>
+            <th>{gettext("URL")}</th>
+            <th>{gettext("Post")}</th>
+            <th>{gettext("Tries")}</th>
+            <th>{gettext("Last error")}</th>
+            <th>{gettext("Queued")}</th>
+            <th><span class="sr-only">{gettext("Actions")}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={ps <- @rows} id={"job-#{ps.id}"}>
+            <td><.status_badge status={ps.status} /></td>
+            <td class="breakwrap">
+              <a href={ps.url} target="_blank" rel="noopener">{ps.url}</a>
+            </td>
+            <td>
+              <.link :if={ps.post} navigate={Posts.path(ps.post)}>
+                {author_label(ps.post)}
+              </.link>
+              <a
+                :if={ps.remote_post}
+                href={RemotePost.origin(ps.remote_post)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {RemoteAccount.display_handle(ps.remote_post.remote_account)}
+              </a>
+            </td>
+            <td class="tabular-nums">{ps.attempts}</td>
+            <td class="breakwrap text-slate-600 dark:text-slate-400">{ps.last_error}</td>
+            <td><.local_time at={ps.inserted_at} id={"queued-#{ps.id}"} /></td>
+            <td>
+              <.button
+                :if={ps.status in ~w(failed skipped)}
+                variant="secondary"
+                phx-click="requeue"
+                phx-value-id={ps.id}
+                phx-disable-with={gettext("Retrying…")}
+              >
+                {gettext("Retry")}
+              </.button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
   attr(:status, :string, required: true)
 
   # A small colored status pill: pending slate, capturing brand, ready emerald,
-  # failed red. Emerald is the app's "active/done" language (the presence dot).
+  # failed red, skipped slate (it only ever shows among its own kind). Emerald
+  # is the app's "active/done" language (the presence dot).
   defp status_badge(assigns) do
     ~H"""
     <span class={[
@@ -688,5 +731,6 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   defp status_label("capturing"), do: gettext("Capturing")
   defp status_label("ready"), do: gettext("Ready")
   defp status_label("failed"), do: gettext("Failed")
+  defp status_label("skipped"), do: gettext("Skipped")
   defp status_label(other), do: other
 end

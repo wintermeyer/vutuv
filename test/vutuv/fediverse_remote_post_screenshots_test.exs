@@ -365,8 +365,9 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
 
       assert :ok = ImageSubjects.apply_rejected(scan)
 
+      # A verdict, not a failure: the job ends skipped and leaves the queue.
       job = job_of(post)
-      assert job.status == "failed"
+      assert job.status == "skipped"
       assert job.moderation == "rejected"
       assert is_nil(job.screenshot)
 

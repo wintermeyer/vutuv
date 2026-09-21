@@ -7,10 +7,11 @@ defmodule Vutuv.Posts.Screenshots do
   **Durable queue.** Each qualifying post gets one `post_screenshots` row (see
   `Vutuv.Posts.PostScreenshot`), which is both the job and the result: a
   `pending` row is work waiting, `capturing` is in flight, `ready` carries the
-  stored screenshot, `failed` gave up (retries exhausted, or a permanent refusal:
-  an SSRF-blocked host, a redirecting link, or a non-200 target — only a plain
-  HTTP 200 is captured). Because the queue is a table, a restart or re-deploy
-  loses nothing —
+  stored screenshot, `failed` gave up after its retries, and `skipped` was
+  refused for good on the first answer: an SSRF-blocked host, a link that
+  redirects off its site (or more than twice on it), or a non-200 target — only
+  a plain HTTP 200 is captured. Because the queue is a table, a restart or
+  re-deploy loses nothing —
   `Vutuv.Posts.ScreenshotWorker` drains it on a poll, `resume_stuck/0` re-queues
   a job a crash left mid-capture, and a transient failure retries with
   exponential backoff. This is the "re-create if in doubt" guarantee.
@@ -39,6 +40,7 @@ defmodule Vutuv.Posts.Screenshots do
 
   import Ecto.Query
 
+  alias Vutuv.ChangesetHelpers
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.MediaJobs
@@ -58,6 +60,10 @@ defmodule Vutuv.Posts.Screenshots do
   @url_regex ~r{https?://[^\s<>]+}
 
   @max_attempts 5
+  # Redirects the probe follows within one site. Two is what a newspaper's short
+  # link takes to its article (taz.de: `/!6201058` → `/!6201058/` → the titled
+  # path); a longer chain is more likely a consent or login detour than a page.
+  @max_redirect_hops 2
   @batch 5
   # Reset a `capturing` job a crash orphaned after this long (the worker's
   # capture ceiling is ~40s; 10 min is comfortably past any live capture).
@@ -267,19 +273,21 @@ defmodule Vutuv.Posts.Screenshots do
   end
 
   @doc """
-  Puts a job that gave up back in the queue: `pending`/`capturing`/`failed` →
-  `pending` with a clean slate (attempts reset, backoff and last error cleared),
-  so the next drain picks it up. An author-`dismissed` tombstone and a `ready`
-  row are refused with `{:error, :not_requeueable}` — dismissing is the author's
-  decision, and a ready row is not work.
+  Puts a job that gave up back in the queue: `pending`/`capturing`/`failed`/
+  `skipped` → `pending` with a clean slate (attempts reset, backoff and last
+  error cleared), so the next drain picks it up. An author-`dismissed` tombstone
+  and a `ready` row are refused with `{:error, :not_requeueable}` — dismissing is
+  the author's decision, and a ready row is not work.
 
-  Nothing else revives a `failed` row: the retry cap is final, so a job that
-  burned its attempts while capture itself was broken (a hanging page that
-  Chromium never bounded, say) would stay dead forever once the environment
-  recovered. This is the admin's hand-back, from `/admin/screenshots`.
+  Nothing else revives a `failed` or `skipped` row: the retry cap is final, so a
+  job that burned its attempts while capture itself was broken (a hanging page
+  that Chromium never bounded, say) would stay dead forever once the environment
+  recovered, and a skipped link is only worth asking again once the site or this
+  installation's rules changed. This is the admin's hand-back, from
+  `/admin/screenshots`.
   """
   def requeue(%PostScreenshot{status: status} = job)
-      when status in ~w(pending capturing failed) do
+      when status in ~w(pending capturing failed skipped) do
     job
     |> Ecto.Changeset.change(
       status: "pending",
@@ -296,14 +304,14 @@ defmodule Vutuv.Posts.Screenshots do
   Puts every finished job whose URL is a YouTube video back in the queue, so
   the worker replaces its stored capture with the video's own thumbnail
   (`Vutuv.YoutubeThumbnail`) — the one-shot backfill for captures from before
-  that existed, which all show YouTube's consent banner. `ready` and `failed`
-  rows alike get a clean pending slate; an author-`dismissed` tombstone stays
-  dismissed (their call, and the thumbnail may be exactly what they removed).
-  Returns the number re-queued. On a release, run it via
+  that existed, which all show YouTube's consent banner. `ready`, `failed` and
+  `skipped` rows alike get a clean pending slate; an author-`dismissed`
+  tombstone stays dismissed (their call, and the thumbnail may be exactly what
+  they removed). Returns the number re-queued. On a release, run it via
   `Vutuv.Release.requeue_youtube_screenshots/0`.
   """
   def requeue_youtube do
-    from(ps in PostScreenshot, where: ps.status in ["ready", "failed"])
+    from(ps in PostScreenshot, where: ps.status in ["ready", "failed", "skipped"])
     |> Repo.all()
     |> Enum.filter(&match?({:ok, _id}, YoutubeThumbnail.video_id(&1.url)))
     |> Enum.map(fn job ->
@@ -321,7 +329,7 @@ defmodule Vutuv.Posts.Screenshots do
   end
 
   @doc """
-  Drops every job — queued, ready or failed — whose URL is on the blocklist
+  Drops every job — queued, ready, failed or skipped — whose URL is on the blocklist
   today, row and stored files alike, and returns how many went.
 
   The one-shot cleanup after an entry is added (`Vutuv.ScreenshotBlocklist`):
@@ -442,24 +450,25 @@ defmodule Vutuv.Posts.Screenshots do
         MediaJobs.fail(media_job, reason)
 
         if permanent_failure?(reason),
-          do: mark_failed(job, reason),
+          do: mark_skipped(job, reason),
           else: mark_retry(job, reason)
     end
   end
 
-  # A property of the target that won't change on retry: an SSRF-refused internal
-  # host, a blocklisted page (`:blocklisted`, one we never shoot), a link that
-  # redirects (`:redirect`), or a `4xx` non-200 answer (`{:bad_status, _}`).
-  # Everything else — a `5xx` server error, an unreachable probe, a
-  # missing/crashed/timed-out Chromium — is transient and retries with backoff
-  # until the cap.
+  # A property of the target that won't change on retry, so the job is skipped
+  # rather than failed: an SSRF-refused internal host, a blocklisted page
+  # (`:blocklisted`, one we never shoot), a redirect the probe would not follow
+  # (`:redirect`), or a `4xx` non-200 answer (`{:bad_status, _}`) other than 408
+  # and 429, which ask to be tried later. Everything else — a `5xx` server
+  # error, an unreachable probe, a missing/crashed/timed-out Chromium — is
+  # transient and retries with backoff until the cap.
   defp permanent_failure?(:internal_target), do: true
   defp permanent_failure?(:blocklisted), do: true
   # The page check saw a consent/login/ad wall and put the site on the
   # blocklist: a retry would be refused by the blocklist anyway.
   defp permanent_failure?(:obstructed), do: true
   defp permanent_failure?(:redirect), do: true
-  defp permanent_failure?({:bad_status, _status}), do: true
+  defp permanent_failure?({:bad_status, status}), do: status not in [408, 429]
   defp permanent_failure?(_reason), do: false
 
   # The real capture. A YouTube video link stores the thumbnail YouTube itself
@@ -506,13 +515,18 @@ defmodule Vutuv.Posts.Screenshots do
     end
   end
 
-  # The classic capture: capture only a plain HTTP-200 link, then reuse the
-  # shared pipeline and store through the same uploader profile links use.
+  # The classic capture: capture only a link that ends in a plain HTTP 200, then
+  # reuse the shared pipeline and store through the same uploader profile links
+  # use. Chromium is handed the address the probe ended at, so it shoots the
+  # page that answered and never walks a redirect the probe did not vet. The
+  # blocklist is asked about the named URL before any probe (a row queued before
+  # its entry existed), and `capture_framed/2` asks again about the target.
   # Returns the stored filename + display size, and whether the browser only
   # showed trusted sites (`Vutuv.ScreenshotTrust`).
   defp page_capture_and_store(%PostScreenshot{} = job) do
-    with :ok <- ensure_http_ok(job.url),
-         {:ok, framed_path, trusted?} <- Vutuv.PageScreenshot.capture_framed(job.url, job.id) do
+    with false <- ScreenshotBlocklist.blocked?(job.url),
+         {:ok, target} <- ensure_http_ok(job.url),
+         {:ok, framed_path, trusted?} <- Vutuv.PageScreenshot.capture_framed(target, job.id) do
       upload = %Plug.Upload{
         content_type: "image/webp",
         filename: "#{job.id}.webp",
@@ -536,6 +550,9 @@ defmodule Vutuv.Posts.Screenshots do
 
       File.rm(framed_path)
       result
+    else
+      true -> {:error, :blocklisted}
+      refused -> refused
     end
   end
 
@@ -544,31 +561,42 @@ defmodule Vutuv.Posts.Screenshots do
   @probe_req_options_key :post_screenshot_req_options
 
   @doc """
-  `:ok` only when `url` answers a plain **HTTP 200**; otherwise `{:error, reason}`
-  and no screenshot is taken. A `redirect: false` GET probe (what a browser would
-  get) runs in the worker before Chromium, so a link that redirects, 404s or gives
-  any other non-200 answer is skipped — a bounce lands on a login/consent wall or
-  a shortener's target, a 404/5xx isn't the linked page — leaving the post to show
-  the plain link. Off the request path, so the probe never slows a save.
+  `{:ok, target}` when `url` ends in a plain **HTTP 200**, where `target` is the
+  address that answered; otherwise `{:error, reason}` and no screenshot is taken.
+  A `redirect: false` GET probe (what a browser would get) runs in the worker
+  before Chromium. It follows at most #{@max_redirect_hops} redirects, and only
+  within the same site (the host itself or its `www.` alias): a newspaper's short
+  link to its own article is the same page, while a bounce to another host lands
+  on a login or consent wall or a shortener's target. Anything else — a redirect
+  off the site or one hop too many, a 404, any other non-200 answer — is refused,
+  leaving the post to show the plain link. Off the request path, so the probe
+  never slows a save.
 
-  Reasons distinguish permanent from transient (for the retry cap): a `3xx` is
-  `:redirect` and a `4xx` `{:bad_status, status}` (both permanent — they won't
-  become a 200 for this URL), a `5xx` is `{:server_error, status}` and a transport
-  failure `:probe_failed` (both transient — the origin may recover). An internal
-  host is caught here as `:internal_target` (the same permanent outcome
-  `Vutuv.PageScreenshot.capture_framed/2` would give) and **never probed**, so this
-  is not an SSRF request.
+  Reasons distinguish permanent from transient (for the retry cap): a refused
+  redirect is `:redirect` and a `4xx` `{:bad_status, status}` (both permanent —
+  they won't become a 200 for this URL — except a 408 or 429, which ask to be
+  tried later), a `5xx` is `{:server_error, status}` and a transport failure
+  `:probe_failed` (both transient — the origin may recover). An internal host,
+  at the start or at any hop, is caught here as `:internal_target` (the same
+  permanent outcome `Vutuv.PageScreenshot.capture_framed/2` would give) and
+  **never probed**, so this is not an SSRF request.
   """
-  def ensure_http_ok(url) do
+  def ensure_http_ok(url), do: probe_hop(url, @max_redirect_hops)
+
+  defp probe_hop(url, hops_left) do
     if Vutuv.Ssrf.resolves_to_internal?(URI.parse(url).host) do
       {:error, :internal_target}
     else
-      classify(probe(url))
+      case classify(probe(url)) do
+        :ok -> {:ok, url}
+        {:redirect, resp} -> follow(url, resp, hops_left)
+        refused -> refused
+      end
     end
   end
 
   defp classify({:ok, %Req.Response{status: 200}}), do: :ok
-  defp classify({:ok, %Req.Response{status: s}}) when s in 300..399, do: {:error, :redirect}
+  defp classify({:ok, %Req.Response{status: s} = resp}) when s in 300..399, do: {:redirect, resp}
 
   defp classify({:ok, %Req.Response{status: s}}) when s in 400..499,
     do: {:error, {:bad_status, s}}
@@ -576,6 +604,23 @@ defmodule Vutuv.Posts.Screenshots do
   defp classify({:ok, %Req.Response{status: s}}), do: {:error, {:server_error, s}}
   # Couldn't reach the target to check — transient, retried like a Chromium timeout.
   defp classify(_error), do: {:error, :probe_failed}
+
+  # A redirect is followed only while hops are left and only to the same site.
+  # The target must still be a plain web address: `web_url?/1` refuses the
+  # backslash and userinfo tricks that make `URI.parse/1` name a different host
+  # than a browser would open.
+  defp follow(url, resp, hops_left) do
+    next = Vutuv.PageScreenshot.redirect_target(url, resp)
+
+    if hops_left > 0 and is_binary(next) and ChangesetHelpers.web_url?(next) and
+         site(next) == site(url),
+       do: probe_hop(next, hops_left - 1),
+       else: {:error, :redirect}
+  end
+
+  # The www. alias is the same site; any other subdomain is not. The same fold
+  # the trusted-sites check applies, so the subsystem reads a host one way.
+  defp site(url), do: ScreenshotTrust.Host.canonical(URI.parse(url).host)
 
   # Only the status line is read, never the body, so drop it during receipt at a
   # small ceiling: a hostile member link could otherwise stream an unbounded
@@ -683,7 +728,7 @@ defmodule Vutuv.Posts.Screenshots do
     attempts = job.attempts + 1
     status = if attempts >= @max_attempts, do: "failed", else: "pending"
 
-    Logger.warning(failure_message(job, reason))
+    Logger.warning(outcome_message("failed", job, reason))
 
     {:ok, job} =
       job
@@ -698,13 +743,13 @@ defmodule Vutuv.Posts.Screenshots do
     job
   end
 
-  defp mark_failed(%PostScreenshot{} = job, reason) do
-    Logger.warning(failure_message(job, reason))
+  defp mark_skipped(%PostScreenshot{} = job, reason) do
+    Logger.info(outcome_message("skipped", job, reason))
 
     {:ok, job} =
       job
       |> Ecto.Changeset.change(
-        status: "failed",
+        status: "skipped",
         attempts: job.attempts + 1,
         last_error: error_string(reason)
       )
@@ -719,8 +764,8 @@ defmodule Vutuv.Posts.Screenshots do
 
   defp error_string(reason), do: reason |> inspect() |> String.slice(0, 255)
 
-  defp failure_message(job, reason),
-    do: "post screenshot failed for #{owner_label(job)} (#{job.url}): #{inspect(reason)}"
+  defp outcome_message(outcome, job, reason),
+    do: "post screenshot #{outcome} for #{owner_label(job)} (#{job.url}): #{inspect(reason)}"
 
   defp owner_label(%PostScreenshot{post_id: post_id}) when is_binary(post_id),
     do: "post #{post_id}"
@@ -730,19 +775,33 @@ defmodule Vutuv.Posts.Screenshots do
 
   ## Admin reads
 
+  # What the admin queue holds: work waiting or in flight, and the jobs that ran
+  # out of retries and need an admin. A skipped job is none of those.
+  @queue_statuses ~w(pending capturing failed)
+
   @doc """
   One page of the admin queue view: the unfinished jobs (`pending` / `capturing`
   / `failed`), newest first, with the owning post + author (or the cached
   remote post + its account) preloaded. Returns `{rows, total}`.
   Author-`dismissed` tombstones are neither unfinished work nor a gallery item,
-  so they are excluded from both admin views.
+  so they are excluded from every admin view.
   """
   def queue_page(params) do
     page(
-      from(ps in PostScreenshot, where: ps.status not in ["ready", "dismissed"]),
+      from(ps in PostScreenshot, where: ps.status in @queue_statuses),
       params,
       desc: :inserted_at
     )
+  end
+
+  @doc """
+  One page of the admin's skipped list: the links refused for good (see
+  `PostScreenshot`), newest first, preloaded like `queue_page/1`. Kept apart
+  from the queue because none of it is work, and kept visible because the
+  sites that refuse every capture are what the blocklist is fed from.
+  """
+  def skipped_page(params) do
+    page(from(ps in PostScreenshot, where: ps.status == "skipped"), params, desc: :inserted_at)
   end
 
   @doc """
@@ -754,18 +813,18 @@ defmodule Vutuv.Posts.Screenshots do
     page(from(ps in PostScreenshot, where: ps.status == "ready"), params, desc: :captured_at)
   end
 
-  @doc "Count of unfinished vs ready jobs, for the admin tab labels."
+  @doc "Count of queued, ready and skipped jobs, for the admin tab labels."
   def counts do
-    from(ps in PostScreenshot,
-      where: ps.status != "dismissed",
-      group_by: fragment("? = 'ready'", ps.status),
-      select: {fragment("? = 'ready'", ps.status), count(ps.id)}
-    )
-    |> Repo.all()
-    |> Enum.reduce(%{queue: 0, ready: 0}, fn
-      {true, n}, acc -> %{acc | ready: n}
-      {false, n}, acc -> %{acc | queue: n}
-    end)
+    by_status =
+      from(ps in PostScreenshot, group_by: ps.status, select: {ps.status, count(ps.id)})
+      |> Repo.all()
+      |> Map.new()
+
+    %{
+      queue: by_status |> Map.take(@queue_statuses) |> Map.values() |> Enum.sum(),
+      ready: Map.get(by_status, "ready", 0),
+      skipped: Map.get(by_status, "skipped", 0)
+    }
   end
 
   defp page(base, params, order) do

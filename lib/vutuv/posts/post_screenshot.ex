@@ -11,13 +11,17 @@ defmodule Vutuv.Posts.PostScreenshot do
   thumbnail, retries, AI moderation, admin views) is shared; only the enqueue
   trigger and the "who is told when it's ready" differ per owner.
 
-  The row is the queue: a `pending`/`capturing`/`failed` row is work the
+  The row is the queue: a `pending`/`capturing` row is work the
   `Vutuv.Posts.ScreenshotWorker` drains, so a restart or re-deploy loses
-  nothing; a `ready` row carries the stored screenshot. A `dismissed` row is the
-  author's tombstone — they removed a bad auto-screenshot (a cookie-banner-covered
-  capture, say) from the post edit page (`Vutuv.Posts.Screenshots.dismiss/1`): it
-  renders nothing, the worker skips it, and a plain re-save of the same URL never
-  re-captures it. All fields are set programmatically by the context (never cast
+  nothing; a `ready` row carries the stored screenshot; a `failed` row ran out of
+  retries on a transient error and waits for an admin. A `skipped` row was
+  refused for good (a redirect off the site, a `4xx`, a blocklisted page, the AI
+  scan's rejection): no retry would change the answer, so it is not queue work,
+  and the row stays so a re-save of the same URL does not ask again. A
+  `dismissed` row is the author's tombstone — they removed a bad
+  auto-screenshot (a cookie-banner-covered capture, say) from the post edit page
+  (`Vutuv.Posts.Screenshots.dismiss/1`): it renders nothing, the worker skips
+  it, and a plain re-save of the same URL never re-captures it. All fields are set programmatically by the context (never cast
   from member params), so there is no public form changeset — state transitions go
   through `Ecto.Changeset.change/2` in `Vutuv.Posts.Screenshots`.
 
@@ -31,7 +35,7 @@ defmodule Vutuv.Posts.PostScreenshot do
 
   alias Vutuv.Moderation.ImageScans
 
-  @statuses ~w(pending capturing ready failed dismissed)
+  @statuses ~w(pending capturing ready failed skipped dismissed)
 
   schema "post_screenshots" do
     belongs_to(:post, Vutuv.Posts.Post)

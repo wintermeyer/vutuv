@@ -37,6 +37,22 @@ defmodule Vutuv.Posts.ScreenshotsTest do
   defp stub_probe(fun) when is_function(fun),
     do: Application.put_env(:vutuv, :post_screenshot_req_options, plug: fun)
 
+  # A probe stub that answers each path in `hops` with a 301 to its target and
+  # everything else with a 200, the way a site's own redirects behave.
+  defp redirects(hops) do
+    fn conn ->
+      case Map.fetch(hops, conn.request_path) do
+        {:ok, target} ->
+          conn
+          |> Plug.Conn.put_resp_header("location", target)
+          |> Plug.Conn.send_resp(301, "")
+
+        :error ->
+          Plug.Conn.send_resp(conn, 200, "")
+      end
+    end
+  end
+
   # A post whose auto-screenshot has already been captured, stored and released
   # by the AI scan — the state the author sees on the card and wants gone.
   defp ready_post(author) do
@@ -144,18 +160,72 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       on_exit(fn -> Application.delete_env(:vutuv, :post_screenshot_req_options) end)
     end
 
-    test "a plain 200 page is allowed through to capture" do
+    test "a plain 200 page is allowed through to capture, at its own address" do
       stub_probe(200)
-      assert Screenshots.ensure_http_ok("https://example.com/page") == :ok
+
+      assert Screenshots.ensure_http_ok("https://example.com/page") ==
+               {:ok, "https://example.com/page"}
     end
 
-    test "a link that HTTP-redirects (3xx) is refused permanently" do
-      stub_probe(fn conn ->
-        conn
-        |> Plug.Conn.put_resp_header("location", "https://example.com/login")
-        |> Plug.Conn.send_resp(302, "")
-      end)
+    # taz.de's short links take exactly two hops to the article, the shape the
+    # cap was chosen for: `/!6201058` → `/!6201058/` → `/<title>/!6201058/`.
+    test "follows two redirects within the same site and captures where they end" do
+      stub_probe(
+        redirects(%{
+          "/!6201058" => "https://taz.de/!6201058/",
+          "/!6201058/" => "/Heidegger-Beuys-und-die-Oekologie/!6201058/"
+        })
+      )
 
+      assert Screenshots.ensure_http_ok("https://taz.de/!6201058") ==
+               {:ok, "https://taz.de/Heidegger-Beuys-und-die-Oekologie/!6201058/"}
+    end
+
+    test "a third redirect is one too many" do
+      stub_probe(
+        redirects(%{
+          "/a" => "https://example.com/b",
+          "/b" => "https://example.com/c",
+          "/c" => "https://example.com/d"
+        })
+      )
+
+      assert Screenshots.ensure_http_ok("https://example.com/a") == {:error, :redirect}
+    end
+
+    test "the www. alias is the same site in both directions" do
+      stub_probe(
+        redirects(%{
+          "/to-www" => "https://www.example.com/landing",
+          "/to-apex" => "https://example.com/landing"
+        })
+      )
+
+      assert Screenshots.ensure_http_ok("https://example.com/to-www") ==
+               {:ok, "https://www.example.com/landing"}
+
+      assert Screenshots.ensure_http_ok("https://www.example.com/to-apex") ==
+               {:ok, "https://example.com/landing"}
+    end
+
+    # Every target answers 200 once reached, so only the site rule refuses it.
+    test "a redirect to another site is refused permanently" do
+      for target <- [
+            "https://example.org/landing",
+            # A subdomain is another site: login walls live on exactly those.
+            "https://login.example.com/landing",
+            # URI.parse reads this host as example.com, a browser as evil.test.
+            "https://evil.test\\@example.com/landing"
+          ] do
+        stub_probe(redirects(%{"/page" => target}))
+
+        assert Screenshots.ensure_http_ok("https://example.com/page") == {:error, :redirect},
+               "expected #{target} to be refused"
+      end
+    end
+
+    test "a redirect without a location is refused permanently" do
+      stub_probe(302)
       assert Screenshots.ensure_http_ok("https://example.com/page") == {:error, :redirect}
     end
 
@@ -364,16 +434,16 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       assert job.last_error =~ "timeout"
     end
 
-    test "an internal-target (SSRF) refusal fails permanently at once" do
+    test "an internal-target (SSRF) refusal is skipped at once" do
       post = url_post(user())
       {:ok, _job} = Screenshots.reconcile(post)
 
       Screenshots.deliver_due(force: true, capture: fn _ -> {:error, :internal_target} end)
 
-      assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "failed"
+      assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "skipped"
     end
 
-    test "a blocklisted refusal fails permanently (a stale row is never retried)" do
+    test "a blocklisted refusal is skipped (a stale row is never retried)" do
       # `qualify/1` keeps a blocklisted URL from ever enqueuing, but a row queued
       # before the page was blocklisted could still reach capture — it must die
       # at once, not burn five retries on a shot that can't work.
@@ -382,10 +452,32 @@ defmodule Vutuv.Posts.ScreenshotsTest do
 
       Screenshots.deliver_due(force: true, capture: fn _ -> {:error, :blocklisted} end)
 
-      assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "failed"
+      assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "skipped"
     end
 
-    test "a non-200 link (redirect, 404) fails permanently at once (no retry)" do
+    # The probe may follow a redirect off a blocklisted path onto one that is
+    # not, so the named URL has to be asked before anything is fetched.
+    test "a row blocklisted after it was queued is skipped without a probe" do
+      post = url_post(user(), "https://example.com/news/story")
+      {:ok, job} = Screenshots.reconcile(post)
+      {:ok, _entry} = Vutuv.ScreenshotBlocklist.create_entry(%{"pattern" => "example.com/news"})
+
+      test_pid = self()
+
+      stub_probe(fn conn ->
+        send(test_pid, :probed)
+        Plug.Conn.send_resp(conn, 200, "")
+      end)
+
+      on_exit(fn -> Application.delete_env(:vutuv, :post_screenshot_req_options) end)
+
+      Screenshots.deliver_due(force: true)
+
+      assert %{status: "skipped", last_error: ":blocklisted"} = Screenshots.get_job!(job.id)
+      refute_received :probed
+    end
+
+    test "a non-200 link (redirect, 404) is skipped at once (no retry)" do
       for reason <- [:redirect, {:bad_status, 404}] do
         post = url_post(user())
         {:ok, _job} = Screenshots.reconcile(post)
@@ -393,13 +485,14 @@ defmodule Vutuv.Posts.ScreenshotsTest do
         Screenshots.deliver_due(force: true, capture: fn _ -> {:error, reason} end)
 
         job = Repo.get_by!(PostScreenshot, post_id: post.id)
-        assert job.status == "failed", "expected #{inspect(reason)} to fail permanently"
+        assert job.status == "skipped", "expected #{inspect(reason)} to be skipped"
         assert job.attempts == 1
       end
     end
 
-    test "a 5xx / unreachable link stays pending with backoff (transient)" do
-      for reason <- [{:server_error, 503}, :probe_failed] do
+    # 408 and 429 are the two 4xx answers that say "later", not "never".
+    test "a 5xx, a timeout or rate limit, or an unreachable link stays pending (transient)" do
+      for reason <- [{:server_error, 503}, {:bad_status, 408}, {:bad_status, 429}, :probe_failed] do
         post = url_post(user())
         {:ok, _job} = Screenshots.reconcile(post)
 
@@ -456,12 +549,39 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       assert Enum.map(Screenshots.list_due(), & &1.id) == [requeued.id]
     end
 
+    test "a skipped job can be handed back too" do
+      {:ok, job} = Screenshots.reconcile(url_post(user()))
+
+      skipped =
+        Repo.update!(Ecto.Changeset.change(job, status: "skipped", last_error: ":redirect"))
+
+      assert {:ok, %{status: "pending", last_error: nil}} = Screenshots.requeue(skipped)
+    end
+
     test "an author-dismissed tombstone is never handed back" do
       {_post, ready} = ready_post(user())
       {:ok, dismissed} = Screenshots.dismiss(ready)
 
       assert {:error, :not_requeueable} = Screenshots.requeue(dismissed)
       assert Repo.get!(PostScreenshot, dismissed.id).status == "dismissed"
+    end
+  end
+
+  describe "queue_page/1, skipped_page/1 and counts/0 (the admin views)" do
+    test "the queue holds only work; a skipped job has a list of its own" do
+      [pending, failed, skipped] =
+        for status <- ~w(pending failed skipped) do
+          {:ok, job} = Screenshots.reconcile(url_post(user()))
+          Repo.update!(Ecto.Changeset.change(job, status: status))
+        end
+
+      assert {queue, 2} = Screenshots.queue_page(%{})
+      assert Enum.sort(Enum.map(queue, & &1.id)) == Enum.sort([pending.id, failed.id])
+
+      assert {[%{id: id}], 1} = Screenshots.skipped_page(%{})
+      assert id == skipped.id
+
+      assert Screenshots.counts() == %{queue: 2, ready: 0, skipped: 1}
     end
   end
 
@@ -625,7 +745,7 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       Screenshots.deliver_due(force: true)
 
       job = Screenshots.get_job!(job.id)
-      assert job.status == "failed"
+      assert job.status == "skipped"
       assert job.last_error == ":redirect"
     end
 
@@ -644,7 +764,7 @@ defmodule Vutuv.Posts.ScreenshotsTest do
 
       Screenshots.deliver_due(force: true)
 
-      assert Screenshots.get_job!(job.id).status == "failed"
+      assert Screenshots.get_job!(job.id).status == "skipped"
       refute_received :youtube_called
     end
   end

@@ -104,6 +104,55 @@ defmodule VutuvWeb.Admin.ScreenshotLiveTest do
 
       refute has_element?(view, "#job-#{job.id} button[phx-click=requeue]")
     end
+
+    test "a skipped job is not work, so the queue leaves it out", %{conn: conn} do
+      job = screenshot(status: "skipped", attempts: 1, last_error: "{:bad_status, 403}")
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots")
+
+      refute has_element?(view, "#job-#{job.id}")
+    end
+  end
+
+  describe "skipped tab" do
+    setup %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+      %{conn: conn}
+    end
+
+    test "lists the links that were refused for good, with their reason", %{conn: conn} do
+      job = screenshot(status: "skipped", attempts: 1, last_error: ":redirect")
+      queued = screenshot(status: "pending")
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=skipped")
+
+      assert has_element?(view, "#tab-skipped[aria-current=page]", "(1)")
+      assert has_element?(view, "#job-#{job.id}", ":redirect")
+      refute has_element?(view, "#job-#{queued.id}")
+    end
+
+    test "a skipped job can be handed back to the worker", %{conn: conn} do
+      job = screenshot(status: "skipped", attempts: 1, last_error: ":redirect")
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=skipped")
+
+      view |> element("#job-#{job.id} button[phx-click=requeue]") |> render_click()
+
+      assert Repo.get!(PostScreenshot, job.id).status == "pending"
+      refute has_element?(view, "#job-#{job.id}")
+    end
+
+    test "the tab reads in German for a German admin", %{conn: conn} do
+      screenshot(status: "skipped", attempts: 1, last_error: ":redirect")
+
+      # One-word labels are what `gettext.extract --merge` fuzzy-fills.
+      conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=skipped")
+
+      assert has_element?(view, "#tab-skipped", "Übersprungen")
+      assert has_element?(view, "h1", "Übersprungen")
+      assert has_element?(view, "td span", "Übersprungen")
+    end
   end
 
   describe "a screenshot of an organization post" do

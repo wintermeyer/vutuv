@@ -279,7 +279,9 @@ GitHub/GitLab/Codeberg and self-hosted Gitea/Forgejo statistics), `:generate_scr
 previews, an organization page's homepage capture **and** the auto-screenshot
 for single-link posts, including cached
 fediverse posts in the feed — admins watch the
-capture queue and browse the gallery at `/admin/screenshots`; a YouTube video
+capture queue, see the links refused for good with their reason (a site on
+that list over and over belongs on the blocklist) and browse the gallery at
+`/admin/screenshots`; a YouTube video
 link stores the video's published thumbnail instead of a capture, fetched
 server-side from YouTube under this same flag),
 `:fediverse_quote_resolve` (resolving what an incoming fediverse post

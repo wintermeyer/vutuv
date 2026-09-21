@@ -258,9 +258,9 @@ defmodule Vutuv.PageScreenshot do
   rather than a link to one particular document: an apex that redirects to
   `www.`, or `http` to `https`, is the normal shape of a homepage, and refusing
   to capture it would leave most organization pages without a picture. The post
-  queue does not use it — there a redirect usually means a shortener or a login
-  wall, so `Vutuv.Posts.Screenshots.ensure_http_ok/1` insists on a plain 200
-  instead.
+  queue does not use it — there a redirect to another site usually means a
+  shortener or a login wall, so `Vutuv.Posts.Screenshots.ensure_http_ok/1`
+  follows at most two redirects within the same site and refuses the rest.
 
   The blocklist is consulted on the named URL first, before the redirect probe,
   so a blocklisted site is not even asked for its headers; `capture_framed/2`
@@ -431,7 +431,12 @@ defmodule Vutuv.PageScreenshot do
     _ -> {:ok, url}
   end
 
-  defp redirect_target(from_url, resp) do
+  @doc """
+  Where a `3xx` response sent from `from_url` points, a relative `location`
+  resolved against it, or `nil` when it names none. Shared by this module's
+  redirect walk and the post queue's (`Vutuv.Posts.Screenshots.ensure_http_ok/1`).
+  """
+  def redirect_target(from_url, resp) do
     case Req.Response.get_header(resp, "location") do
       [location | _] -> from_url |> URI.merge(location) |> URI.to_string()
       _ -> nil
