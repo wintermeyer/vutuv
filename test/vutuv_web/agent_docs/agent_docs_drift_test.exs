@@ -564,6 +564,20 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert german =~ "Nachname: Lovelace"
   end
 
+  test "the readable formats name an address's country in the reader's language" do
+    user = insert_activated_user(username: "country_reader")
+    insert(:address, user: user, description: "Büro", city: "Paris", country: "France")
+
+    rendered = formats_for("/#{user.username}")
+    assert rendered.md =~ "Paris, France"
+    assert rendered.txt =~ "Paris, France"
+
+    for ext <- ["md", "txt"] do
+      german = get(build_conn(), "/#{user.username}.#{ext}?lang=de").resp_body
+      assert german =~ "Paris, Frankreich"
+    end
+  end
+
   test "a member with only the two usual name parts gets no empty label lines" do
     user = insert_activated_user(username: "two_part_name", first_name: "Ada", last_name: "Byron")
 

@@ -9,11 +9,20 @@ defmodule Vutuv.AddressTest do
   end
 
   describe "lines/2" do
-    test "renders a German address with its country for a non-de viewer" do
+    test "names the country of a German address in a non-de viewer's language" do
       a = address(line_1: "Johannes-Müller-Str. 10", zip_code: "56068", city: "Koblenz")
 
-      assert Address.lines(a, "en") == ["Johannes-Müller-Str. 10", "56068 Koblenz", "Deutschland"]
-      assert Address.lines(a, nil) == ["Johannes-Müller-Str. 10", "56068 Koblenz", "Deutschland"]
+      assert Address.lines(a, "en") == ["Johannes-Müller-Str. 10", "56068 Koblenz", "Germany"]
+    end
+
+    test "without a locale the interface language names the country and drops it" do
+      a = address(zip_code: "56068", city: "Koblenz")
+
+      assert Gettext.with_locale(VutuvWeb.Gettext, "it", fn -> Address.lines(a, nil) end) ==
+               ["56068 Koblenz", "Germania"]
+
+      assert Gettext.with_locale(VutuvWeb.Gettext, "de", fn -> Address.lines(a, nil) end) ==
+               ["56068 Koblenz"]
     end
 
     test "drops the country line for a German address shown to a de viewer" do
@@ -25,7 +34,7 @@ defmodule Vutuv.AddressTest do
     test "keeps the country for a foreign address even for a de viewer" do
       a = address(country: "France", line_1: "10 Rue de Rivoli", zip_code: "75001", city: "Paris")
 
-      assert Address.lines(a, "de") == ["10 Rue de Rivoli", "75001 Paris", "France"]
+      assert Address.lines(a, "de") == ["10 Rue de Rivoli", "75001 Paris", "Frankreich"]
     end
 
     test "formats US addresses as City, ST ZIP" do
@@ -51,7 +60,7 @@ defmodule Vutuv.AddressTest do
       a = address(line_1: nil, line_2: nil, zip_code: nil, city: nil)
 
       assert Address.lines(a, "de") == []
-      assert Address.lines(a, "en") == ["Deutschland"]
+      assert Address.lines(a, "en") == ["Germany"]
     end
   end
 

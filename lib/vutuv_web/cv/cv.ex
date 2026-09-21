@@ -38,6 +38,7 @@ defmodule VutuvWeb.CV do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Countries
   alias Vutuv.Languages
   alias Vutuv.Phone
   alias Vutuv.Profiles.Address
@@ -441,7 +442,7 @@ defmodule VutuvWeb.CV do
       address.line_4,
       city_line,
       address.state,
-      address.country
+      Countries.localize_english_name(address.country)
     ]
     |> Enum.map(&presence/1)
     |> Enum.filter(& &1)

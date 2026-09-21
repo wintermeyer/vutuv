@@ -231,6 +231,26 @@ defmodule VutuvWeb.CVControllerTest do
       assert conn.resp_body =~ "Erika Beispiel"
     end
 
+    test "names the country in the reader's language", %{conn: conn} do
+      owner = insert(:activated_user)
+      insert(:address, user: owner, city: "Koblenz", country: "Germany")
+
+      german =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/#{owner}/cv/download/html")
+
+      assert german.resp_body =~ "Deutschland"
+      refute german.resp_body =~ "Germany"
+
+      english =
+        conn
+        |> put_req_header("accept-language", "en")
+        |> get(~p"/#{owner}/cv/download/html")
+
+      assert english.resp_body =~ "Germany"
+    end
+
     test "an anonymized download drops the username from the filename", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
 

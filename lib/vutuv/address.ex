@@ -5,24 +5,27 @@ defmodule Vutuv.Address do
 
   Mirrors `Vutuv.Phone`: pure functions that turn a stored address into the
   lines a viewer should actually see, and into deep links to the common map
-  services. The HTML view (`format_address/2`) and the agent formats both
-  build on the same line logic so they can never describe an address
-  differently.
+  services. The HTML pages build on these lines (`format_address/2`); the CV
+  and the agent formats keep their own, but name the country the same way,
+  through `Vutuv.Countries.localize_english_name/2`.
   """
 
+  alias Vutuv.Countries
   alias Vutuv.Profiles.Address
 
   @doc """
   The address as a list of display lines, ordered top to bottom.
 
-  The country line is dropped for a German viewer (`locale == "de"`) looking at
-  a German address: a German reader does not need "Deutschland" spelled out
-  under a domestic address. Every other case keeps the country line, so a
-  foreign address (or a non-German viewer) never loses its country.
+  The country line is named in the viewer's language (`nil` reads the current
+  interface language), and dropped for a German viewer (`locale == "de"`)
+  looking at a German address: a German reader does not need "Deutschland"
+  spelled out under a domestic address. Every other case keeps the country
+  line, so a foreign address (or a non-German viewer) never loses its country.
   """
   def lines(address, locale \\ nil)
 
   def lines(%Address{} = address, locale) do
+    locale = locale || Gettext.get_locale(VutuvWeb.Gettext)
     body_lines(address) ++ country_lines(address, locale)
   end
 
@@ -72,12 +75,9 @@ defmodule Vutuv.Address do
 
   defp country_lines(%Address{country: "Germany"}, "de"), do: []
 
-  defp country_lines(%Address{country: country}, _locale) do
-    present([country_name(country)])
+  defp country_lines(%Address{country: country}, locale) do
+    present([Countries.localize_english_name(country, locale)])
   end
-
-  defp country_name("Germany"), do: "Deutschland"
-  defp country_name(country), do: country
 
   # Keeps only the non-blank entries of a list, trimming each survivor.
   defp present(list) do

@@ -15,6 +15,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
+  alias Vutuv.Countries
   alias Vutuv.Isbn
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.PostComponents
@@ -1112,7 +1113,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         address.zip_code,
         address.city,
         address.state,
-        address.country
+        Countries.localize_english_name(address.country)
       ]
       |> Enum.filter(&(&1 not in [nil, ""]))
       |> Enum.join(", ")

@@ -626,7 +626,7 @@ defmodule VutuvWeb.UserControllerTest do
     refute html =~ "data-map-row"
   end
 
-  test "keeps the country line of a German address for a non-de viewer", %{conn: conn} do
+  test "names the country of a German address in an en viewer's language", %{conn: conn} do
     user = insert_activated_user()
     insert(:address, user: user, description: "Office", city: "Koblenz", country: "Germany")
 
@@ -636,8 +636,24 @@ defmodule VutuvWeb.UserControllerTest do
       |> get(~p"/#{user}")
       |> html_response(200)
 
-    assert html =~ "Koblenz"
-    assert html =~ "Deutschland"
+    # The JSON-LD carries the stored English name too, so read the card alone.
+    card = text_of(html, "#profile-addresses")
+    assert card =~ "Koblenz"
+    assert card =~ "Germany"
+    refute html =~ "Deutschland"
+  end
+
+  test "names a foreign country in a de viewer's language", %{conn: conn} do
+    user = insert_activated_user()
+    insert(:address, user: user, description: "Büro", city: "Paris", country: "France")
+
+    html =
+      conn
+      |> put_req_header("accept-language", "de-DE,de")
+      |> get(~p"/#{user}")
+      |> html_response(200)
+
+    assert html =~ "Frankreich"
   end
 
   test "hides the address card from visitors while no address names a city", %{conn: conn} do
