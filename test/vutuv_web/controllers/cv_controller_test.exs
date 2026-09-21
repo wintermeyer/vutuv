@@ -287,8 +287,7 @@ defmodule VutuvWeb.CVControllerTest do
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "wordprocessingml.document"
 
-      {:ok, files} = :zip.unzip(conn.resp_body, [:memory])
-      files = Map.new(files, fn {name, data} -> {List.to_string(name), data} end)
+      files = unzipped(conn.resp_body)
 
       assert Map.has_key?(files, "[Content_Types].xml")
       document = Map.fetch!(files, "word/document.xml")
@@ -315,8 +314,7 @@ defmodule VutuvWeb.CVControllerTest do
       # The ODF magic: an uncompressed "mimetype" first in the archive.
       assert binary_part(conn.resp_body, 30, 8) == "mimetype"
 
-      {:ok, files} = :zip.unzip(conn.resp_body, [:memory])
-      files = Map.new(files, fn {name, data} -> {List.to_string(name), data} end)
+      files = unzipped(conn.resp_body)
       assert files["mimetype"] == "application/vnd.oasis.opendocument.text"
       content = Map.fetch!(files, "content.xml")
       assert content =~ "SV Musterstadt"
@@ -377,6 +375,49 @@ defmodule VutuvWeb.CVControllerTest do
       {conn, user} = login_with_profile(conn)
       assert conn |> get(~p"/#{user}/cv/download/pdf") |> response(404)
     end
+  end
+
+  # The headline is Markdown, rendered as such on the profile. Every CV format
+  # printed its source instead, brackets and all.
+  describe "a Markdown headline" do
+    setup %{conn: conn} do
+      {conn, user} = login_with_profile(conn)
+
+      user
+      |> Changeset.change(headline: "Koordinator der [CoWorkLand eG](https://coworkland.de/)")
+      |> Repo.update!()
+
+      %{conn: conn, user: user}
+    end
+
+    test "is a link in the print view", %{conn: conn, user: user} do
+      body = conn |> get(~p"/#{user}/cv/print") |> html_response(200)
+
+      assert body =~ ~s(href="https://coworkland.de/")
+      refute body =~ "[CoWorkLand eG]"
+    end
+
+    test "keeps its link text and URL on paper and in the JSON Resume", %{conn: conn, user: user} do
+      plain = "Koordinator der CoWorkLand eG (https://coworkland.de/)"
+
+      for format <- ~w(tex docx odt) do
+        text = conn |> recycle() |> get(~p"/#{user}/cv/download/#{format}") |> response(200)
+        assert document_text(format, text) =~ plain, format
+      end
+
+      resume = conn |> recycle() |> get(~p"/#{user}/cv/download/json") |> json_response(200)
+      assert resume["basics"]["label"] == plain
+    end
+  end
+
+  defp document_text("tex", body), do: body
+  defp document_text("docx", body), do: body |> unzipped() |> Map.fetch!("word/document.xml")
+  defp document_text("odt", body), do: body |> unzipped() |> Map.fetch!("content.xml")
+
+  # An office package's files by name.
+  defp unzipped(body) do
+    {:ok, files} = :zip.unzip(body, [:memory])
+    Map.new(files, fn {name, data} -> {List.to_string(name), data} end)
   end
 
   describe "access & privacy" do

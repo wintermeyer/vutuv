@@ -75,6 +75,17 @@ defmodule VutuvWeb.SavedLiveTest do
     refute has_element?(view, "#saved-people li", "Conrad")
   end
 
+  test "a saved person's headline reads as text, not as its Markdown", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    keeper = other_user(headline: "Bei der [CoWorkLand eG](https://coworkland.de/)")
+    :ok = Vutuv.Social.bookmark_user(user, keeper)
+
+    {:ok, view, _html} = live(conn, ~p"/bookmarks?tab=people")
+
+    assert has_element?(view, "#saved-people li", "Bei der CoWorkLand eG")
+    refute render(view) =~ "[CoWorkLand eG]"
+  end
+
   test "removing a saved person from the People tab drops the row live", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     liked = other_user(first_name: "Removable")

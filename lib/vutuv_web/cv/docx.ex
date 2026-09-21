@@ -93,7 +93,7 @@ defmodule VutuvWeb.CV.Docx do
     body =
       [
         cv.name && paragraph(cv.name, style: "Title"),
-        cv.headline && paragraph(cv.headline),
+        cv.headline && paragraph(MarkdownBlocks.plain(cv.headline)),
         contact(cv),
         address(cv),
         details(cv),

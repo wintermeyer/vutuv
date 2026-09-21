@@ -58,7 +58,7 @@ defmodule VutuvWeb.CV.Odt do
     body =
       [
         cv.name && p(cv.name, "CVTitle"),
-        cv.headline && p(cv.headline, "CVHeadline"),
+        cv.headline && p(MarkdownBlocks.plain(cv.headline), "CVHeadline"),
         contact(cv),
         address(cv),
         details(cv),

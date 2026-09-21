@@ -174,6 +174,8 @@ defmodule VutuvWeb.CVLive do
   # text, so its label carries the meaning).
   defp identity_preview("photo", _value), do: nil
   defp identity_preview("address", lines), do: Enum.join(lines, ", ")
+  # The headline is Markdown, shown as text like the entry hints below.
+  defp identity_preview("headline", headline), do: MarkdownBlocks.plain(headline)
   defp identity_preview(_key, value), do: value
 
   # Every viewer is offered every format: they all render the same public CV

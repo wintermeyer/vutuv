@@ -66,7 +66,9 @@ defmodule VutuvWeb.CV.Html do
   defp header(cv) do
     photo = if cv.photo, do: ~s(<img class="photo" src="#{cv.photo}" alt=""/>), else: ""
     name = if cv.name, do: ~s(<h1>#{esc(cv.name)}</h1>), else: ""
-    headline = if cv.headline, do: ~s(<p class="headline">#{esc(cv.headline)}</p>), else: ""
+
+    headline =
+      if cv.headline, do: ~s(<div class="headline">#{markdown_html(cv.headline)}</div>), else: ""
 
     # The profile link is a real clickable link (opens the vutuv profile);
     # the email/phone stay plain text.
@@ -124,7 +126,7 @@ defmodule VutuvWeb.CV.Html do
 
     description =
       if entry.description,
-        do: ~s(<div class="desc">#{description_html(entry.description)}</div>),
+        do: ~s(<div class="desc">#{markdown_html(entry.description)}</div>),
         else: ""
 
     """
@@ -135,11 +137,11 @@ defmodule VutuvWeb.CV.Html do
     """
   end
 
-  # The description Markdown through the profile's sanitizing pipeline
-  # (escaped raw HTML, stripped images, safe links). Its @handle/#hashtag
-  # links come out relative; a downloaded file has no host to resolve them
-  # against, so they are absolutized against this installation's URL.
-  defp description_html(markdown) do
+  # A description's or the headline's Markdown through the profile's
+  # sanitizing pipeline (escaped raw HTML, stripped images, safe links). Its
+  # @handle/#hashtag links come out relative; a downloaded file has no host to
+  # resolve them against, so they are absolutized against this installation's URL.
+  defp markdown_html(markdown) do
     markdown
     |> Markdown.render()
     |> Phoenix.HTML.safe_to_string()
@@ -238,6 +240,8 @@ defmodule VutuvWeb.CV.Html do
     .photo { width: 104px; height: 104px; object-fit: cover; border-radius: 8px; flex: none; }
     h1 { font-size: 28px; margin: 0; line-height: 1.2; }
     .headline { margin: 4px 0 0; font-size: 15px; color: #334155; }
+    .headline p { margin: 0; }
+    .headline a { color: #1d4ed8; }
     .contact { margin: 8px 0 0; font-size: 13px; color: #334155; overflow-wrap: anywhere; }
     .contact a { color: #1d4ed8; }
     h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #64748b;
@@ -272,7 +276,7 @@ defmodule VutuvWeb.CV.Html do
       body { background: #fff; }
       .sheet { max-width: none; padding: 0; min-height: 0; }
       .noprint { display: none; }
-      .links a, .desc a { color: inherit; text-decoration: none; }
+      .links a, .desc a, .headline a { color: inherit; text-decoration: none; }
     }
     """
   end

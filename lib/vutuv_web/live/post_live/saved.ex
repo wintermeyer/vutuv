@@ -21,7 +21,7 @@ defmodule VutuvWeb.PostLive.Saved do
 
   import VutuvWeb.OrganizationComponents
   import VutuvWeb.PostComponents
-  import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.UserHelpers, only: [full_name: 1, headline_text: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
@@ -825,12 +825,10 @@ defmodule VutuvWeb.PostLive.Saved do
   defp remove_label(:bookmarks), do: gettext("Remove bookmark")
 
   # Headlines are short Markdown; on this compact row show the plain text only.
-  defp present_headline(%User{headline: headline}) when is_binary(headline) do
-    case String.trim(headline) do
+  defp present_headline(%User{headline: headline}) do
+    case headline_text(headline) do
       "" -> nil
       text -> text
     end
   end
-
-  defp present_headline(_), do: nil
 end

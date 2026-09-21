@@ -113,6 +113,24 @@ defmodule Vutuv.SavedSearches.AlertSweeperTest do
       assert_email_sent(fn email -> assert email.text_body =~ ctx.candidate.username end)
     end
 
+    test "the member's headline reads as text, not as its Markdown", ctx do
+      save(ctx.recipient, %{kind: :people, query: "q=status%3Alooking", notify: :daily})
+
+      ctx.candidate
+      |> Ecto.Changeset.change(headline: "Bei der [CoWorkLand eG](https://coworkland.de/)")
+      |> Repo.update!()
+
+      flip_status(ctx.candidate, "looking", "members")
+
+      assert AlertSweeper.sweep(BerlinTime.today()) == 1
+
+      assert_email_sent(fn email ->
+        refute email.text_body =~ "[CoWorkLand eG]"
+        refute email.html_body =~ "[CoWorkLand eG]"
+        assert email.text_body =~ "Bei der CoWorkLand eG"
+      end)
+    end
+
     test "a hidden status never matches", ctx do
       save(ctx.recipient, %{kind: :people, query: "q=status%3Alooking", notify: :daily})
       flip_status(ctx.candidate, "looking", "hidden")

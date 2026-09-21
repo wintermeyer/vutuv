@@ -616,7 +616,10 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   defp people_meta(candidate) do
-    join_present(["@" <> candidate.username, candidate.headline], " · ")
+    join_present(
+      ["@" <> candidate.username, UserHelpers.headline_text(candidate.headline)],
+      " · "
+    )
   end
 
   # Only ever the status the recipient could see logged in (#928/#938); nil hides

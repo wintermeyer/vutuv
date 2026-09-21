@@ -14,6 +14,8 @@ defmodule VutuvWeb.CV.JsonResume do
   the human-readable formats, not here.)
   """
 
+  alias VutuvWeb.CV.MarkdownBlocks
+
   @schema_url "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json"
 
   def render(cv) do
@@ -22,7 +24,9 @@ defmodule VutuvWeb.CV.JsonResume do
       "basics" =>
         compact(%{
           "name" => cv.name,
-          "label" => cv.headline,
+          # A title, so plain text; the entries' `summary` below keeps the
+          # Markdown source (see `VutuvWeb.CV.MarkdownBlocks`).
+          "label" => cv.headline && MarkdownBlocks.plain(cv.headline),
           "email" => cv.email,
           "phone" => cv.phone,
           "url" => cv.profile_url,

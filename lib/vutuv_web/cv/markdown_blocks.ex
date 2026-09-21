@@ -33,8 +33,9 @@ defmodule VutuvWeb.CV.MarkdownBlocks do
   end
 
   @doc """
-  The description as a single line of plain text — for compact one-line
-  hints (the CV builder's entry checklist). Bullet items join with a
+  Markdown (a description or the headline) as one line of plain text — for
+  compact one-line hints (the CV builder's entry checklist) and for the
+  headline wherever a CV format carries it as text. Bullet items join with a
   middle dot, everything else with spaces.
   """
   @spec plain(String.t()) :: String.t()

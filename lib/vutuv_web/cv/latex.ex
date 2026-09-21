@@ -46,7 +46,9 @@ defmodule VutuvWeb.CV.Latex do
   defp title(%{name: name}), do: "#{gettext("CV")}: #{name}"
 
   defp headline(%{headline: nil}), do: ""
-  defp headline(%{headline: headline}), do: "\n\\medskip\n\n#{esc(headline)}\n"
+
+  defp headline(%{headline: headline}),
+    do: "\n\\medskip\n\n#{esc(MarkdownBlocks.plain(headline))}\n"
 
   defp contact(cv) do
     url_part = if cv.profile_url, do: ["\\url{#{url(cv.profile_url)}}"], else: []

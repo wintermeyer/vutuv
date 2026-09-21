@@ -79,6 +79,20 @@ defmodule VutuvWeb.CVLiveTest do
       refute html =~ "**Led**"
     end
 
+    test "the tagline preview shows the headline without Markdown markers", %{
+      conn: conn,
+      owner: owner
+    } do
+      owner
+      |> Ecto.Changeset.change(headline: "Bei der [CoWorkLand eG](https://coworkland.de/)")
+      |> Repo.update!()
+
+      {:ok, _view, html} = live(conn, ~p"/#{owner}/cv")
+
+      assert html =~ "Bei der CoWorkLand eG (https://coworkland.de/)"
+      refute html =~ "[CoWorkLand eG]"
+    end
+
     test "unticking a section encodes it into every download link", %{conn: conn, owner: owner} do
       internship = Repo.get_by(WorkExperience, title: "Werkstudent", user_id: owner.id)
       {:ok, view, _html} = live(conn, ~p"/#{owner}/cv")
