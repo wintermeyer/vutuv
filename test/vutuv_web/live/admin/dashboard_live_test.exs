@@ -42,6 +42,17 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
     :ok
   end
 
+  # The people card lists one set at a time, new members first; the online list
+  # sits behind its segment.
+  defp show_online(view) do
+    view |> element("#dashboard-tab-online") |> render_click()
+    view
+  end
+
+  defp tag_member(member, count) do
+    for _ <- 1..count, do: insert(:user_tag, user: member, tag: insert(:tag))
+  end
+
   describe "embedded on the admin home page" do
     test "the admin home renders the live dashboard at the top", %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)
@@ -96,8 +107,88 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
 
       assert has_element?(view, "#stat-online", "0")
       assert has_element?(view, "#stat-posts-today", "2")
-      assert render(view) =~ "Direct messages"
-      assert render(view) =~ "New members"
+      assert render(view) =~ "Messages"
+      assert render(view) =~ "New today"
+    end
+
+    # Variant C of the 2026-09-21 demo: on a phone the four figures come first
+    # and one list below them, so an admin who opens the page for today's
+    # sign-ups does not scroll past everybody online to reach them.
+    test "the people card opens on the new members and switches to who is online", %{
+      session: session
+    } do
+      {:ok, view, _html} = mount_dashboard(session)
+
+      assert has_element?(view, "#newest-members")
+      refute has_element?(view, "#online-members")
+      assert has_element?(view, "#dashboard-tab-new[aria-pressed=true]")
+
+      show_online(view)
+
+      assert has_element?(view, "#online-members")
+      refute has_element?(view, "#newest-members")
+      assert has_element?(view, "#dashboard-tab-online[aria-pressed=true]")
+
+      # The figure tile is the same switch, and the bigger target on a phone.
+      view |> element("#tile-new") |> render_click()
+
+      assert has_element?(view, "#newest-members")
+    end
+
+    test "the segments carry a short label for a phone beside the full one", %{session: session} do
+      {:ok, view, _html} = mount_dashboard(session)
+
+      assert has_element?(view, "#dashboard-tab-new [data-label=short]", "New")
+      assert has_element?(view, "#dashboard-tab-new [data-label=full]", "New members")
+      assert has_element?(view, "#dashboard-tab-online [data-label=short]", "Online")
+      assert has_element?(view, "#dashboard-tab-online [data-label=full]", "Currently online")
+    end
+
+    test "a new member's row names where they live and their first three tags", %{
+      session: session
+    } do
+      member = insert(:activated_user)
+      insert(:address, user: member, city: "Leipzig", country: "Germany")
+      tag_member(member, 5)
+
+      {:ok, view, _html} = mount_dashboard(session)
+      row = "#newest-members-#{member.id}"
+
+      assert has_element?(view, "#{row} [data-member-place]", "Leipzig, Germany")
+      assert length(elements(render(view), "#{row} [data-member-tag]")) == 3
+      assert has_element?(view, "#{row} [data-member-more-tags]", "+2 more tags")
+    end
+
+    # The count is derived from the tag summary on every render. Derived once
+    # and stashed beside it, change tracking skipped it and the row kept the
+    # figure from mount after the member added a tag.
+    test "the rest-of-tags count follows a refresh", %{session: session} do
+      member = insert(:activated_user)
+      tag_member(member, 5)
+
+      {:ok, view, _html} = mount_dashboard(session)
+      row = "#newest-members-#{member.id}"
+      assert has_element?(view, "#{row} [data-member-more-tags]", "+2 more tags")
+
+      tag_member(member, 1)
+      send(view.pid, :refresh)
+      _ = :sys.get_state(view.pid)
+
+      assert has_element?(view, "#{row} [data-member-more-tags]", "+3 more tags")
+    end
+
+    test "a row with three tags or fewer shows no count, and one without an address no place", %{
+      session: session
+    } do
+      member = insert(:activated_user)
+      tag_member(member, 3)
+
+      {:ok, view, _html} = mount_dashboard(session)
+      row = "#newest-members-#{member.id}"
+
+      assert length(elements(render(view), "#{row} [data-member-tag]")) == 3
+      refute has_element?(view, "#{row} [data-member-more-tags]")
+      refute has_element?(view, "#{row} [data-member-place]")
     end
 
     test "the currently-online count tracks presence live", %{session: session} do
@@ -114,6 +205,7 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
     test "the currently-online card links to each online member's profile", %{session: session} do
       {:ok, view, _html} = mount_dashboard(session)
 
+      show_online(view)
       assert has_element?(view, "#online-members", "Nobody is online right now")
 
       online = insert(:user)
@@ -259,6 +351,7 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
       {:ok, view, _html} = mount_dashboard(session)
 
       bring_online(view, admin)
+      show_online(view)
 
       assert has_element?(view, "#online-members a[href='/#{admin.username}']")
       refute has_element?(view, "#online-members button[phx-value-followee='#{admin.id}']")
@@ -273,11 +366,33 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
       {:ok, view, _html} = mount_dashboard(shell_session(admin))
 
       html = render(view)
-      assert html =~ "Gerade online"
-      assert html =~ "Direktnachrichten"
-      assert html =~ "Neue Mitglieder"
+      assert html =~ "Neu heute"
+      assert html =~ "Nachrichten"
       assert html =~ "Geschlecht"
       assert html =~ "ohne Angabe"
+
+      assert has_element?(view, "#dashboard-tab-new [data-label=short]", "Neu")
+      assert has_element?(view, "#dashboard-tab-new [data-label=full]", "Neue Mitglieder")
+      assert has_element?(view, "#dashboard-tab-online [data-label=short]", "Online")
+      assert has_element?(view, "#dashboard-tab-online [data-label=full]", "Gerade online")
+    end
+
+    # `addresses.country` stores the English name; a German admin reads the
+    # German one.
+    test "a German admin reads the member's country in German" do
+      admin = insert(:user, admin?: true, email_confirmed?: true, locale: "de")
+      member = insert(:activated_user)
+      insert(:address, user: member, city: "London", country: "United Kingdom")
+
+      {:ok, view, _html} = mount_dashboard(shell_session(admin))
+
+      assert has_element?(
+               view,
+               "#newest-members-#{member.id} [data-member-place]",
+               "London, Vereinigtes Königreich"
+             )
+
+      assert has_element?(view, "#stat-members-yesterday", "gestern 0")
     end
   end
 end

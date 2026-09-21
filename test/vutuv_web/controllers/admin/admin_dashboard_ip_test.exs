@@ -36,4 +36,30 @@ defmodule VutuvWeb.Admin.AdminDashboardIpTest do
     assert html =~ "127.0.0.1"
     assert html =~ "Reverse proxy is not forwarding"
   end
+
+  # On a phone the live figures are what an admin opens the page for, so a
+  # healthy IP line waits at the foot of the page. A broken proxy is work to do
+  # and keeps its place above everything.
+  test "a healthy IP line sits at the end of the page", %{conn: conn} do
+    html = html_response(admin_dashboard_from(conn, {203, 0, 113, 7}), 200)
+    {ip_at, _} = :binary.match(html, "admin-client-ip")
+    {last_card_at, _} = :binary.match(html, "admin-legal-link")
+
+    assert ip_at > last_card_at
+  end
+
+  test "the proxy warning keeps the top of the page", %{conn: conn} do
+    html = html_response(admin_dashboard_from(conn, {127, 0, 0, 1}), 200)
+    {warning_at, _} = :binary.match(html, "admin-proxy-ip-warning")
+    {dashboard_at, _} = :binary.match(html, "admin-live-dashboard")
+
+    assert warning_at < dashboard_at
+    refute html =~ "admin-client-ip"
+  end
+
+  test "the page no longer opens with the tagline", %{conn: conn} do
+    html = html_response(admin_dashboard_from(conn, {203, 0, 113, 7}), 200)
+
+    refute html =~ "Everything that keeps vutuv running"
+  end
 end

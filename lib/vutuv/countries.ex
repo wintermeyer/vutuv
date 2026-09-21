@@ -317,6 +317,7 @@ defmodule Vutuv.Countries do
              {code, %{en: en, de: de, fr: fr, it: it}}
            end)
   @codes Enum.map(@countries, fn {code, _en, _de, _fr, _it} -> code end)
+  @code_by_english Map.new(@countries, fn {code, en, _de, _fr, _it} -> {en, code} end)
 
   # Countries that customarily carry a state, province, or region in a postal
   # address. Kept deliberately small: the large federations whose mail routing
@@ -408,6 +409,26 @@ defmodule Vutuv.Countries do
   end
 
   def name(code, _locale), do: to_string(code)
+
+  @doc """
+  The localized display name for a country stored by its **English** name,
+  which is how `addresses.country` holds it
+  (`VutuvWeb.AddressHTML.country_options/1`).
+
+  A name outside the ISO list (an older import's "Burma") comes back as it is
+  stored, so a row never loses its country; `nil` stays `nil`.
+  """
+  @spec localize_english_name(String.t() | nil, String.t() | atom() | nil) :: String.t() | nil
+  def localize_english_name(english, locale \\ nil)
+
+  def localize_english_name(english, locale) when is_binary(english) do
+    case Map.fetch(@code_by_english, english) do
+      {:ok, code} -> name(code, locale)
+      :error -> english
+    end
+  end
+
+  def localize_english_name(english, _locale), do: english
 
   @doc """
   Options for a country select, as `{localized_name, code}` tuples sorted by the

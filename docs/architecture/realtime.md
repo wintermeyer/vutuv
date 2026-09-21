@@ -1027,6 +1027,6 @@ query (every socket receives the messages, but the `recount` is gated on
 follower arriving says nothing about today's registrations. The pill is
 rendered only above zero, so a quiet day adds no chrome. Each such message
 makes an admin socket re-read `Vutuv.Dashboard.registrations_today/0` (the
-figure the admin dashboard's "New members" tile shows) rather than adjusting a
+figure the admin dashboard's "New today" tile shows) rather than adjusting a
 running tally, so it cannot drift; `Vutuv.DayClock`'s midnight tick empties it
 out for the new day.

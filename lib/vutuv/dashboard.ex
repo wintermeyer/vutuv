@@ -22,6 +22,7 @@ defmodule Vutuv.Dashboard do
   alias Vutuv.BerlinTime
   alias Vutuv.Chat.Message
   alias Vutuv.Posts.Post
+  alias Vutuv.Profiles.Address
   alias Vutuv.Repo
   alias Vutuv.Reports
 
@@ -129,6 +130,28 @@ defmodule Vutuv.Dashboard do
   def newest_members(limit \\ @people_list_limit) do
     from(u in User, where: u.email_confirmed? == true)
     |> recent_listing(limit)
+  end
+
+  @doc """
+  Where each of `user_ids` lives, as `%{user_id => %{city: city, country:
+  country}}`: the member's first address in their own order that names a city
+  or a country. A street-only row says nothing at a glance, so it is passed
+  over rather than hiding the next address that does. Members with no such
+  address are absent. `country` is the stored English name
+  (`Vutuv.Countries.localize_english_name/2` translates it).
+  """
+  def member_places([]), do: %{}
+
+  def member_places(user_ids) do
+    # `distinct` puts `user_id` in front of the member's own order.
+    from(a in Address.ordered(),
+      where: a.user_id in ^user_ids,
+      where: fragment("coalesce(?, '') <> '' or coalesce(?, '') <> ''", a.city, a.country),
+      distinct: a.user_id,
+      select: {a.user_id, %{city: a.city, country: a.country}}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   @doc """

@@ -14,18 +14,23 @@ The admin panel lives at `/admin`, reached from the **account menu** (an "Admin"
 entry that only admins see; there is no other link to it).
 
 At the very top sits a **live activity dashboard**
-(`VutuvWeb.Admin.DashboardLive`, embedded like the shell): an at-a-glance pulse
-of the system — how many members are online right now, plus today-vs-yesterday
-post, direct-message and confirmed-sign-up counts and the time of the last post
-and message.
+(`VutuvWeb.Admin.DashboardLive`, embedded like the shell): four figure tiles —
+confirmed sign-ups today, members online right now, posts and direct messages
+today, each against yesterday, the last two with the time of the newest row.
 
-The **Currently online** and **New members** cards also list the newest ten
-members behind each figure (avatar + name, linking straight to the profile), so
-an admin can look at who is online or who just joined without searching.
+Below the tiles **one** people card lists either the newest ten members or up to
+ten of the members online, switched by a segment control or by tapping the
+matching tile. New members come first: on a phone that is what an admin opens
+the page for. A new member's row also shows where they live (city and country
+of their first address, `Vutuv.Dashboard.member_places/1`, the country
+translated from the stored English name) and their three most-endorsed tags
+with the count of the rest. On a phone the segments say "New" and "Online".
 
 The "online now" figure and its list update the instant a member connects or
 disconnects (via `VutuvWeb.Presence`); the rest refreshes on a gentle timer, so
-it stays current without a reload.
+it stays current without a reload. The client IP check sits at the foot of the
+page while it is healthy and moves to the top as a warning when the app only
+sees the proxy hop.
 
 Below it the panel groups the sections by what you come to do — **Moderation &
 queues** (moderation, member browser, deliverability), **Communication**

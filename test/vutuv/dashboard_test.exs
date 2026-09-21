@@ -185,6 +185,37 @@ defmodule Vutuv.DashboardTest do
     end
   end
 
+  describe "member_places/1" do
+    test "takes each member's first address that names a city or a country" do
+      member = insert(:activated_user)
+      insert(:address, user: member, position: 2, city: "Hamburg", country: "Germany")
+      insert(:address, user: member, position: 1, city: "Zürich", country: "Switzerland")
+
+      assert Dashboard.member_places([member.id]) == %{
+               member.id => %{city: "Zürich", country: "Switzerland"}
+             }
+    end
+
+    # A street-only row says nothing about where somebody lives at a glance,
+    # so it must not hide the next address that does.
+    test "skips an address with neither city nor country" do
+      member = insert(:activated_user)
+      insert(:address, user: member, position: 1, city: nil, country: "")
+      insert(:address, user: member, position: 2, city: nil, country: "Austria")
+
+      assert Dashboard.member_places([member.id]) == %{
+               member.id => %{city: nil, country: "Austria"}
+             }
+    end
+
+    test "leaves out a member without an address, and asks nothing for no ids" do
+      member = insert(:activated_user)
+
+      assert Dashboard.member_places([member.id]) == %{}
+      assert Dashboard.member_places([]) == %{}
+    end
+  end
+
   describe "online_members/1" do
     test "returns [] for an empty presence set without querying" do
       assert Dashboard.online_members(MapSet.new()) == []

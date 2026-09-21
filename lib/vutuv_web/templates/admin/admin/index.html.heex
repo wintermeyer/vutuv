@@ -1,12 +1,10 @@
 <.page_header title={gettext("Admin control panel")} crumbs={[gettext("Admin")]} />
 
-<p class="-mt-2 mb-8 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-  {gettext("Everything that keeps vutuv running, in one place. Cards with open work glow in coral.")}
-</p>
-
 <%!-- The client IP as the app actually sees it: a live check that nginx forwards
 X-Forwarded-For (issues #799, #837). A loopback/private address here means the
-per-IP rate limiter and the security email only ever see the proxy hop. --%>
+per-IP rate limiter and the security email only ever see the proxy hop, and that
+is work to do, so the warning keeps the top of the page. The healthy line is
+only a reassurance and waits at the foot, below the cards. --%>
 <%= if @proxy_hop? do %>
   <div
     id="admin-proxy-ip-warning"
@@ -25,11 +23,6 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
       )}
     </p>
   </div>
-<% else %>
-  <p class="mb-8 text-sm text-slate-600 dark:text-slate-400">
-    {gettext("Your IP address, as vutuv sees it:")}
-    <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-800 dark:bg-slate-800 dark:text-slate-200">{@client_ip}</code>
-  </p>
 <% end %>
 
 <%!-- The live activity pulse, embedded like ShellLive so its counts and the
@@ -464,3 +457,8 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
   </.admin_group>
 </div>
+
+<p :if={!@proxy_hop?} id="admin-client-ip" class="mt-10 text-sm text-slate-600 dark:text-slate-400">
+  {gettext("Your IP address, as vutuv sees it:")}
+  <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-800 dark:bg-slate-800 dark:text-slate-200">{@client_ip}</code>
+</p>

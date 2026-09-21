@@ -60,6 +60,25 @@ defmodule Vutuv.CountriesTest do
     end
   end
 
+  # `addresses.country` holds the English name, not the code
+  # (`VutuvWeb.AddressHTML.country_options/1`), so a reader in another language
+  # needs the name translated back through the code.
+  describe "localize_english_name/2" do
+    test "translates a stored English name into the reader's language" do
+      assert Countries.localize_english_name("United Kingdom", "de") == "Vereinigtes Königreich"
+      assert Countries.localize_english_name("Germany", "fr") == "Allemagne"
+      assert Countries.localize_english_name("Switzerland", "en") == "Switzerland"
+    end
+
+    test "keeps a name outside the ISO list as it is stored" do
+      assert Countries.localize_english_name("Burma", "de") == "Burma"
+    end
+
+    test "answers nil for no country" do
+      assert Countries.localize_english_name(nil, "de") == nil
+    end
+  end
+
   describe "select_options/1" do
     test "returns {name, code} tuples and contains the German name for de" do
       options = Countries.select_options(:de)
