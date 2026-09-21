@@ -3,24 +3,7 @@ defmodule VutuvWeb.SearchLiveTest do
 
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
-
-  alias Vutuv.Accounts.SearchTerm
-
-  # A user findable by name search: the factory does not create search terms
-  # (Accounts.create_user does), so insert the same terms create_user would.
-  defp searchable_user(first, last, attrs \\ []) do
-    user = insert(:activated_user, Keyword.merge([first_name: first, last_name: last], attrs))
-
-    for changeset <-
-          SearchTerm.create_search_terms(%{
-            "first_name" => first,
-            "last_name" => last
-          }) do
-      changeset |> Ecto.Changeset.put_change(:user_id, user.id) |> Repo.insert!()
-    end
-
-    user
-  end
+  import Vutuv.SearchHelpers
 
   describe "the live search page" do
     test "renders the search form with tips for an empty query", %{conn: conn} do

@@ -4316,16 +4316,6 @@ msgstr ""
 msgid "Undeliverable"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:464
-#, elixir-autogen, elixir-format
-msgid "You can search for a name, email, or tag, or for words in public posts."
-msgstr ""
-
-#: lib/vutuv_web/live/search_live.ex:459
-#, elixir-autogen, elixir-format
-msgid "Search for people by name, email, or username."
-msgstr ""
-
 #: lib/vutuv_web/live/search_live.ex:460
 #, elixir-autogen, elixir-format
 msgid "Search for tags by name."
@@ -4524,11 +4514,6 @@ msgstr ""
 #: lib/vutuv_web/templates/user/show.html.heex:648
 #, elixir-autogen, elixir-format
 msgid "Add a tag"
-msgstr ""
-
-#: lib/vutuv_web/live/search_live.ex:453
-#, elixir-autogen, elixir-format
-msgid "Search for people, tags, or posts"
 msgstr ""
 
 #: lib/vutuv_web/templates/access_token/index.html.heex:1
@@ -19560,11 +19545,6 @@ msgstr ""
 msgid "Fetch this post"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:452
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Search for people, tags, posts, or paste a Fediverse address"
-msgstr ""
-
 #: lib/vutuv_web/live/search_live.ex:632
 #, elixir-autogen, elixir-format
 msgid "Sign in to fetch this post"
@@ -26234,4 +26214,99 @@ msgstr ""
 #: lib/vutuv_web/live/admin/screenshot_live.ex:734
 #, elixir-autogen, elixir-format
 msgid "Skipped"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1191
+#, elixir-autogen, elixir-format
+msgid "All %{formatted} organizations"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1124
+#, elixir-autogen, elixir-format
+msgid "All %{formatted} people"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1294
+#, elixir-autogen, elixir-format
+msgid "All %{formatted} posts"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1228
+#, elixir-autogen, elixir-format
+msgid "All %{formatted} tags"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1009
+#, elixir-autogen, elixir-format
+msgid "Currently at %{name}"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1010
+#, elixir-autogen, elixir-format
+msgid "Formerly at %{name}"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:955
+#, elixir-autogen, elixir-format
+msgid "Limited to people at %{name}, so only people are shown."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:997
+#, elixir-autogen, elixir-format
+msgid "Nobody found at %{name}."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:911
+#, elixir-autogen, elixir-format
+msgid "Only at %{name}"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:989
+#, elixir-autogen, elixir-format
+msgid "People at %{name}"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:915
+#, elixir-autogen, elixir-format
+msgid "Remove the organization filter"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:677
+#, elixir-autogen, elixir-format
+msgid "Search for organizations by name, city or another name they go by."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:674
+#, elixir-autogen, elixir-format
+msgid "Search for people by name, email, username, employer or school."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:667
+#, elixir-autogen, elixir-format
+msgid "Search for people, organizations, tags, or posts"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:666
+#, elixir-autogen, elixir-format
+msgid "Search for people, organizations, tags, posts, or paste a Fediverse address"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:684
+#, elixir-autogen, elixir-format
+msgid "You can search for a name, email, employer, school, organization or tag, or for words in public posts."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1123
+#, elixir-autogen, elixir-format
+msgid "All people"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:1144
+#, elixir-autogen, elixir-format
+msgid "This search matches more people than the list can show. Add a word to narrow it down."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:529
+#, elixir-autogen, elixir-format
+msgid "more than %{formatted}"
 msgstr ""

@@ -2633,18 +2633,39 @@ defmodule Vutuv.Posts do
       `:exact` is set.
     * `:exact` — the `tag:` match is equality (`"php"` doesn't hit `phpstorm`).
     * `:limit` — result cap (default 25).
+    * `:offset` — how many results to skip, for the search page's pages.
   """
   def search_public(value, opts \\ []) when is_binary(value) do
-    do_search_public(value, Keyword.get(opts, :tag), opts)
+    case public_search_query(value, Keyword.get(opts, :tag), opts) do
+      nil ->
+        []
+
+      query ->
+        query
+        |> order_public_search(value)
+        |> limit(^Keyword.get(opts, :limit, 25))
+        |> offset(^Keyword.get(opts, :offset, 0))
+        |> preload([author: u, search_organization: o], user: u, organization: o)
+        |> Repo.all()
+    end
+  end
+
+  @doc """
+  How many posts `search_public/2` would find with no limit: the same query,
+  counted, so the number above a result list and the pages under it agree.
+  """
+  def count_public_search(value, opts \\ []) when is_binary(value) do
+    case public_search_query(value, Keyword.get(opts, :tag), opts) do
+      nil -> 0
+      query -> Repo.aggregate(query, :count, :id)
+    end
   end
 
   # Nothing to search: an empty query with no tag filter matches no post
   # (rather than every post). A tag: filter alone is a valid pure listing.
-  defp do_search_public("", nil, _opts), do: []
+  defp public_search_query("", nil, _opts), do: nil
 
-  defp do_search_public(value, tag, opts) do
-    limit = Keyword.get(opts, :limit, 25)
-
+  defp public_search_query(value, tag, opts) do
     # scope_visible(nil) supplies the three anonymous-visibility conditions
     # (no denials, unfrozen, non-hidden author); only the search-specific
     # filters stay here. Search keeps the stricter `email_confirmed? == true`
@@ -2672,11 +2693,7 @@ defmodule Vutuv.Posts do
     )
     |> filter_body_search(value)
     |> filter_posts_by_tag(tag, Keyword.get(opts, :exact, false))
-    |> order_public_search(value)
-    |> limit(^limit)
-    |> preload([author: u, search_organization: o], user: u, organization: o)
     |> scope_visible(nil)
-    |> Repo.all()
   end
 
   defp filter_body_search(query, ""), do: query

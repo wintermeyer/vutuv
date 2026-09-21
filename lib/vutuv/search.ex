@@ -1,23 +1,32 @@
 defmodule Vutuv.Search do
   @moduledoc """
-  Member, tag and post search.
+  Member, organization, tag and post search.
 
-  `instant/2` powers the live search page: one call returns people (split
-  into exact prefix matches and phonetically similar ones), tags and public
-  posts. Queries support operators, parsed by `parse/2`: `vorname:`/`first:`
-  and `nachname:`/`last:` search one name field, `tag:`/`skill:` filters both
-  people and posts carrying that tag (issue #946), `@handle` the username, and
-  a fully quoted query (or `exact: true`) turns off prefix and phonetic
-  matching. `search_by_email/1` stays as the low-level email matcher.
+  `page/2` powers the live search page: people (split into exact prefix
+  matches and phonetically similar ones, plus the people whose CV names a
+  matching employer or school), public organization pages, tags and public
+  posts, each kind with its total, so the page can preview a few of every kind
+  and page through one. `instant/2` is the plain matcher the Mastodon API
+  reads. Queries support operators, parsed by
+  `parse/2`: `vorname:`/`first:` and `nachname:`/`last:` search one name
+  field, `tag:`/`skill:` filters both people and posts carrying that tag
+  (issue #946), `@handle` the username, and a fully quoted query (or
+  `exact: true`) turns off prefix and phonetic matching.
+  `search_by_email/1` stays as the low-level email matcher.
   """
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
-  import Vutuv.SearchText, only: [contains: 1]
+  import Vutuv.Organizations.Query, only: [organization_public_row: 1]
+  import Vutuv.SearchText, only: [contains: 1, equals: 1]
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
+  alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.SearchText
   alias Vutuv.Tags
@@ -25,12 +34,18 @@ defmodule Vutuv.Search do
 
   @min_chars 3
   @min_field_chars 2
-  @term_limit 100
-  @people_limit 50
+  # How many search terms and people one query loads. The search page's people
+  # scope pages through its name matches in memory, so it gets the larger pair;
+  # everything else (the "All" preview, the Mastodon API) keeps the smaller one.
+  # A list that reaches its cap says so (`capped?`) rather than pass for a total.
+  @caps %{terms: 100, people: 50}
+  @people_scope_caps %{terms: 500, people: 250}
   @tag_limit 20
   @tag_scope_limit 50
   @post_limit 10
   @post_scope_limit 25
+  @preview 3
+  @tag_preview 10
 
   # TLD bound is {2,} (not {2,4}): modern TLDs run long (.online, .software),
   # and an unrecognized email would wrongly fall through to phonetic name search.
@@ -78,10 +93,18 @@ defmodule Vutuv.Search do
   # the shared source is `Vutuv.Accounts.User.employment_statuses/0`.
   @status_values ~w(open looking)
 
-  @scopes [:all, :people, :tags, :posts]
+  @scopes [:all, :people, :organizations, :tags, :posts]
 
   @doc "Free-text queries shorter than this many characters return no results."
   def min_chars, do: @min_chars
+
+  @doc """
+  How many results one page of the people, tags or posts scope shows.
+  Organizations page at the directory's own size (`Organizations.directory_page/1`).
+  """
+  def per_page(:people), do: 25
+  def per_page(:tags), do: @tag_scope_limit
+  def per_page(:posts), do: @post_scope_limit
 
   @doc "Whether the query looks like an email address (searched exactly)."
   def email?(value) when is_binary(value), do: Regex.match?(@email_regex, value)
@@ -96,9 +119,9 @@ defmodule Vutuv.Search do
   ("müller tag:php"). `status:open` / `status:looking` (issue #935) filters by
   job-availability, honored only for a signed-in viewer.
   A query wrapped in double quotes sets `exact?` (equality instead of substring
-  + phonetics). Options: `:scope` (`:all | :people | :tags | :posts`, the UI
-  filter; operators override it, reported back as `scope_pinned?`) and `:exact`
-  (the UI toggle, OR-ed with the quotes).
+  + phonetics). Options: `:scope` (`:all | :people | :organizations | :tags |
+  :posts`, the UI filter; operators override it, reported back as
+  `scope_pinned?`) and `:exact` (the UI toggle, OR-ed with the quotes).
   """
   def parse(value, opts \\ []) when is_binary(value) do
     # Cut first, so nothing this function reaches walks more than the cap.
@@ -192,24 +215,40 @@ defmodule Vutuv.Search do
   end
 
   @doc """
-  The search-as-you-type entry point. Returns `nil` for queries below the
-  minimum length; otherwise a map with the normalized `:query`, the `:parsed`
-  operator breakdown, the people split into `:exact_people` (literal substring
-  matches) and `:similar_people` (matched only via Cologne/Soundex phonetics),
-  matching
-  `:tags` with `:tag_member_counts`, and public `:posts`. Accepts the same
-  options as `parse/2`, plus `:viewer` (the signed-in `%User{}` or nil) which
-  gates the `status:` operator — logged-out search ignores it (issue #935).
+  The search-as-you-type matcher behind the Mastodon API's search. Returns
+  `nil` for queries below the minimum length; otherwise a map with the
+  normalized `:query`, the `:parsed` operator breakdown, the people split into
+  `:exact_people` (literal substring matches) and `:similar_people` (matched
+  only via Cologne/Soundex phonetics), matching `:tags` with
+  `:tag_member_counts`, and public `:posts`. Accepts the same options as
+  `parse/2`, plus `:viewer` (the signed-in `%User{}` or nil) which gates the
+  `status:` operator — logged-out search ignores it (issue #935).
+
+  The search page asks `page/2`, which adds organizations, CV matches, totals
+  and pages on the same matching.
   """
   def instant(value, opts \\ [])
 
   def instant(value, opts) when is_binary(value) do
-    parsed = Map.put(parse(value, opts), :logged_in?, opts[:viewer] != nil)
+    parsed = parse_for(value, opts, @caps)
 
     if runnable?(parsed) do
-      {exact, similar} = people(parsed)
-      tags = tags(parsed)
+      {exact, similar, _capped?} = people(parsed)
       viewer = opts[:viewer]
+
+      tags =
+        case tag_query(parsed) do
+          nil -> []
+          query -> fetch_tags(query, scope_limit(parsed, :tags, @tag_scope_limit, @tag_limit), 0)
+        end
+
+      posts =
+        if post_search?(parsed) do
+          limit = scope_limit(parsed, :posts, @post_scope_limit, @post_limit)
+          Vutuv.Posts.search_public(parsed.text, post_opts(parsed, limit, 0))
+        else
+          []
+        end
 
       %{
         query: parsed.raw,
@@ -218,12 +257,92 @@ defmodule Vutuv.Search do
         similar_people: status_visible(similar, parsed, viewer),
         tags: tags,
         tag_member_counts: tag_member_counts(tags),
-        posts: posts(parsed)
+        posts: posts
       }
     end
   end
 
   def instant(_value, _opts), do: nil
+
+  @doc """
+  The search page's answer: every kind the scope covers, each as the rows the
+  page shows and the total behind them. Under `:all` that is a preview of each
+  kind (`preview/0` rows, ten tag chips), whose total is counted only when the
+  preview came back full; under a kind's own scope it is one page of that kind
+  (`:page`, `:per_page`), held inside the last page. `nil` below the minimum
+  length, otherwise `:query`, `:parsed` and one map per kind, each carrying its
+  `:total`, `:page` and `:per_page`:
+
+    * `:people` — `:names` (the name matches, `instant/2`'s matcher), `:cv`
+      (members whose CV names a matching employer or school, never one of the
+      name matches; `matched_entries/3` says which entry), `:similar`,
+      `:main_total` (names and CV matches) and `:capped?` (the name matches
+      ran into their row cap, so the totals are a lower bound). The people
+      scope pages over names then CV matches: the names arrive whole and are
+      cut here, the CV matches as exactly the slice the page needs, counted
+      in SQL, because an employer such as "GmbH" names hundreds.
+    * `:organizations` — `:entries` and `:people_counts`, the public pages as
+      the directory at /organizations finds them.
+    * `:tags` — `:entries` and `:member_counts`.
+    * `:posts` — `:entries`.
+  """
+  def page(value, opts \\ [])
+
+  def page(value, opts) when is_binary(value) do
+    parsed = parse_for(value, opts, @caps)
+    parsed = if parsed.scope == :people, do: %{parsed | caps: @people_scope_caps}, else: parsed
+
+    if runnable?(parsed) do
+      requested = Keyword.get(opts, :page, 1)
+      size = opts[:per_page]
+
+      %{
+        query: parsed.raw,
+        parsed: parsed,
+        people: people_page(parsed, requested, size || per_page(:people), opts[:viewer]),
+        organizations: organization_page(parsed, requested, size),
+        tags: tag_page(parsed, requested, size || per_page(:tags)),
+        posts: post_page(parsed, requested, size || per_page(:posts))
+      }
+    end
+  end
+
+  def page(_value, _opts), do: nil
+
+  @doc "How many results \"All\" shows of each kind before its link into the full list."
+  def preview, do: @preview
+
+  defp parse_for(value, opts, caps) do
+    value |> parse(opts) |> Map.merge(%{logged_in?: opts[:viewer] != nil, caps: caps})
+  end
+
+  defp scope_limit(%{scope: kind}, kind, scope_limit, _all_limit), do: scope_limit
+  defp scope_limit(_parsed, _kind, _scope_limit, all_limit), do: all_limit
+
+  # One page of a kind that has a count and a fetch of its own: under its own
+  # scope the counted page, held inside the last one; under "All" the preview,
+  # counted only when it came back full — while typing, most previews do not.
+  defp kind_page(nil, _selected?, _requested, size, _preview),
+    do: %{entries: [], total: 0, page: 1, per_page: size}
+
+  defp kind_page({count, fetch}, true, requested, size, _preview) do
+    total = count.()
+    page = clamp_page(requested, total, size)
+    %{entries: fetch.(size, (page - 1) * size), total: total, page: page, per_page: size}
+  end
+
+  defp kind_page({count, fetch}, false, _requested, size, preview) do
+    entries = fetch.(preview, 0)
+    %{entries: entries, total: total_of(entries, preview, count), page: 1, per_page: size}
+  end
+
+  defp total_of(entries, limit, _count) when length(entries) < limit, do: length(entries)
+  defp total_of(_entries, _limit, count), do: count.()
+
+  # A requested page past the last one shows the last one, so an old link or a
+  # narrowed query never lands on an empty page with a pager beneath it.
+  defp clamp_page(page, total, size),
+    do: page |> max(1) |> min(Vutuv.Pages.total_pages(total, size))
 
   @doc """
   The people-side matcher for saved-search alerts (issue #935): confirmed,
@@ -312,42 +431,48 @@ defmodule Vutuv.Search do
   # nothing but the two ids.
   defp status_visible(people, %{status: status}, %User{} = viewer)
        when status in @status_values do
-    Enum.reject(people, &Accounts.viewer_excluded?(&1, viewer))
+    excluded = people |> Enum.map(& &1.id) |> Accounts.excluded_owner_ids(viewer)
+    Enum.reject(people, &MapSet.member?(excluded, &1.id))
   end
 
   defp status_visible(people, _parsed, _viewer), do: people
 
-  defp people(%{scope: scope}) when scope not in [:all, :people], do: {[], []}
+  # `{exact, similar, capped?}`: `capped?` says the query ran into its row cap,
+  # so there are more people than came back and the page must not claim a total.
+  defp people(%{scope: scope}) when scope not in [:all, :people], do: {[], [], false}
 
   defp people(parsed) do
     cond do
       is_binary(parsed.slug) ->
-        {parsed
-         |> filtered_users()
-         |> by_field(:username, parsed.slug, parsed.exact?)
-         |> list_people(), []}
+        parsed
+        |> filtered_users()
+        |> by_field(:username, parsed.slug, parsed.exact?)
+        |> list_people(parsed)
+        |> listed(parsed)
 
       is_binary(parsed.first_name) or is_binary(parsed.last_name) ->
-        {people_by_name(parsed), []}
+        parsed |> people_by_name() |> listed(parsed)
 
       # Pure filter search: "tag:php" / "ort:koblenz" without a name lists
       # everyone matching the filter(s).
       parsed.text == "" ->
-        {people_by_filter(parsed), []}
+        parsed |> people_by_filter() |> listed(parsed)
 
       String.length(parsed.text) < @min_chars ->
-        {[], []}
+        {[], [], false}
 
       email?(parsed.text) ->
-        {search_by_email(parsed.text), []}
+        {search_by_email(parsed.text), [], false}
 
       parsed.exact? ->
-        {exact_people(parsed), []}
+        exact_people(parsed)
 
       true ->
         substring_and_phonetic_people(parsed)
     end
   end
+
+  defp listed(people, parsed), do: {people, [], length(people) >= parsed.caps.people}
 
   defp people_by_name(parsed) do
     [first_name: parsed.first_name, last_name: parsed.last_name]
@@ -355,12 +480,12 @@ defmodule Vutuv.Search do
     |> Enum.reduce(filtered_users(parsed), fn {field, value}, query ->
       by_field(query, field, value, parsed.exact?)
     end)
-    |> list_people()
+    |> list_people(parsed)
   end
 
   defp people_by_filter(parsed) do
     if parsed.tag || parsed.city || status_filter(parsed) do
-      parsed |> filtered_users() |> list_people()
+      parsed |> filtered_users() |> list_people(parsed)
     else
       []
     end
@@ -461,10 +586,10 @@ defmodule Vutuv.Search do
     where(query, [user: u], ilike(field(u, ^field), ^contains(value)))
   end
 
-  defp list_people(query) do
+  defp list_people(query, parsed) do
     query
     |> order_by([user: u], asc: u.last_name, asc: u.first_name)
-    |> limit(@people_limit)
+    |> limit(^parsed.caps.people)
     |> select([user: u], struct(u, ^people_fields()))
     |> Repo.all()
   end
@@ -477,19 +602,21 @@ defmodule Vutuv.Search do
   # "Exact matches only" free text: the query must equal a real-name term
   # (first, last or a full-name combination) - no substring, no phonetics.
   defp exact_people(parsed) do
-    from(t in SearchTerm,
-      join: u in assoc(t, :user),
-      as: :user,
-      where:
-        account_confirmed_row(u) and t.score == 100 and
-          t.value == ^parsed.text,
-      limit: @term_limit,
-      select: struct(u, ^people_fields())
-    )
-    |> exclude_moderated()
-    |> apply_people_filters(parsed)
-    |> Repo.all()
-    |> Enum.uniq_by(& &1.id)
+    rows =
+      from(t in SearchTerm,
+        join: u in assoc(t, :user),
+        as: :user,
+        where:
+          account_confirmed_row(u) and t.score == 100 and
+            t.value == ^parsed.text,
+        limit: ^parsed.caps.terms,
+        select: struct(u, ^people_fields())
+      )
+      |> exclude_moderated()
+      |> apply_people_filters(parsed)
+      |> Repo.all()
+
+    {Enum.uniq_by(rows, & &1.id), [], length(rows) >= parsed.caps.terms}
   end
 
   # One pass over the search terms, then split per matched term: a score-100
@@ -504,7 +631,7 @@ defmodule Vutuv.Search do
         join: u in assoc(t, :user),
         as: :user,
         order_by: [desc: t.score, asc: t.value],
-        limit: @term_limit,
+        limit: ^parsed.caps.terms,
         select: %{score: t.score, value: t.value, user: struct(u, ^people_fields())}
       )
       |> phonetic_term_match(value)
@@ -524,7 +651,7 @@ defmodule Vutuv.Search do
       |> Enum.uniq_by(& &1.id)
       |> Enum.reject(&MapSet.member?(exact_ids, &1.id))
 
-    {exact, similar}
+    {exact, similar, length(terms) >= parsed.caps.terms}
   end
 
   defp visible_users do
@@ -549,21 +676,253 @@ defmodule Vutuv.Search do
     )
   end
 
-  defp tags(%{scope: scope}) when scope not in [:all, :tags], do: []
+  # --- people ---------------------------------------------------------------
 
-  defp tags(parsed) do
-    case parsed.text do
-      "" ->
-        []
+  # The people the page shows, see `page/2`: the name matches cut to the page,
+  # then exactly the CV matches that fill it.
+  defp people_page(parsed, requested, size, viewer) do
+    {exact, similar, capped?} = people(parsed)
+    exact = status_visible(exact, parsed, viewer)
+    cv_query = cv_query(parsed, exact)
 
-      needle ->
-        limit = if parsed.scope == :tags, do: @tag_scope_limit, else: @tag_limit
+    {page, names, cv, cv_total} =
+      if parsed.scope == :people do
+        cv_total = count(cv_query)
+        page = clamp_page(requested, length(exact) + cv_total, size)
+        names = exact |> Enum.drop((page - 1) * size) |> Enum.take(size)
+        offset = max((page - 1) * size - length(exact), 0)
+        {page, names, fetch_cv(cv_query, offset, size - length(names)), cv_total}
+      else
+        names = Enum.take(exact, @preview)
+        preview = fetch_cv(cv_query, 0, @preview)
+        cv_total = total_of(preview, @preview, fn -> count(cv_query) end)
+        {1, names, Enum.take(preview, @preview - length(names)), cv_total}
+      end
 
-        visible_tags(needle, parsed.exact?)
-        |> order_by([t], asc: t.name)
-        |> limit(^limit)
-        |> Repo.all()
+    # A CV hit is a real match and outranks a guess at how a name sounds.
+    similar = similar |> status_visible(parsed, viewer) |> drop_cv_matches(cv_query)
+    main_total = length(exact) + cv_total
+
+    %{
+      names: names,
+      # The per-viewer `status:` exclusion runs after the slice, like it does
+      # for the name matches, so a page can come out one short for that viewer.
+      cv: status_visible(cv, parsed, viewer),
+      similar: shown_similar(similar, parsed.scope, page, size),
+      main_total: main_total,
+      total: main_total + length(similar),
+      capped?: capped?,
+      page: page,
+      per_page: size
+    }
+  end
+
+  # The people scope keeps its similar names below the first page, where they
+  # help most, and never more of them than a page holds.
+  defp shown_similar(similar, :people, 1, size), do: Enum.take(similar, size)
+  defp shown_similar(_similar, :people, _page, _size), do: []
+  defp shown_similar(similar, _scope, _page, _size), do: Enum.take(similar, @preview)
+
+  defp count(nil), do: 0
+  defp count(query), do: Repo.aggregate(query, :count)
+
+  # --- people found through their CV ---------------------------------------
+
+  # Members whose CV names an employer or a school matching the free text, on
+  # the same terms as the name search: the tag/city/status filters apply, and the
+  # people-only field operators (`@handle`, `vorname:`) and an email mean the
+  # searcher asked for something else. Everybody the name search already found
+  # is left out, so nobody is listed twice. `nil` when there is nothing to ask.
+  defp cv_query(%{scope: scope}, _found) when scope not in [:all, :people], do: nil
+
+  defp cv_query(parsed, found) do
+    if cv_searchable?(parsed) do
+      found_ids = Enum.map(found, & &1.id)
+
+      parsed
+      |> filtered_users()
+      |> where([user: u], u.id in subquery(cv_user_ids(parsed.text, parsed.exact?)))
+      |> where([user: u], u.id not in ^found_ids)
     end
+  end
+
+  defp cv_searchable?(parsed) do
+    is_nil(parsed.slug) and is_nil(parsed.first_name) and is_nil(parsed.last_name) and
+      String.length(parsed.text) >= @min_chars and not email?(parsed.text)
+  end
+
+  defp fetch_cv(nil, _offset, _limit), do: []
+  defp fetch_cv(_query, _offset, limit) when limit <= 0, do: []
+
+  defp fetch_cv(query, offset, limit) do
+    query
+    |> order_by([user: u], asc: u.last_name, asc: u.first_name, asc: u.id)
+    |> limit(^limit)
+    |> offset(^offset)
+    |> select([user: u], struct(u, ^people_fields()))
+    |> Repo.all()
+  end
+
+  defp drop_cv_matches(similar, nil), do: similar
+  defp drop_cv_matches([], _cv_query), do: []
+
+  defp drop_cv_matches(similar, cv_query) do
+    similar_ids = Enum.map(similar, & &1.id)
+
+    matched =
+      cv_query
+      |> where([user: u], u.id in ^similar_ids)
+      |> select([user: u], u.id)
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.reject(similar, &MapSet.member?(matched, &1.id))
+  end
+
+  # The one rule for "this CV names the place", as three one-table queries: the
+  # member's own employer text, the name of a linked **public** organization
+  # page (the SQL side of `WorkExperience.linked_organization/1`, since a
+  # pending or frozen page shows its name nowhere else either), and a school.
+  # Both `cv_user_ids/2` and `matched_entries/3` read it, so the rows a search
+  # finds and the line each one explains itself with cannot drift apart.
+  defp cv_arms(pattern) do
+    [
+      from(w in WorkExperience,
+        as: :entry,
+        left_join: o in Organization,
+        as: :page,
+        on: o.id == w.organization_id and organization_public_row(o),
+        where: ilike(w.organization, ^pattern)
+      ),
+      from(w in WorkExperience,
+        as: :entry,
+        join: o in Organization,
+        as: :page,
+        on: o.id == w.organization_id and organization_public_row(o),
+        where: ilike(o.name, ^pattern)
+      ),
+      from(e in Education, as: :entry, where: ilike(e.school, ^pattern))
+    ]
+  end
+
+  defp cv_pattern(text, true), do: equals(text)
+  defp cv_pattern(text, false), do: contains(text)
+
+  # Everybody with a work experience (any, ended or running) or an education
+  # entry naming the place. A **union of one-table queries**, never an OR across
+  # tables: Postgres builds a bitmap only over arms of one relation, so an OR
+  # that reads a second table gives up every index in it and scans. Oliver
+  # Andrich measured this shape for the member directory (PR #2217) on a copy
+  # with 100k members: 54.8 ms as one OR, 0.645 ms as this union, every arm a
+  # bitmap scan on its own trigram index.
+  defp cv_user_ids(text, exact?) do
+    text
+    |> cv_pattern(exact?)
+    |> cv_arms()
+    |> Enum.map(&select(&1, [entry: x], x.user_id))
+    |> Enum.reduce(fn arm, acc -> union(acc, ^arm) end)
+  end
+
+  @doc """
+  The CV entry each of `users` was found by, as `%{user_id => entry}`: a
+  `%WorkExperience{}` (with its public `organization_page` loaded, so the view
+  names the employer the way every other surface does) or an `%Education{}`.
+
+  A result row normally shows a member's current job, which explains nothing
+  when the search found them through a role they left in 2016 or a university
+  they attended. So the page asks, for the rows it renders, which entry
+  answered. Work before school, a running role before an ended one, then the
+  most recent. One query per arm over the rendered ids, never one per row.
+  """
+  # What the result line prints and `Organizations.public_visible?/1` reads, and
+  # no more: `description` is a text column LinkedIn imports fill to 10k.
+  @job_line_fields ~w(id user_id title organization organization_id start_month start_year end_month end_year)a
+  @page_line_fields ~w(id name slug status frozen_at)a
+  @education_line_fields ~w(id user_id school degree start_month start_year end_month end_year)a
+
+  def matched_entries([], _text, _exact?), do: %{}
+
+  def matched_entries(users, text, exact?) do
+    ids = Enum.map(users, & &1.id)
+    [by_text, by_page, by_school] = text |> cv_pattern(exact?) |> cv_arms()
+
+    jobs =
+      for arm <- [by_text, by_page],
+          {job, page} <-
+            Repo.all(
+              from([entry: w, page: o] in arm,
+                where: w.user_id in ^ids,
+                select: {struct(w, ^@job_line_fields), struct(o, ^@page_line_fields)}
+              )
+            ),
+          do: {0, %{job | organization_page: page}}
+
+    schools =
+      from([entry: e] in by_school,
+        where: e.user_id in ^ids,
+        select: struct(e, ^@education_line_fields)
+      )
+      |> Repo.all()
+      |> Enum.map(&{1, &1})
+
+    (jobs ++ schools)
+    |> Enum.group_by(fn {_rank, entry} -> entry.user_id end)
+    |> Map.new(fn {user_id, entries} ->
+      {_rank, entry} = Enum.min_by(entries, &entry_rank/1)
+      {user_id, entry}
+    end)
+  end
+
+  defp entry_rank({kind, entry}) do
+    {kind, if(is_nil(entry.end_year), do: 0, else: 1), -(entry.end_year || 0),
+     -(entry.start_year || 0), entry.id}
+  end
+
+  # --- organizations --------------------------------------------------------
+
+  # The public organization pages whose name, city or other name matches: the
+  # same set and the same match as the directory at /organizations, so a page
+  # found here is one a visitor can open, at the directory's page size.
+  defp organization_page(%{scope: scope, text: text}, requested, size)
+       when scope in [:all, :organizations] do
+    if String.length(text) >= @min_chars do
+      {page, per_page} = if scope == :organizations, do: {requested, size}, else: {1, @preview}
+      result = Organizations.directory_page(search: text, page: page, per_page: per_page)
+
+      result
+      |> Map.take([:entries, :total, :page, :per_page])
+      |> Map.put(
+        :people_counts,
+        result.entries |> Enum.map(& &1.id) |> Organizations.people_counts()
+      )
+    else
+      no_organizations()
+    end
+  end
+
+  defp organization_page(_parsed, _requested, _size), do: no_organizations()
+
+  defp no_organizations, do: %{entries: [], total: 0, page: 1, per_page: nil, people_counts: %{}}
+
+  # --- tags -----------------------------------------------------------------
+
+  defp tag_query(%{scope: scope}) when scope not in [:all, :tags], do: nil
+  defp tag_query(%{text: ""}), do: nil
+  defp tag_query(parsed), do: visible_tags(parsed.text, parsed.exact?)
+
+  defp fetch_tags(query, limit, offset) do
+    query |> order_by([t], asc: t.name) |> limit(^limit) |> offset(^offset) |> Repo.all()
+  end
+
+  defp tag_page(parsed, requested, size) do
+    kinds =
+      case tag_query(parsed) do
+        nil -> nil
+        query -> {fn -> count(query) end, &fetch_tags(query, &1, &2)}
+      end
+
+    page = kind_page(kinds, parsed.scope == :tags, requested, size, @tag_preview)
+    Map.put(page, :member_counts, tag_member_counts(page.entries))
   end
 
   # Tags match on their alternative names too (issue #1338) — searching "ROR"
@@ -612,12 +971,21 @@ defmodule Vutuv.Search do
   # by tag, so a bare `tag:php` lists posts carrying that tag even with no body
   # words. The exact toggle applies only to the tag match (the body query is
   # always full-text). Nothing to search — no words and no tag — yields nothing.
-  defp posts(%{scope: scope}) when scope not in [:all, :posts], do: []
-  defp posts(%{text: "", tag: nil}), do: []
+  defp post_search?(%{scope: scope}) when scope not in [:all, :posts], do: false
+  defp post_search?(%{text: "", tag: nil}), do: false
+  defp post_search?(_parsed), do: true
 
-  defp posts(parsed) do
-    limit = if parsed.scope == :posts, do: @post_scope_limit, else: @post_limit
-    Vutuv.Posts.search_public(parsed.text, tag: parsed.tag, exact: parsed.exact?, limit: limit)
+  defp post_opts(parsed, limit, offset),
+    do: [tag: parsed.tag, exact: parsed.exact?, limit: limit, offset: offset]
+
+  defp post_page(parsed, requested, size) do
+    kinds =
+      if post_search?(parsed) do
+        {fn -> Vutuv.Posts.count_public_search(parsed.text, post_opts(parsed, nil, 0)) end,
+         &Vutuv.Posts.search_public(parsed.text, post_opts(parsed, &1, &2))}
+      end
+
+    kind_page(kinds, parsed.scope == :posts, requested, size, @preview)
   end
 
   @doc """

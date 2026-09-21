@@ -1,26 +1,11 @@
 defmodule Vutuv.SearchTest do
   use Vutuv.DataCase, async: true
 
-  alias Vutuv.Accounts.SearchTerm
+  import Vutuv.SearchHelpers
+
   alias Vutuv.Accounts.ViewerExclusion
   alias Vutuv.Search
   alias Vutuv.Social
-
-  # A user findable by name search: the factory does not create search terms
-  # (Accounts.create_user does), so insert the same terms create_user would.
-  defp searchable_user(first, last, attrs \\ []) do
-    user = insert(:activated_user, Keyword.merge([first_name: first, last_name: last], attrs))
-
-    for changeset <-
-          SearchTerm.create_search_terms(%{
-            "first_name" => first,
-            "last_name" => last
-          }) do
-      changeset |> Ecto.Changeset.put_change(:user_id, user.id) |> Repo.insert!()
-    end
-
-    user
-  end
 
   describe "instant/1" do
     test "returns nil below the minimum query length" do
