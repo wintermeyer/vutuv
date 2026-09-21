@@ -33,6 +33,7 @@ defmodule VutuvWeb.SettingsHTML do
   alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.Mutes
   alias Vutuv.Mutes.AccountMute
+  alias Vutuv.Prefs
   alias Vutuv.SavedSearches
 
   embed_templates("../templates/settings/*")
@@ -139,6 +140,19 @@ defmodule VutuvWeb.SettingsHTML do
 
   def organization_status_class(_organization),
     do: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
+
+  @doc """
+  The map services an address can open in, then "no map link", as
+  `{label, value}` pairs for the one select on the language & display page.
+  The services come from the `:default_map_service` pref, so the member page
+  and `/admin/preferences` name them the same way (`Vutuv.Prefs.value_label/2`).
+  """
+  def map_choice_options do
+    pref = Prefs.pref!(:default_map_service)
+
+    Enum.map(pref.values, &{Prefs.value_label(pref, &1), &1}) ++
+      [{gettext("No map link"), "none"}]
+  end
 
   @doc """
   The two choices for how often the unread-message email is sent, as

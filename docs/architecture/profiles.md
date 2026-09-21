@@ -1026,15 +1026,17 @@ foreign number keeps its own country code.
 **Addresses** follow the same German-viewer rule (`Vutuv.Address`): a German
 viewer (`locale == "de"`) looking at a German address sees no redundant
 "Deutschland" line, while foreign addresses and non-German viewers keep the
-country; every address on the profile card also links out to the major map
-services — **Google Maps, OpenStreetMap and Apple Maps** — and each logged-in
-member chooses on the account settings hub which of those to show and which is
-the default (rendered as the primary "Open in …" button, the rest a quiet "Also
-on" line); opening a non-default service promotes it to the new default live
-across the page and persists it (`Vutuv.Maps`; with JS off they stay plain links
-that still open).
+country, named in the reader's language (the column stores the English name,
+`Vutuv.Countries.localize_english_name/2` translates it). The whole address on
+the profile card is one link to a map service, **Google Maps, OpenStreetMap or
+Apple Maps**, whichever the viewer picked on `/settings/preferences`, where they
+can also turn the link off (`Vutuv.Maps.address_link/2`; the other services are
+not offered on the card). An address that names no city gets no link, and a
+visitor sees the card at all only once an address names one
+(`VutuvWeb.UserHTML.address_card?/1`), since a lone country or postal code
+shows nothing and has no map to open.
 
-A logged-out visitor sees the default set (Google primary).
+A logged-out visitor gets the installation default (Google Maps).
 
 The geocoding query keeps the country even when it is hidden on screen
 

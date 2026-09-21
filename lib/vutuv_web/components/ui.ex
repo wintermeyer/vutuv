@@ -5524,6 +5524,9 @@ defmodule VutuvWeb.UI do
     do:
       "M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
 
+  # A link that leaves the site (the profile address card's map link).
+  defp detail_icon_path("arrow-up-right"), do: "m4.5 19.5 15-15m0 0H8.25m11.25 0v11.25"
+
   @doc """
   The grouped settings menu: the **one map** of everything a member can change
   about themselves, shared by the settings hub (`/settings`) and the desktop

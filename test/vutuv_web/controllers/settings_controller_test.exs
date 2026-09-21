@@ -3,6 +3,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Maps
 
   describe "access control" do
     test "the settings pages render for the owner", %{conn: conn} do
@@ -857,10 +858,21 @@ defmodule VutuvWeb.SettingsControllerTest do
 
       assert html =~ ~s(action="#{~p"/settings/language"}")
       assert html =~ ~s(action="#{~p"/settings/maps"}")
-      assert html =~ "map_google?"
-      assert html =~ "map_openstreetmap?"
-      assert html =~ "map_apple?"
-      assert html =~ "default_map_service"
+      # One choice: the service an address opens in, or none at all.
+      assert html =~ ~s(name="user[default_map_service]")
+      assert html =~ ~s(value="none")
+      refute html =~ "map_google?"
+    end
+
+    test "names the map choice in German for a German member", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _} = Accounts.update_user(user, %{"locale" => "de"})
+
+      html = conn |> get(~p"/settings/preferences") |> html_response(200)
+
+      assert html =~ "Adressen auf Profilen verlinken auf diesen Kartendienst."
+      assert html =~ "Adressen öffnen in"
+      assert html =~ "Kein Kartenlink"
     end
 
     test "carries the post-display form with the line and hyphenation fields", %{conn: conn} do
@@ -1012,28 +1024,30 @@ defmodule VutuvWeb.SettingsControllerTest do
   end
 
   describe "map preferences" do
-    test "saving persists the enabled services and the default, and stays on the preferences page",
+    test "picking a service makes it the one addresses open in, and stays on the page",
          %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn =
-        put(conn, ~p"/settings/maps",
-          user: %{
-            "map_google?" => "true",
-            "map_openstreetmap?" => "false",
-            "map_apple?" => "true",
-            "default_map_service" => "apple"
-          }
-        )
+      conn = put(conn, ~p"/settings/maps", user: %{"default_map_service" => "apple"})
 
       assert redirected_to(conn) == ~p"/settings/preferences"
+      assert %User{default_map_service: "apple"} = Repo.get(User, user.id)
+    end
 
-      assert %User{
-               map_google?: true,
-               map_openstreetmap?: false,
-               map_apple?: true,
-               default_map_service: "apple"
-             } = Repo.get(User, user.id)
+    test "\"no map link\" turns the links off, and picking a service turns them back on",
+         %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      put(conn, ~p"/settings/maps", user: %{"default_map_service" => "none"})
+      assert Maps.default_service(Repo.get(User, user.id)) == nil
+
+      html = conn |> get(~p"/settings/preferences") |> html_response(200)
+
+      assert text_of(html, "select[name='user[default_map_service]'] option[selected]") =~
+               "No map link"
+
+      put(conn, ~p"/settings/maps", user: %{"default_map_service" => "openstreetmap"})
+      assert Maps.default_service(Repo.get(User, user.id)) == :openstreetmap
     end
 
     test "an unknown default is rejected by the changeset", %{conn: conn} do

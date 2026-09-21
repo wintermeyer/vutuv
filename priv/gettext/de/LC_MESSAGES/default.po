@@ -6137,11 +6137,6 @@ msgstr[1] "Beiträge"
 msgid "After choosing a file you can reposition and zoom it."
 msgstr "Nach der Auswahl einer Datei können Sie sie verschieben und zoomen."
 
-#: lib/vutuv_web/templates/user/show.html.heex:1617
-#, elixir-autogen, elixir-format
-msgid "Also on"
-msgstr "Auch auf"
-
 #: lib/vutuv_web/templates/user/edit.html.heex:63
 #: lib/vutuv_web/templates/user/edit.html.heex:148
 #, elixir-autogen, elixir-format
@@ -6328,13 +6323,7 @@ msgstr "Standardkarte"
 msgid "Map preferences saved."
 msgstr "Karteneinstellungen gespeichert."
 
-#: lib/vutuv_web/templates/settings/preferences.html.heex:137
-#, elixir-autogen, elixir-format
-msgid "Map services to show"
-msgstr "Anzuzeigende Kartendienste"
-
 #: lib/vutuv_web/gettext_extraction_anchors.ex:114
-#: lib/vutuv_web/templates/settings/preferences.html.heex:122
 #, elixir-autogen, elixir-format
 msgid "Maps"
 msgstr "Karten"
@@ -6345,21 +6334,6 @@ msgstr "Karten"
 #, elixir-autogen, elixir-format
 msgid "Open in %{name}"
 msgstr "In %{name} öffnen"
-
-#: lib/vutuv_web/gettext_extraction_anchors.ex:112
-#: lib/vutuv_web/templates/settings/preferences.html.heex:159
-#, elixir-autogen, elixir-format
-msgid "Opens first, as the main button. The others appear as alternatives."
-msgstr ""
-"Wird zuerst geöffnet, als Hauptschaltfläche. Die anderen erscheinen als "
-"Alternativen."
-
-#: lib/vutuv_web/templates/settings/preferences.html.heex:124
-#, elixir-autogen, elixir-format
-msgid "Pick which map services to show on addresses, and which one opens by default."
-msgstr ""
-"Wählen Sie, welche Kartendienste bei Adressen angezeigt werden und welcher "
-"standardmäßig geöffnet wird."
 
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:29
 #, elixir-autogen, elixir-format
@@ -27047,3 +27021,18 @@ msgstr "die Website und jede Subdomain"
 #, elixir-autogen, elixir-format
 msgid "the site and www., no other subdomain"
 msgstr "die Website und www., keine andere Subdomain"
+
+#: lib/vutuv_web/gettext_extraction_anchors.ex:112
+#, elixir-autogen, elixir-format
+msgid "Addresses on profiles link to this map service."
+msgstr "Adressen auf Profilen verlinken auf diesen Kartendienst."
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex:134
+#, elixir-autogen, elixir-format
+msgid "Open addresses in"
+msgstr "Adressen öffnen in"
+
+#: lib/vutuv_web/views/settings_html.ex:154
+#, elixir-autogen, elixir-format
+msgid "No map link"
+msgstr "Kein Kartenlink"

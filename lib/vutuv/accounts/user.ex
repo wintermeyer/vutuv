@@ -828,8 +828,8 @@ defmodule Vutuv.Accounts.User do
         else: [time_zone: "is not a known time zone"]
     end)
     # The literal mirrors the canonical service list in `Vutuv.Maps`; it is kept
-    # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
-    # pattern-matches the `User` struct.
+    # inline to avoid a compile cycle, since Maps pattern-matches the `User`
+    # struct.
     |> validate_inclusion(:default_map_service, ~w(google openstreetmap apple))
     # The feed's foreign-language mode (issue #1461); a tampered value must
     # not fail the whole preferences form, so unknown values are refused with

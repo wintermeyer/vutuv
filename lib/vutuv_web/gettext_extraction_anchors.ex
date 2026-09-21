@@ -109,7 +109,7 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Between 4 and 20 seconds."),
       gettext("0 means posts are never shortened."),
       gettext("How much of a post a notification quotes before it is cut off."),
-      gettext("Opens first, as the main button. The others appear as alternatives."),
+      gettext("Addresses on profiles link to this map service."),
       gettext("Posts"),
       gettext("Maps"),
       gettext("On"),

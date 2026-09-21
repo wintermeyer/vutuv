@@ -1567,68 +1567,33 @@ up. The rest of the geometry is one block in the phone section of
         {gettext("Add an address")}
       </.empty_add>
       <%!-- Icon block: a map-pin leads the entry; the description is the bold
-      title and the full address sits muted below it, tightened with
-      leading-snug. --%>
+      title and the full address sits muted below it. The whole block is the
+      one link to the viewer's map service (Vutuv.Maps.address_link/2, chosen
+      on /settings/preferences): the pin turns brand, an arrow says the link
+      leaves the site, and the row tints under the pointer. An address without
+      a city, or a viewer who turned maps off, gets the same block unlinked.
+      The geocoding query keeps the country even when it is hidden. --%>
       <ul class="-my-1.5 text-sm">
-        <li :for={address <- @user.addresses} class="flex items-start gap-2.5 py-1.5">
-          <.detail_icon name="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
-          <div class="min-w-0 leading-snug">
-            <%!-- The label is optional (a welcome-page location may carry
-            none), so the title line drops out rather than leaving a gap. --%>
-            <p :if={address.description} class="mb-0 font-medium text-slate-800 dark:text-slate-100">
-              {address.description}
-            </p>
-            <div class="text-slate-600 dark:text-slate-400">
-              {format_address(address, @locale)}
-            </div>
-            <%!-- Open the address on a map. The viewer's default service
-            (Vutuv.Maps, set on their account settings or by clicking) is the one
-            decisive primary "Open in …" button; their other enabled services are
-            demoted to a quiet alternatives line so the row reads as a single map
-            action instead of look-alike links. A logged-in viewer's row carries
-            data-map-persist-url: the MapLinks enhancement in app.js then promotes
-            whichever alternative they open to their new default (live across all
-            rows, and persisted). The geocoding query keeps the country even when
-            it is hidden above. --%>
-            <% map = Vutuv.Maps.address_links(address, @current_user) %>
-            <div
-              :if={map.primary}
-              class="mt-1.5"
-              data-map-row
-              data-map-persist-url={@current_user && ~p"/maps/default"}
-            >
-              <.button
-                href={map.primary.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-map-link
-                data-map-primary
-                data-service={map.primary.service}
-                data-label-primary={gettext("Open in %{name}", name: map.primary.label)}
-                data-label-alt={map.primary.label}
-              >
-                <.detail_icon name="map-pin" class="h-3.5 w-3.5" />
-                <span data-map-text>{gettext("Open in %{name}", name: map.primary.label)}</span>
-              </.button>
-              <div
-                :if={map.alternatives != []}
-                class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600 dark:text-slate-400"
-              >
-                <span>{gettext("Also on")}</span>
-                <a
-                  :for={alt <- map.alternatives}
-                  data-map-link
-                  data-map-alt
-                  data-service={alt.service}
-                  data-label-primary={gettext("Open in %{name}", name: alt.label)}
-                  data-label-alt={alt.label}
-                  href={alt.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-                ><span data-map-text>{alt.label}</span></a>
-              </div>
-            </div>
+        <li :for={address <- @user.addresses}>
+          <% map = Vutuv.Maps.address_link(address, @current_user) %>
+          <.link
+            :if={map}
+            href={map.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="-mx-2 flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-brand-50 dark:hover:bg-brand-800/30"
+          >
+            <.detail_icon name="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" />
+            <.address_text address={address} locale={@locale} />
+            <.detail_icon
+              name="arrow-up-right"
+              class="mt-0.5 ml-auto h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400"
+            />
+            <span class="sr-only">{gettext("Open in %{name}", name: map.label)}</span>
+          </.link>
+          <div :if={!map} class="flex items-start gap-2.5 py-1.5">
+            <.detail_icon name="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+            <.address_text address={address} locale={@locale} />
           </div>
         </li>
       </ul>

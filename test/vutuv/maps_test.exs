@@ -17,15 +17,6 @@ defmodule Vutuv.MapsTest do
   describe "the canonical service list" do
     test "is Google, OpenStreetMap, Apple in display order" do
       assert Maps.services() == [:google, :openstreetmap, :apple]
-      assert Maps.service_strings() == ["google", "openstreetmap", "apple"]
-    end
-
-    test "valid_service?/1 only accepts the known string forms" do
-      assert Maps.valid_service?("google")
-      assert Maps.valid_service?("apple")
-      refute Maps.valid_service?("bing")
-      refute Maps.valid_service?(:google)
-      refute Maps.valid_service?(nil)
     end
 
     test "label/1 names each service" do
@@ -84,56 +75,62 @@ defmodule Vutuv.MapsTest do
     end
   end
 
-  describe "address_links/2" do
-    test "a logged-out viewer sees Google primary, the rest as alternatives" do
-      %{primary: primary, alternatives: alts} = Maps.address_links(address(), nil)
+  describe "address_link/2" do
+    test "a logged-out viewer gets Google Maps" do
+      link = Maps.address_link(address(), nil)
 
-      assert primary.service == :google
-      assert primary.label == "Google Maps"
-      assert primary.url =~ "https://www.google.com/maps/search/"
-      assert Enum.map(alts, & &1.service) == [:openstreetmap, :apple]
+      assert link.service == :google
+      assert link.label == "Google Maps"
+      assert link.url =~ "https://www.google.com/maps/search/"
     end
 
-    test "the member's default becomes the primary; alternatives keep canonical order" do
+    test "a member gets the default they chose" do
       user = %User{map_apple?: true, default_map_service: "apple"}
 
-      %{primary: primary, alternatives: alts} = Maps.address_links(address(), user)
-
-      assert primary.service == :apple
-      assert primary.url =~ "https://maps.apple.com/"
-      assert Enum.map(alts, & &1.service) == [:google, :openstreetmap]
+      assert %{service: :apple, url: "https://maps.apple.com/" <> _} =
+               Maps.address_link(address(), user)
     end
 
-    test "a single enabled service renders just the primary, no alternatives" do
-      user = %User{
-        map_google?: false,
-        map_openstreetmap?: true,
-        map_apple?: false,
-        default_map_service: "openstreetmap"
-      }
-
-      assert %{primary: %{service: :openstreetmap}, alternatives: []} =
-               Maps.address_links(address(), user)
-    end
-
-    test "disabling every service hides the map entirely" do
+    test "disabling every service leaves the address unlinked" do
       user = %User{map_google?: false, map_openstreetmap?: false, map_apple?: false}
-      assert %{primary: nil, alternatives: []} = Maps.address_links(address(), user)
+      assert Maps.address_link(address(), user) == nil
     end
 
-    test "an address without a city gets no map, whatever the viewer enabled" do
+    test "an address without a city gets no link, whatever the viewer enabled" do
       country_only = struct(Address, %{country: "Germany", zip_code: "56068"})
 
-      assert %{primary: nil, alternatives: []} = Maps.address_links(country_only, nil)
+      assert Maps.address_link(country_only, nil) == nil
     end
 
-    test "every link's geocoding query still carries the address" do
-      %{primary: primary, alternatives: alts} = Maps.address_links(address(), nil)
+    test "the geocoding query carries the address" do
+      link = Maps.address_link(address(), nil)
 
-      for link <- [primary | alts] do
-        assert link.url =~ "Koblenz"
-        assert link.url =~ "Germany"
-      end
+      assert link.url =~ "Koblenz"
+      assert link.url =~ "Germany"
+    end
+  end
+
+  describe "choice_attrs/2" do
+    test "\"none\" turns every service off" do
+      assert Maps.choice_attrs(%User{}, "none") == %{
+               "map_google?" => false,
+               "map_openstreetmap?" => false,
+               "map_apple?" => false
+             }
+    end
+
+    # Switched on explicitly even where the flag still inherits (nil): an
+    # admin who later turns that service off site-wide must not move a member
+    # who picked it onto another one.
+    test "a service becomes the default and is switched on for this member" do
+      assert Maps.choice_attrs(%User{}, "openstreetmap") == %{
+               "default_map_service" => "openstreetmap",
+               "map_openstreetmap?" => true
+             }
+    end
+
+    test "an unknown value is passed on for the changeset to reject" do
+      assert Maps.choice_attrs(%User{}, "bing") == %{"default_map_service" => "bing"}
     end
   end
 end

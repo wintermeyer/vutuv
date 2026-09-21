@@ -110,18 +110,16 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
       </div>
     </.card>
 
-    <%!-- Map preferences: which map services show on the addresses this member
-          looks at, and which one is the default rendered as the primary
-          "Open in …" button. Unchecking every service simply hides the map
-          buttons. Clicking a non-default service on a profile promotes it to
-          the default live (VutuvWeb.MapPreferenceController), so this form is
-          the explicit way to set the same thing. Vutuv.Maps reconciles a
-          default pointing at a disabled service, so the select can safely
-          offer all three. --%>
+    <%!-- Map preferences: the one map service an address on a profile links
+          to, or none at all. One choice, because the address card offers one
+          link (Vutuv.Maps.address_link/2); SettingsController.update_maps
+          turns it into the stored fields (Vutuv.Maps.choice_attrs/2), and
+          the select shows what the viewer really gets (Vutuv.Maps.choice/1),
+          not the raw default column. --%>
     <.card>
       <.section_title>{gettext("Maps")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {gettext("Pick which map services to show on addresses, and which one opens by default.")}
+        {Vutuv.Prefs.hint(:default_map_service)}
       </p>
 
       <.form
@@ -132,32 +130,12 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
       >
         <.form_error changeset={@changeset} />
 
-        <fieldset class="space-y-3">
-          <legend class="text-sm font-medium text-slate-900 dark:text-white">
-            {gettext("Map services to show")}
-          </legend>
-
-          <label class="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
-            <%= checkbox f, :map_google?, class: checkbox_class() %>
-            <span>{Vutuv.Maps.label(:google)}</span>
-          </label>
-          <label class="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
-            <%= checkbox f, :map_openstreetmap?, class: checkbox_class() %>
-            <span>{Vutuv.Maps.label(:openstreetmap)}</span>
-          </label>
-          <label class="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
-            <%= checkbox f, :map_apple?, class: checkbox_class() %>
-            <span>{Vutuv.Maps.label(:apple)}</span>
-          </label>
-        </fieldset>
-
         <div class="sm:max-w-xs">
-          <%= label f, :default_map_service, gettext("Default map"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= select f, :default_map_service, Enum.map(Vutuv.Maps.services(), &{Vutuv.Maps.label(&1), Atom.to_string(&1)}), class: input_class() %>
+          <%= label f, :default_map_service, gettext("Open addresses in"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= select f, :default_map_service, map_choice_options(),
+            value: Vutuv.Maps.choice(@user),
+            class: input_class() %>
           <%= error_tag f, :default_map_service %>
-          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Opens first, as the main button. The others appear as alternatives.")}
-          </p>
         </div>
 
         <div class="pt-1">

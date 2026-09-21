@@ -6122,11 +6122,6 @@ msgstr[1] "post"
 msgid "After choosing a file you can reposition and zoom it."
 msgstr "Dopo aver scelto un file puoi spostarlo e ingrandirlo."
 
-#: lib/vutuv_web/templates/user/show.html.heex:1617
-#, elixir-autogen, elixir-format
-msgid "Also on"
-msgstr "Anche su"
-
 #: lib/vutuv_web/templates/user/edit.html.heex:63
 #: lib/vutuv_web/templates/user/edit.html.heex:148
 #, elixir-autogen, elixir-format
@@ -6313,13 +6308,7 @@ msgstr "Mappa predefinita"
 msgid "Map preferences saved."
 msgstr "Preferenze delle mappe salvate."
 
-#: lib/vutuv_web/templates/settings/preferences.html.heex:137
-#, elixir-autogen, elixir-format
-msgid "Map services to show"
-msgstr "Servizi di mappe da mostrare"
-
 #: lib/vutuv_web/gettext_extraction_anchors.ex:114
-#: lib/vutuv_web/templates/settings/preferences.html.heex:122
 #, elixir-autogen, elixir-format
 msgid "Maps"
 msgstr "Mappe"
@@ -6330,21 +6319,6 @@ msgstr "Mappe"
 #, elixir-autogen, elixir-format
 msgid "Open in %{name}"
 msgstr "Apri in %{name}"
-
-#: lib/vutuv_web/gettext_extraction_anchors.ex:112
-#: lib/vutuv_web/templates/settings/preferences.html.heex:159
-#, elixir-autogen, elixir-format
-msgid "Opens first, as the main button. The others appear as alternatives."
-msgstr ""
-"Si apre per prima, come pulsante principale. Le altre compaiono come "
-"alternative."
-
-#: lib/vutuv_web/templates/settings/preferences.html.heex:124
-#, elixir-autogen, elixir-format
-msgid "Pick which map services to show on addresses, and which one opens by default."
-msgstr ""
-"Scegli quali servizi di mappe mostrare sugli indirizzi e quale si apre di "
-"default."
 
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:29
 #, elixir-autogen, elixir-format
@@ -27876,3 +27850,18 @@ msgstr "il sito e ogni sottodominio"
 #, elixir-autogen, elixir-format
 msgid "the site and www., no other subdomain"
 msgstr "il sito e www., nessun altro sottodominio"
+
+#: lib/vutuv_web/gettext_extraction_anchors.ex:112
+#, elixir-autogen, elixir-format
+msgid "Addresses on profiles link to this map service."
+msgstr "Gli indirizzi nei profili rimandano a questo servizio di mappe."
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex:134
+#, elixir-autogen, elixir-format
+msgid "Open addresses in"
+msgstr "Apri gli indirizzi in"
+
+#: lib/vutuv_web/views/settings_html.ex:154
+#, elixir-autogen, elixir-format
+msgid "No map link"
+msgstr "Nessun link alla mappa"

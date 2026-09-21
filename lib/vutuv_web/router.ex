@@ -901,12 +901,6 @@ defmodule VutuvWeb.Router do
     post("/user_likes", UserSaveController, :like)
     delete("/user_likes/:id", UserSaveController, :unlike)
 
-    # Promote a map service to the viewer's default (the primary "Open in …"
-    # button on address cards). Fired by the MapLinks enhancement in app.js when
-    # a logged-in member opens a non-default service. Logged-in only. See
-    # VutuvWeb.MapPreferenceController.
-    post("/maps/default", MapPreferenceController, :update)
-
     # Vernetzt = a mutual follow, so there is no connection lifecycle any more:
     # you just follow (above), and a follow-back makes you vernetzt. The list
     # lives at /:slug/connections in the profile scope below (read-only).

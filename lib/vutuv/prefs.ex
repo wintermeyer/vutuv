@@ -296,7 +296,7 @@ defmodule Vutuv.Prefs do
     do:
       Gettext.gettext(
         VutuvWeb.Gettext,
-        "Opens first, as the main button. The others appear as alternatives."
+        "Addresses on profiles link to this map service."
       )
 
   def hint(_key), do: nil

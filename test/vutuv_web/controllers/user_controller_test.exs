@@ -550,8 +550,7 @@ defmodule VutuvWeb.UserControllerTest do
     end
   end
 
-  test "hides the country of a German address from a de viewer and links to maps",
-       %{conn: conn} do
+  test "links the whole address to Google Maps for a logged-out de viewer", %{conn: conn} do
     user = insert_activated_user()
 
     insert(:address,
@@ -573,23 +572,18 @@ defmodule VutuvWeb.UserControllerTest do
     # A German viewer looking at a German address does not need "Deutschland".
     refute html =~ "Deutschland"
 
-    # Every address links out to the major map services.
-    assert html =~ "https://www.google.com/maps/search/"
-    assert html =~ "https://www.openstreetmap.org/search"
-    assert html =~ "https://maps.apple.com/"
-    # For a logged-out viewer the default (Google Maps) is the single primary
-    # call to action; the other services are demoted to a quiet "also on" line
-    # so the row reads as one map action (Vutuv.Maps).
-    assert html =~ "In Google Maps öffnen"
-    assert html =~ "Auch auf"
-    assert html =~ "OpenStreetMap"
-    assert html =~ "Apple Maps"
-    # A logged-out viewer cannot promote a default, so the row carries no
-    # persist hook (the click-to-promote enhancement stays off).
-    refute html =~ "data-map-persist-url"
+    # The address itself is the one link, to the viewer's map service (Google
+    # for a logged-out viewer); the other providers are not offered here.
+    link = "#profile-addresses a[href^='https://www.google.com/maps/search/']"
+    assert text_of(html, link) =~ "Johannes-Müller-Str. 10"
+    assert text_of(html, link) =~ "In Google Maps öffnen"
+    assert [_] = Regex.scan(~r{https://www\.google\.com/maps/search/}, html)
+    refute html =~ "openstreetmap.org"
+    refute html =~ "maps.apple.com"
+    refute html =~ "Auch auf"
   end
 
-  test "renders the viewer's chosen default map service as the primary button", %{conn: conn} do
+  test "links the address to the viewer's chosen map service", %{conn: conn} do
     {conn, viewer} = create_and_login_user(conn)
     {:ok, _} = Vutuv.Accounts.update_user(viewer, %{"default_map_service" => "apple"})
 
@@ -598,14 +592,12 @@ defmodule VutuvWeb.UserControllerTest do
 
     html = conn |> get(~p"/#{owner}") |> html_response(200)
 
-    # The viewer defaulted to Apple Maps, so that is the primary "Open in …"
-    # button; the row carries the persist hook so a click promotes a new default.
+    assert text_of(html, "#profile-addresses a[href^='https://maps.apple.com/']") =~ "Koblenz"
     assert html =~ "Open in Apple Maps"
-    assert html =~ "data-map-persist-url"
-    assert html =~ ~s(data-service="apple")
+    refute html =~ "google.com/maps"
   end
 
-  test "shows no map buttons when the viewer has disabled every map service", %{conn: conn} do
+  test "shows the address without a link when the viewer has turned maps off", %{conn: conn} do
     {conn, viewer} = create_and_login_user(conn)
 
     {:ok, _} =
@@ -620,10 +612,10 @@ defmodule VutuvWeb.UserControllerTest do
 
     html = conn |> get(~p"/#{owner}") |> html_response(200)
 
-    # The address itself still shows; only the map links are gone.
-    assert html =~ "Koblenz"
-    refute html =~ "https://maps.apple.com/"
-    refute html =~ "data-map-row"
+    assert text_of(html, "#profile-addresses") =~ "Koblenz"
+    refute html =~ "google.com/maps"
+    refute html =~ "maps.apple.com"
+    refute html =~ "openstreetmap.org"
   end
 
   test "names the country of a German address in an en viewer's language", %{conn: conn} do
@@ -673,7 +665,7 @@ defmodule VutuvWeb.UserControllerTest do
     html = conn |> get(~p"/#{owner}") |> html_response(200)
 
     assert html =~ ~s(id="profile-addresses")
-    refute html =~ "data-map-row"
+    refute html =~ "google.com/maps"
   end
 
   test "maps only the addresses that name a city", %{conn: conn} do
@@ -684,7 +676,7 @@ defmodule VutuvWeb.UserControllerTest do
     html = conn |> get(~p"/#{owner}") |> html_response(200)
 
     assert html =~ ~s(id="profile-addresses")
-    assert [_] = Regex.scan(~r/data-map-row/, html)
+    assert [_] = Regex.scan(~r{https://www\.google\.com/maps/search/}, html)
   end
 
   test "a member the owner follows does not see the owner's private email (page still renders)",
