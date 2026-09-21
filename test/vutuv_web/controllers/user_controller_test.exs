@@ -640,6 +640,37 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Deutschland"
   end
 
+  test "hides the address card from visitors while no address names a city", %{conn: conn} do
+    owner = insert_activated_user()
+    insert(:address, user: owner, description: "Private", city: nil, zip_code: nil)
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    refute html =~ ~s(id="profile-addresses")
+    refute html =~ "PostalAddress"
+  end
+
+  test "the owner still sees an address card without a city, but no map", %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+    insert(:address, user: owner, description: "Private", city: nil, zip_code: nil)
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    assert html =~ ~s(id="profile-addresses")
+    refute html =~ "data-map-row"
+  end
+
+  test "maps only the addresses that name a city", %{conn: conn} do
+    owner = insert_activated_user()
+    insert(:address, user: owner, description: "Office", city: "Koblenz", country: "Germany")
+    insert(:address, user: owner, description: "Private", city: nil, zip_code: nil)
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    assert html =~ ~s(id="profile-addresses")
+    assert [_] = Regex.scan(~r/data-map-row/, html)
+  end
+
   test "a member the owner follows does not see the owner's private email (page still renders)",
        %{conn: conn} do
     {conn, viewer} = create_and_login_user(conn)

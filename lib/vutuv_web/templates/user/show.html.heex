@@ -1561,7 +1561,7 @@ up. The rest of the geometry is one block in the phone section of
       </ul>
     </.card>
 
-    <.card :if={@totals.addresses > 0 or @as_owner?} id="profile-addresses">
+    <.card :if={@as_owner? or address_card?(@user.addresses)} id="profile-addresses">
       <.section_header title={ngettext("Address", "Addresses", @totals.addresses)} />
       <.empty_add :if={@as_owner? and @totals.addresses == 0} href={~p"/settings/addresses/new"}>
         {gettext("Add an address")}
@@ -1698,7 +1698,7 @@ each CV category now, so @education holds every row. --%>
       educations: Enum.flat_map(@education_groups, & &1.entries),
       languages: @languages,
       qualifications: @qualifications,
-      addresses: @user.addresses,
+      addresses: if(address_card?(@user.addresses), do: @user.addresses, else: []),
       urls: @user.urls
     })
   }

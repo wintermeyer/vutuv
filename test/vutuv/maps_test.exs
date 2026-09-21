@@ -121,6 +121,12 @@ defmodule Vutuv.MapsTest do
       assert %{primary: nil, alternatives: []} = Maps.address_links(address(), user)
     end
 
+    test "an address without a city gets no map, whatever the viewer enabled" do
+      country_only = struct(Address, %{country: "Germany", zip_code: "56068"})
+
+      assert %{primary: nil, alternatives: []} = Maps.address_links(country_only, nil)
+    end
+
     test "every link's geocoding query still carries the address" do
       %{primary: primary, alternatives: alts} = Maps.address_links(address(), nil)
 

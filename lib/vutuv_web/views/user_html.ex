@@ -48,6 +48,14 @@ defmodule VutuvWeb.UserHTML do
     do: not as_owner? and (current_user == nil or fediverse != nil or posts_total > 0)
 
   @doc """
+  Whether a visitor gets the address card: only once an address names a city,
+  since a lone country or postal code has nothing to show and no map to open.
+  The owner keeps the card to manage what is there, and the JSON-LD reads the
+  same answer so the markup never carries an address the page hides.
+  """
+  def address_card?(addresses), do: Enum.any?(addresses, &Vutuv.Address.city?/1)
+
+  @doc """
   One compact user row (avatar, name, work line, follow/unfollow) shared by
   the profile page's "Who to follow" rail and the follower/following preview
   cards. Callers pass the page-wide `work_info_by_id` / `following_by_id`

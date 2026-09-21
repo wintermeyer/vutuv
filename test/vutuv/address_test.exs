@@ -55,6 +55,18 @@ defmodule Vutuv.AddressTest do
     end
   end
 
+  describe "city?/1" do
+    test "is true once the address names a city" do
+      assert Address.city?(address(city: "Koblenz"))
+    end
+
+    test "is false for a country, a postal code or a street without a city" do
+      refute Address.city?(address(city: nil))
+      refute Address.city?(address(city: "  ", zip_code: "56068"))
+      refute Address.city?(address(city: nil, line_1: "Johannes-Müller-Str. 10"))
+    end
+  end
+
   describe "map_links/1" do
     test "builds Google, OpenStreetMap and Apple deep links" do
       a = address(line_1: "Johannes-Müller-Str. 10", zip_code: "56068", city: "Koblenz")

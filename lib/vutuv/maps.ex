@@ -96,22 +96,23 @@ defmodule Vutuv.Maps do
   where each `link` is `%{service: atom, label: binary, url: binary}`. The
   `primary` is the viewer's default service (the "Open in …" button) and
   `alternatives` are the rest of their enabled services in canonical order.
-  Both are `nil`/`[]` when the viewer has disabled every service.
+  Both are `nil`/`[]` when the viewer has disabled every service, and for an
+  address without a city (`Vutuv.Address.city?/1`).
   """
   def address_links(%Address{} = address, viewer) do
-    case default_service(viewer) do
-      nil ->
-        %{primary: nil, alternatives: []}
+    default = default_service(viewer)
 
-      default ->
-        urls = Vutuv.Address.map_links(address)
+    if default && Vutuv.Address.city?(address) do
+      urls = Vutuv.Address.map_links(address)
 
-        alternatives =
-          enabled_services(viewer)
-          |> Enum.reject(&(&1 == default))
-          |> Enum.map(&link(&1, urls))
+      alternatives =
+        enabled_services(viewer)
+        |> Enum.reject(&(&1 == default))
+        |> Enum.map(&link(&1, urls))
 
-        %{primary: link(default, urls), alternatives: alternatives}
+      %{primary: link(default, urls), alternatives: alternatives}
+    else
+      %{primary: nil, alternatives: []}
     end
   end
 

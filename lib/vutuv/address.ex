@@ -26,6 +26,9 @@ defmodule Vutuv.Address do
     body_lines(address) ++ country_lines(address, locale)
   end
 
+  @doc "Whether the address names a city."
+  def city?(%Address{city: city}), do: trim(city) != ""
+
   @doc """
   Deep links to the address on the major map services, as `{service, url}`
   pairs keyed `:google`, `:openstreetmap` and `:apple`.
