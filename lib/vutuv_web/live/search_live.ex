@@ -16,8 +16,10 @@ defmodule VutuvWeb.SearchLive do
   Power users get operators instead, parsed by
   `Vutuv.Search.parse/2`: `vorname:`/`nachname:` (aliases `first:`/`last:`),
   `@handle`, double quotes for exact-only, and the combinable people filters
-  `tag:`/`skill:` (has the tag) and `ort:`/`stadt:`/`city:` (has an address
-  in the city) - "müller tag:php", "müller ort:koblenz".
+  `tag:`/`skill:` (has the tag), `ort:`/`stadt:`/`city:` (has an address
+  in the city), `firma:`/`company:` (worked there) and `schule:`/`school:`
+  (studied there) - "müller tag:php", "müller firma:siemens". Under the last
+  two each row names the entry at that employer or school.
 
   A query is recorded for the search history only after it settles (no
   keystroke for two seconds), so typing "meier" stores one query, not five.
@@ -396,8 +398,8 @@ defmodule VutuvWeb.SearchLive do
 
   defp assign_people(socket, %{people: people, parsed: parsed}) do
     lines =
-      people.cv
-      |> Search.matched_entries(parsed.text, parsed.exact?)
+      people
+      |> Search.found_by(parsed)
       |> Map.new(fn {user_id, entry} -> {user_id, entry_line(entry)} end)
 
     assign(socket,
@@ -590,6 +592,16 @@ defmodule VutuvWeb.SearchLive do
       %{
         term: gettext("first:stefan"),
         desc: gettext("searches first names only (last: for last names)"),
+        scopes: [:all, :people]
+      },
+      %{
+        term: gettext("company:siemens"),
+        desc: gettext("only people who work or worked there, combinable: miller company:siemens"),
+        scopes: [:all, :people]
+      },
+      %{
+        term: gettext("school:tum"),
+        desc: gettext("only people who studied or trained at this school or university"),
         scopes: [:all, :people]
       },
       %{

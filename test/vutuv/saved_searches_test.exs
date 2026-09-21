@@ -4,6 +4,7 @@ defmodule Vutuv.SavedSearchesTest do
   alias Vutuv.Accounts.User
   alias Vutuv.SavedSearches
   alias Vutuv.SavedSearches.SavedSearch
+  alias Vutuv.Search
 
   setup do
     %{user: insert(:activated_user)}
@@ -145,6 +146,16 @@ defmodule Vutuv.SavedSearchesTest do
       assert "berlin" in segments
       assert User.employment_status_label("open") in segments
       refute Enum.any?(segments, &(&1 =~ "tag:"))
+    end
+
+    test "a people search narrowed by employer or school can be saved and names both" do
+      q = URI.encode_www_form("müller firma:siemens schule:tum")
+      search = build(:saved_search, kind: :people, query: "q=" <> q)
+
+      assert Search.alertable?(Search.parse("firma:siemens"))
+      assert Search.alertable?(Search.parse("schule:tum"))
+      refute Search.alertable?(Search.parse("müller"))
+      assert SavedSearches.summary_segments(search) == ["müller", "siemens", "tum"]
     end
 
     test "summary_segments omits the salary figure" do

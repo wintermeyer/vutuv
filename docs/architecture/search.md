@@ -13,10 +13,16 @@ exact-only toggle and query operators parsed by `Vutuv.Search.parse/2`:
 `@handle`, double quotes for exact, the combinable filter `tag:`/`skill:`
 (has the tag) which finds **both people and posts** carrying it (issue #946),
 plus the combinable people-only filters `ort:`/`stadt:`/`city:` (address in
-that city) and `status:looking` / `status:open` (job-availability, #928 —
+that city), `firma:`/`company:` (a work experience at that employer, ended or
+running, or at a linked page of that name), `schule:`/`uni:`/`school:` (an
+education entry there) and `status:looking` / `status:open` (job-availability, #928 —
 honored only for a signed-in viewer, logged-out search ignores it and a
-`hidden` status never matches), e.g. `müller tag:php`, `müller ort:koblenz` or
-`elixir status:open`. Only the people-only operators pin the scope to people
+`hidden` status never matches), e.g. `müller tag:php`, `müller firma:siemens` or
+`elixir status:open`. With `firma:` or `schule:` the free text stays a name
+search, similar-sounding names included, and every row names its entry at that
+employer or school rather than the current job. A value under three letters
+matches as a whole word, as it does in the free text (`schule:tu` is the TU,
+not Stuttgart). Only the people-only operators pin the scope to people
 (`scope_pinned?`); `tag:` leaves the scope free, so its chips still narrow to
 just people or just posts.
 
@@ -42,7 +48,7 @@ one-table queries over trigram indexes
 (`20260921114842_add_cv_search_trigram_indexes`), because an OR across tables
 makes Postgres drop every index and scan; Oliver Andrich measured the shape for
 PR #2217 (54.8 ms as one OR, 0.645 ms as the union on a 100k-member copy). Such
-a row names the entry that matched (`Search.matched_entries/3`) instead of the
+a row names the entry that matched (`Search.matched_entries/4`) instead of the
 member's current job. The CV matches are counted and fetched per page in SQL;
 the name matches load whole up to a cap (500 terms / 250 people in the people
 scope, 100 / 50 elsewhere), and a list that reaches it says "more than N"

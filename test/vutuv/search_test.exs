@@ -182,6 +182,20 @@ defmodule Vutuv.SearchTest do
       assert %{tag: "php"} = Search.parse("competence:php")
     end
 
+    test "the employer and school operators in every interface language" do
+      # One key per language the help page prints its examples in, plus the
+      # obvious English twin, so no reader is told to type a key that does
+      # nothing.
+      for key <- ~w(firma company employer entreprise azienda) do
+        assert %{company: "siemens", text: "müller", scope: :people, scope_pinned?: true} =
+                 Search.parse("müller #{key}:siemens")
+      end
+
+      for key <- ~w(schule uni school école ecole scuola) do
+        assert %{school: "tum", scope: :people, scope_pinned?: true} = Search.parse("#{key}:tum")
+      end
+    end
+
     test "`nome` and `nom` stay two different fields" do
       # Italian `nome` is the given name, French `nom` the family name. They
       # differ by one letter and sit three lines apart in `@field_ops`, which is

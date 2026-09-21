@@ -27944,3 +27944,23 @@ msgstr "Questa ricerca trova più persone di quante la lista possa mostrarne. Ag
 #, elixir-autogen, elixir-format
 msgid "more than %{formatted}"
 msgstr "più di %{formatted}"
+
+#: lib/vutuv_web/live/search_live.ex:611
+#, elixir-autogen, elixir-format
+msgid "company:siemens"
+msgstr "azienda:fiat"
+
+#: lib/vutuv_web/live/search_live.ex:617
+#, elixir-autogen, elixir-format
+msgid "only people who studied or trained at this school or university"
+msgstr "solo persone che hanno studiato o si sono formate in questa scuola o università"
+
+#: lib/vutuv_web/live/search_live.ex:612
+#, elixir-autogen, elixir-format
+msgid "only people who work or worked there, combinable: miller company:siemens"
+msgstr "solo persone che ci lavorano o ci hanno lavorato, combinabile: rossi azienda:fiat"
+
+#: lib/vutuv_web/live/search_live.ex:616
+#, elixir-autogen, elixir-format
+msgid "school:tum"
+msgstr "scuola:bocconi"

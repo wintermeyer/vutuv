@@ -65,6 +65,33 @@ defmodule VutuvWeb.SearchOrganizationsLiveTest do
     assert has_element?(view, "#search-people-exact li", "Entwickler @ Quarzwerk AG")
   end
 
+  test "with firma: each row names the station at that company", %{conn: conn} do
+    member = searchable_user("Petra", "Müllerstein")
+    insert(:work_experience, user: member, organization: "Nordlicht Studio", title: "Designerin")
+
+    insert(:work_experience,
+      user: member,
+      organization: "Quarzwerk AG",
+      title: "Teamleiterin",
+      start_year: 2018,
+      end_year: 2020
+    )
+
+    {:ok, view, _html} = live(conn, ~p"/search?q=müllerstein firma:quarzwerk")
+
+    assert has_element?(view, "#search-people-exact li", "Teamleiterin @ Quarzwerk AG")
+    refute has_element?(view, "#search-people-exact li", "Designerin")
+  end
+
+  test "the German help names the employer operator with an example", %{conn: conn} do
+    conn = put_req_header(conn, "accept-language", "de-DE,de")
+
+    {:ok, _view, html} = live(conn, ~p"/search")
+
+    assert html =~ "müller firma:siemens"
+    assert html =~ "schule:tum"
+  end
+
   test "an organization row counts its people and narrows the list to them", %{conn: conn} do
     org = insert(:organization, name: "Lindwurm Maschinenbau")
     now = insert(:activated_user, first_name: "Ilvy", last_name: "Sandhagen")
