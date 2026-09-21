@@ -133,5 +133,20 @@ defmodule VutuvWeb.MastodonApi.EngagementTest do
       refute account["note"] =~ "<script>"
       assert account["note"] =~ "&lt;script&gt;"
     end
+
+    # The headline is Markdown, rendered as such on the profile. Escaping the
+    # source showed app users the link syntax, brackets and all.
+    test "renders the bio's Markdown as HTML", %{conn: conn} do
+      user = insert(:activated_user, headline: "Bei der [CoWorkLand eG](https://coworkland.de/)")
+
+      account =
+        conn
+        |> mastodon_conn(mastodon_token(user, ["read"]))
+        |> get("/api/v1/accounts/verify_credentials")
+        |> json_response(200)
+
+      assert account["note"] =~ ~s(href="https://coworkland.de/")
+      refute account["note"] =~ "]("
+    end
   end
 end

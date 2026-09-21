@@ -517,12 +517,9 @@ defmodule Vutuv.MastodonApi.Presenter do
   end
 
   # Mastodon's `note` is HTML, and a vutuv headline or page description is
-  # plain text a member typed. Escaped and wrapped in one paragraph, so a
-  # client renders the words rather than parsing whatever was in them.
-  defp note(text) when is_binary(text) and text != "",
-    do: "<p>" <> Plug.HTML.html_escape(text) <> "</p>"
-
-  defp note(_blank), do: ""
+  # Markdown: rendered the way the profile renders it (raw HTML a member typed
+  # stays escaped text), so an app shows a link rather than its syntax.
+  defp note(text), do: Markdown.render_absolute(text, main_base())
 
   @doc """
   The picture stood in for an account we hold no avatar for — a page, a remote

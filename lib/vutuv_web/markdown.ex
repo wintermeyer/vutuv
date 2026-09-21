@@ -93,6 +93,24 @@ defmodule VutuvWeb.Markdown do
   def render(_), do: Phoenix.HTML.raw("")
 
   @doc """
+  `render/1` as an HTML string for a reader on another server or in an app,
+  with its root-relative links (`/handle`, `/tags/…`) absolutized against
+  `base` and the source newlines Mastodon would draw taken out
+  (`compact_html/1`). Blank text is `""`. For a member's headline and a page's
+  description, which are Markdown here but HTML fields out there (the
+  ActivityPub actor `summary`, the Mastodon API account `note`).
+  """
+  def render_absolute(text, _base) when text in [nil, ""], do: ""
+
+  def render_absolute(text, base) do
+    text
+    |> render()
+    |> Phoenix.HTML.safe_to_string()
+    |> absolutize_html(base)
+    |> compact_html()
+  end
+
+  @doc """
   Render a post's Markdown (`Phoenix.HTML.safe()`).
 
   Same pipeline as `render/1`, plus inline images: `![alt](url)` renders as

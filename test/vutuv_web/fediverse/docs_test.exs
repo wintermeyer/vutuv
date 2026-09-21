@@ -39,6 +39,31 @@ defmodule VutuvWeb.Fediverse.DocsTest do
       assert %{"toot" => _, "attributionDomains" => _} = List.last(doc["@context"])
     end
 
+    # The headline is Markdown, rendered as such on the profile. Escaping the
+    # source instead showed Mastodon readers `[CoWorkLand eG](https://…)` in
+    # the bio, brackets and all.
+    test "renders the headline's Markdown as HTML, not as its source" do
+      user =
+        insert(:activated_user,
+          headline: "Koordinator der [CoWorkLand eG](https://coworkland.de/)"
+        )
+
+      {:ok, actor} = Fediverse.ensure_actor(user)
+
+      summary = Docs.actor(user, actor)["summary"]
+
+      assert summary =~ ~s(href="https://coworkland.de/")
+      assert summary =~ ">CoWorkLand eG</a>"
+      refute summary =~ "]("
+    end
+
+    test "an empty headline is an empty summary" do
+      user = insert(:activated_user, headline: nil)
+      {:ok, actor} = Fediverse.ensure_actor(user)
+
+      assert Docs.actor(user, actor)["summary"] == ""
+    end
+
     # It used to be named unconditionally, so every member without a picture
     # handed remote servers a URL that answers 404 — and a picture a copyright
     # freeze has taken offline (issue #2012) would have stayed advertised.

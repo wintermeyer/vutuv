@@ -156,7 +156,7 @@ defmodule VutuvWeb.Fediverse.Docs do
       "type" => Vutuv.Identity.ap_type(user),
       "preferredUsername" => user.username,
       "name" => UserHelpers.full_name(user),
-      "summary" => summary(user),
+      "summary" => markdown_summary(user.headline),
       "url" => "#{base()}/#{user.username}",
       # Count-only like the followers collection, and for the same reason: who
       # a member reads is theirs to know (issue #1160). Always advertised, so a
@@ -305,30 +305,16 @@ defmodule VutuvWeb.Fediverse.Docs do
       # `Fediverse.federated?/1` refuses a page that has not claimed one.
       "preferredUsername" => organization.username,
       "name" => organization.name,
-      "summary" => organization_summary(organization),
+      "summary" => markdown_summary(organization.description),
       "url" => "#{base()}/organizations/#{organization.slug}"
     })
     |> put_organization_icon(organization)
   end
 
-  # A page's description is Markdown, and `summary` is HTML — the first cut put
-  # the stored source straight on the wire, so a bio written with a link or a
-  # list travelled as its own markup characters, unescaped and unwrapped. It
-  # goes through the renderer the page itself uses (`<.markdown_prose>`), so
-  # what a remote server shows is what a visitor here reads, and through the
-  # same absolutizer the post bodies use, because a root-relative `/handle`
-  # means nothing on another server. The member half already did this with its
-  # headline (`summary/1`), plainer only because a headline is one line of text.
-  defp organization_summary(%Organization{description: description})
-       when description in [nil, ""],
-       do: ""
-
-  defp organization_summary(%Organization{description: description}) do
-    description
-    |> VutuvWeb.Markdown.render()
-    |> Phoenix.HTML.safe_to_string()
-    |> absolutize()
-  end
+  # A page's description and a member's headline are Markdown, and `summary` is
+  # HTML: rendered the way their own page renders them, so a remote server
+  # shows what a visitor here reads rather than the markup characters.
+  defp markdown_summary(text), do: VutuvWeb.Markdown.render_absolute(text, base())
 
   # The page's logo, which is the avatar a remote server shows beside its name.
   # Rendered only when there is one: the document is a promise to strangers, and
@@ -1217,20 +1203,6 @@ defmodule VutuvWeb.Fediverse.Docs do
   end
 
   defp cover_attachments(%Post{}), do: []
-
-  defp summary(user) do
-    case user.headline do
-      nil ->
-        ""
-
-      "" ->
-        ""
-
-      headline ->
-        "<p>" <>
-          (headline |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()) <> "</p>"
-    end
-  end
 
   defp iso8601(%NaiveDateTime{} = at),
     do: at |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601() |> Kernel.<>("Z")
