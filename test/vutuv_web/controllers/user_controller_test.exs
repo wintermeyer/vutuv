@@ -600,12 +600,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "shows the address without a link when the viewer has turned maps off", %{conn: conn} do
     {conn, viewer} = create_and_login_user(conn)
 
-    {:ok, _} =
-      Vutuv.Accounts.update_user(viewer, %{
-        "map_google?" => "false",
-        "map_openstreetmap?" => "false",
-        "map_apple?" => "false"
-      })
+    {:ok, _} = Vutuv.Accounts.update_user(viewer, %{"default_map_service" => "none"})
 
     owner = insert_activated_user()
     insert(:address, user: owner, description: "Office", city: "Koblenz", country: "Germany")

@@ -84,10 +84,10 @@ defmodule Vutuv.PrefsTest do
     end
 
     test "an admin-set default overrides the shipped one" do
-      with_installation_defaults(%{post_lines_desktop: 12, map_google?: false})
+      with_installation_defaults(%{post_lines_desktop: 12, like_attribution?: false})
 
       assert Prefs.default(:post_lines_desktop) == 12
-      assert Prefs.default(:map_google?) == false
+      assert Prefs.default(:like_attribution?) == false
       # Untouched keys keep the shipped value.
       assert Prefs.default(:post_lines_mobile) == 8
     end
@@ -174,24 +174,24 @@ defmodule Vutuv.PrefsTest do
       assert {:ok, updated} =
                Prefs.admin_update_user(user, %{
                  "post_lines_desktop" => "4",
-                 "map_google?" => "false",
-                 "default_map_service" => "apple"
+                 "like_attribution?" => "false",
+                 "default_map_service" => "none"
                })
 
       assert updated.post_lines_desktop == 4
-      assert updated.map_google? == false
-      assert updated.default_map_service == "apple"
+      assert updated.like_attribution? == false
+      assert updated.default_map_service == "none"
 
       # A blank means "back to the installation default" (nil).
       assert {:ok, cleared} =
                Prefs.admin_update_user(updated, %{
                  "post_lines_desktop" => "",
-                 "map_google?" => "",
+                 "like_attribution?" => "",
                  "default_map_service" => ""
                })
 
       assert cleared.post_lines_desktop == nil
-      assert cleared.map_google? == nil
+      assert cleared.like_attribution? == nil
       assert cleared.default_map_service == nil
     end
 
@@ -208,11 +208,14 @@ defmodule Vutuv.PrefsTest do
       user = insert(:user)
 
       {:ok, user} =
-        Prefs.admin_update_user(user, %{"post_lines_desktop" => "4", "map_google?" => "false"})
+        Prefs.admin_update_user(user, %{
+          "post_lines_desktop" => "4",
+          "like_attribution?" => "false"
+        })
 
       assert {:ok, reset} = Prefs.reset_group(user, :post_display)
       assert reset.post_lines_desktop == nil
-      assert reset.map_google? == false
+      assert reset.like_attribution? == false
     end
   end
 
@@ -235,20 +238,23 @@ defmodule Vutuv.PrefsTest do
   end
 
   describe "Vutuv.Maps through the installation defaults" do
-    test "an untouched member and a logged-out visitor follow the admin defaults" do
-      with_installation_defaults(%{map_google?: false, default_map_service: "apple"})
+    test "an untouched member and a logged-out visitor follow the admin default" do
+      with_installation_defaults(%{default_map_service: "apple"})
 
-      assert Vutuv.Maps.enabled_services(%User{}) == [:openstreetmap, :apple]
-      assert Vutuv.Maps.enabled_services(nil) == [:openstreetmap, :apple]
       assert Vutuv.Maps.default_service(%User{}) == :apple
+      assert Vutuv.Maps.default_service(nil) == :apple
     end
 
-    test "explicit member choices still win over the admin defaults" do
-      with_installation_defaults(%{map_google?: false, default_map_service: "apple"})
-      user = %User{map_google?: true, default_map_service: "google"}
+    test "an installation can link addresses nowhere" do
+      with_installation_defaults(%{default_map_service: "none"})
 
-      assert :google in Vutuv.Maps.enabled_services(user)
-      assert Vutuv.Maps.default_service(user) == :google
+      assert Vutuv.Maps.default_service(nil) == nil
+    end
+
+    test "an explicit member choice still wins over the admin default" do
+      with_installation_defaults(%{default_map_service: "none"})
+
+      assert Vutuv.Maps.default_service(%User{default_map_service: "google"}) == :google
     end
   end
 end

@@ -41,7 +41,6 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.ContentFilters
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
-  alias Vutuv.Maps
   alias Vutuv.Mutes
   alias Vutuv.Mutes.AccountMute
   alias Vutuv.Organizations
@@ -844,24 +843,17 @@ defmodule VutuvWeb.SettingsController do
 
   # Map preferences (which map service an address links to, or none) are a
   # viewing preference, not public profile content, so they sit on the
-  # language & display page. The form posts one choice, which
-  # `Maps.choice_attrs/2` turns into the stored fields; an unknown service
-  # goes through as the default for the changeset to reject.
+  # language & display page.
   def update_maps(conn, %{"user" => params}) do
     save(
       conn,
-      map_choice_params(conn.assigns[:user], params),
+      params,
       "preferences.html",
       ~p"/settings/preferences",
       gettext("Map preferences saved."),
       event: "preferences_changed"
     )
   end
-
-  defp map_choice_params(user, %{"default_map_service" => choice}),
-    do: Maps.choice_attrs(user, choice)
-
-  defp map_choice_params(_user, params), do: params
 
   # Post-display preferences (how many lines a post is clamped to and whether the
   # body hyphenates, desktop and mobile independently). A reading preference like

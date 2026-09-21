@@ -171,7 +171,7 @@ defmodule VutuvWeb.AccountEventHooksTest do
       put(conn, ~p"/settings/post_display", user: %{"post_lines_desktop" => "3"})
 
       assert [maps, posts] = events(user, "preferences_changed")
-      assert maps.details["fields"] == ["default_map_service", "map_apple?"]
+      assert maps.details["fields"] == ["default_map_service"]
       assert posts.details["fields"] == ["post_lines_desktop"]
     end
 

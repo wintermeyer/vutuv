@@ -711,8 +711,10 @@ vutuv runs fine without internet access:
   post whose language nobody has placed is not a candidate for it, so on a
   fresh switch-on the sweep has almost nothing it is allowed to do until the
   detection pile is drained.
-- The map links on profile addresses (Google/OSM/Apple) are plain link-outs
-  rendered in the visitor's browser; they simply won't resolve offline.
+- The map link on a profile address (Google Maps, OpenStreetMap or Apple
+  Maps) is a plain link-out rendered in the visitor's browser; it simply
+  won't resolve offline. Set the default map to "No map link" at
+  `/admin/preferences` and untouched members see plain addresses.
 - Job postings need no configuration to work offline: their zip → coordinate
   resolution uses a bundled GeoNames postal dataset (`priv/geo/`), entirely
   offline with no outbound call. Add your intranet's country with
@@ -870,8 +872,8 @@ Some behaviour is a **member preference** with an installation-wide default:
 how many lines a post shows in the feed before "Read more" (desktop and
 mobile separately), whether post text hyphenates, how many lines of a post a
 notification on `/notifications` quotes, and which map service an address on
-a profile links to (switching every service off removes the link). Members tune these on their own settings
-pages; you decide what everyone gets **until** they do.
+a profile links to, if any. Members tune these on their own settings pages;
+you decide what everyone gets **until** they do.
 
 One is the **interface language**. vutuv ships in English, German and Italian;
 a member picks theirs on their settings page, and a visitor who has picked

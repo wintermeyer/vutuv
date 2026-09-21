@@ -10431,21 +10431,6 @@ msgstr ""
 msgid "On"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:72
-#, elixir-autogen, elixir-format
-msgid "Show Apple Maps"
-msgstr ""
-
-#: lib/vutuv_web/gettext_extraction_anchors.ex:70
-#, elixir-autogen, elixir-format
-msgid "Show Google Maps"
-msgstr ""
-
-#: lib/vutuv_web/gettext_extraction_anchors.ex:71
-#, elixir-autogen, elixir-format
-msgid "Show OpenStreetMap"
-msgstr ""
-
 #: lib/vutuv_web/templates/admin/user_pref/show.html.heex:29
 #, elixir-autogen, elixir-format
 msgid "These are the member's own settings: change them here only for support. A field on \"installation default\" follows whatever the defaults page says, now and in the future; a set value stays until the member (or an admin) changes it again."
@@ -26229,7 +26214,7 @@ msgstr ""
 msgid "Open addresses in"
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:154
+#: lib/vutuv_web/gettext_extraction_anchors.ex:71
 #, elixir-autogen, elixir-format
 msgid "No map link"
 msgstr ""

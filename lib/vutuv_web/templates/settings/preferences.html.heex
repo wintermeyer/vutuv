@@ -1,7 +1,7 @@
 <%!-- Language & display: the member's own viewing preferences — the interface
 language (it overrides Accept-Language for the whole site, not the public
-profile), which map services show on addresses, and how the posts they read are
-shortened and hyphenated. Each form posts its own subset and lands back here. --%>
+profile), which map service an address links to, and how the posts they read
+are shortened and hyphenated. Each form posts its own subset and lands back here. --%>
 <.settings_shell user={@user} active={:preferences} title={gettext("Language & display")}>
   <div class="space-y-6">
     <.card>
@@ -37,11 +37,7 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
               format by reading the name of a country. --%>
         <div class="sm:max-w-md">
           <%= label f, :date_region, Vutuv.Prefs.label(:date_region), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= select f, :date_region,
-            Enum.map(Vutuv.Prefs.pref!(:date_region).values, fn value ->
-              {Vutuv.Prefs.value_label(Vutuv.Prefs.pref!(:date_region), value), value}
-            end),
-            class: input_class() %>
+          <%= select f, :date_region, pref_options(:date_region), class: input_class() %>
           <%= error_tag f, :date_region %>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
             {Vutuv.Prefs.hint(:date_region)}
@@ -111,11 +107,7 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
     </.card>
 
     <%!-- Map preferences: the one map service an address on a profile links
-          to, or none at all. One choice, because the address card offers one
-          link (Vutuv.Maps.address_link/2); SettingsController.update_maps
-          turns it into the stored fields (Vutuv.Maps.choice_attrs/2), and
-          the select shows what the viewer really gets (Vutuv.Maps.choice/1),
-          not the raw default column. --%>
+          to (Vutuv.Maps.address_link/2), or none at all. --%>
     <.card>
       <.section_title>{gettext("Maps")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -132,9 +124,7 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
 
         <div class="sm:max-w-xs">
           <%= label f, :default_map_service, gettext("Open addresses in"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= select f, :default_map_service, map_choice_options(),
-            value: Vutuv.Maps.choice(@user),
-            class: input_class() %>
+          <%= select f, :default_map_service, pref_options(:default_map_service), class: input_class() %>
           <%= error_tag f, :default_map_service %>
         </div>
 

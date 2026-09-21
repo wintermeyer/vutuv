@@ -62,7 +62,7 @@ defmodule VutuvWeb.SettingsPrefsTest do
         Prefs.admin_update_user(user, %{
           "post_lines_desktop" => "3",
           "post_hyphenate_desktop" => "true",
-          "map_google?" => "false"
+          "default_map_service" => "none"
         })
 
       conn = post(conn, ~p"/settings/post_display/reset")
@@ -72,24 +72,19 @@ defmodule VutuvWeb.SettingsPrefsTest do
       assert user.post_lines_desktop == nil
       assert user.post_hyphenate_desktop == nil
       # The maps group is untouched.
-      assert user.map_google? == false
+      assert user.default_map_service == "none"
     end
 
     test "the maps reset clears the maps group", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       {:ok, _user} =
-        Prefs.admin_update_user(user, %{
-          "map_google?" => "false",
-          "default_map_service" => "apple"
-        })
+        Prefs.admin_update_user(user, %{"default_map_service" => "apple"})
 
       conn = post(conn, ~p"/settings/maps/reset")
       assert redirected_to(conn) == ~p"/settings/preferences"
 
-      user = Repo.get!(User, user.id)
-      assert user.map_google? == nil
-      assert user.default_map_service == nil
+      assert Repo.get!(User, user.id).default_map_service == nil
     end
   end
 

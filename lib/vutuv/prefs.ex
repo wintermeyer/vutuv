@@ -39,8 +39,8 @@ defmodule Vutuv.Prefs do
   # Grouped in display order. The post-display values mirror the CSS fallbacks
   # in assets/css/components.css (.post-clamp / .markdown--post / .notif-clamp)
   # — see Vutuv.Accounts.User.post_prefs_defaults/0 and
-  # notification_post_lines_default/0; the map defaults reproduce
-  # "all services on, Google first" (Vutuv.Maps).
+  # notification_post_lines_default/0; the map default is Google Maps, and
+  # "none" links addresses nowhere (Vutuv.Maps).
   @registry [
     %Pref{
       key: :post_lines_desktop,
@@ -159,14 +159,11 @@ defmodule Vutuv.Prefs do
       values: Vutuv.TimeZones.all(),
       group: :region
     },
-    %Pref{key: :map_google?, type: :boolean, default: true, group: :maps},
-    %Pref{key: :map_openstreetmap?, type: :boolean, default: true, group: :maps},
-    %Pref{key: :map_apple?, type: :boolean, default: true, group: :maps},
     %Pref{
       key: :default_map_service,
       type: :select,
       default: "google",
-      values: ~w(google openstreetmap apple),
+      values: ~w(google openstreetmap apple none),
       group: :maps
     }
   ]
@@ -222,9 +219,6 @@ defmodule Vutuv.Prefs do
   def label(:date_region), do: Gettext.gettext(VutuvWeb.Gettext, "Date format")
   def label(:time_zone), do: Gettext.gettext(VutuvWeb.Gettext, "Time zone")
 
-  def label(:map_google?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Google Maps")
-  def label(:map_openstreetmap?), do: Gettext.gettext(VutuvWeb.Gettext, "Show OpenStreetMap")
-  def label(:map_apple?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Apple Maps")
   def label(:default_map_service), do: Gettext.gettext(VutuvWeb.Gettext, "Default map")
 
   @doc "A short muted helper line under the control, or nil."
@@ -321,6 +315,9 @@ defmodule Vutuv.Prefs do
     do: Vutuv.Maps.label(:openstreetmap)
 
   def value_label(%Pref{key: :default_map_service}, "apple"), do: Vutuv.Maps.label(:apple)
+
+  def value_label(%Pref{key: :default_map_service}, "none"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "No map link")
 
   # A date shape is chosen by looking at one, so the sample leads and the
   # regions it is named after follow. Separated by a middle dot rather than

@@ -1039,6 +1039,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       put(conn, ~p"/settings/maps", user: %{"default_map_service" => "none"})
+      assert %User{default_map_service: "none"} = Repo.get(User, user.id)
       assert Maps.default_service(Repo.get(User, user.id)) == nil
 
       html = conn |> get(~p"/settings/preferences") |> html_response(200)

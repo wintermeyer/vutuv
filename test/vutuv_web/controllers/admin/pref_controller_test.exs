@@ -31,6 +31,15 @@ defmodule VutuvWeb.Admin.PrefControllerTest do
       assert html =~ ~s(action="/admin/preferences")
     end
 
+    test "offers the map as one choice, none included, with no per-service boxes",
+         %{conn: conn} do
+      html = conn |> get(~p"/admin/preferences") |> html_response(200)
+
+      assert html =~ ~s(id="pref_default_map_service")
+      assert html =~ ~s(value="none")
+      refute html =~ "map_google?"
+    end
+
     test "shows a stored override in the control", %{conn: conn} do
       {:ok, _} = Prefs.put_defaults(%{"post_lines_desktop" => "12"})
 
@@ -68,14 +77,7 @@ defmodule VutuvWeb.Admin.PrefControllerTest do
       {:ok, _} = Prefs.put_defaults(%{"default_map_service" => "apple"})
 
       conn =
-        put(conn, ~p"/admin/preferences",
-          prefs: %{
-            "map_google?" => "true",
-            "map_openstreetmap?" => "true",
-            "map_apple?" => "true",
-            "default_map_service" => "google"
-          }
-        )
+        put(conn, ~p"/admin/preferences", prefs: %{"default_map_service" => "google"})
 
       assert redirected_to(conn) == ~p"/admin/preferences"
       assert Prefs.list_default_rows() == %{}

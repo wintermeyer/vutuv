@@ -142,16 +142,13 @@ defmodule VutuvWeb.SettingsHTML do
     do: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
 
   @doc """
-  The map services an address can open in, then "no map link", as
-  `{label, value}` pairs for the one select on the language & display page.
-  The services come from the `:default_map_service` pref, so the member page
-  and `/admin/preferences` name them the same way (`Vutuv.Prefs.value_label/2`).
+  A select pref's values as `{label, value}` pairs, read off the `Vutuv.Prefs`
+  registry, so a member page and `/admin/preferences` offer and name the same
+  choices (`Vutuv.Prefs.value_label/2`).
   """
-  def map_choice_options do
-    pref = Prefs.pref!(:default_map_service)
-
-    Enum.map(pref.values, &{Prefs.value_label(pref, &1), &1}) ++
-      [{gettext("No map link"), "none"}]
+  def pref_options(key) do
+    pref = Prefs.pref!(key)
+    Enum.map(pref.values, &{Prefs.value_label(pref, &1), &1})
   end
 
   @doc """

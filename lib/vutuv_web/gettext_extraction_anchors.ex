@@ -67,10 +67,8 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Lines on mobile"),
       gettext("Hyphenate on desktop"),
       gettext("Hyphenate on mobile"),
-      gettext("Show Google Maps"),
-      gettext("Show OpenStreetMap"),
-      gettext("Show Apple Maps"),
       gettext("Default map"),
+      gettext("No map link"),
       gettext("Lines in notifications"),
       gettext("Show my name on posts I like"),
       gettext(
