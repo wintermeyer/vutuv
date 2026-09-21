@@ -416,6 +416,25 @@ defmodule Vutuv.FediverseRevocationTest do
       assert %{inboxes: ["https://social.example/inbox"]} = Fediverse.prepare_actor_delete(hidden)
     end
 
+    # An answer also goes to the servers following the member it answers, and
+    # no follower row of the one who wrote it names them. Only the delivery
+    # record does, so without it they kept the answer under a dead actor.
+    test "reaches every server a post of theirs went to, not only their followers" do
+      answered = federating()
+      follower_on(answered, "follows-answered.example")
+      replier = federating()
+      follower_on(replier, "social.example")
+      {:ok, parent} = Vutuv.Posts.create_post(answered, %{body: "Eine Frage."})
+      {:ok, _reply} = Vutuv.Posts.create_reply(replier, parent, %{body: "Eine Antwort."})
+
+      assert %{inboxes: inboxes} = Fediverse.prepare_actor_delete(replier)
+
+      assert Enum.sort(inboxes) == [
+               "https://follows-answered.example/inbox",
+               "https://social.example/inbox"
+             ]
+    end
+
     test "clears the delivery records the cascade cannot reach" do
       user = federating()
       follower_on(user, "social.example")

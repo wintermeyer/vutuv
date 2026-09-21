@@ -210,7 +210,10 @@ defmodule Vutuv.PostsRemoteRepliesTest do
 
       assert {:ok, _reply} = Posts.create_remote_reply(lonely, note, %{"body" => "Auch von mir."})
 
-      assert [%Delivery{inbox_uri: @inbox}] = Repo.all(Delivery)
+      # Beside the answered person, the servers following the author of the
+      # vutuv post it sits under get it too, as any answer under that post does.
+      inboxes = Delivery |> Repo.all() |> Enum.map(& &1.inbox_uri) |> Enum.sort()
+      assert inboxes == ["https://follower.example/inbox", @inbox]
     end
 
     test "deleting the answer tells the answered person too", %{author: author, note: note} do

@@ -633,8 +633,13 @@ every activity of a member it finds no key for, silently.
   public post enqueues `Create(Note)`, editing `Update`, deleting
   `Delete(Tombstone)` through the one revocation chokepoint (`revoke_post/1`, see
   the revocation section); an edit that closes the audience revokes
-  too. Replies federate with `inReplyTo` only when the parent's author also
-  federates (else the id would not resolve). A **repost** of a public post
+  too. A reply always carries `inReplyTo` and names the parent's author in `cc`
+  and as a `Mention` only when that author federates (issue #1739). A public
+  reply to a public post here also goes to the servers following the parent's
+  author, member or page (`Fediverse.recipients/2`), as Mastodon does for an
+  answer under a local post: without it an answer by somebody nobody there
+  follows never arrives, and our Notes carry no `replies` collection to fetch
+  it from. A **repost** of a public post
   enqueues an `Announce` to the reposter's own followers, un-reposting the
   matching `Undo(Announce)` (stable id `<note-url>#announce-<reposter>`); both
   fire only when the reposter federates and the **original author** federates

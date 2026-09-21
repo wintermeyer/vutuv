@@ -790,9 +790,14 @@ defmodule VutuvWeb.Fediverse.Docs do
   # is deliberately not here: on vutuv a member names somebody by typing `@ada`,
   # which `content_html/3` already spells out in full on the wire, so prepending
   # a handle they never typed would put words in their post.
-  defp answered_actors(nil), do: []
+  @doc """
+  The accounts of ours a `reply_parent/1` answer names, as a list: its author
+  when they federate, else nobody. The Note's `cc` and `Mention` read it, and so
+  does `Vutuv.Fediverse.recipients/2` for whose followers also get the answer.
+  """
+  def answered_actors(nil), do: []
 
-  defp answered_actors({author, _parent_post_id}),
+  def answered_actors({author, _parent_post_id}),
     do: Enum.filter([author], &Vutuv.Fediverse.federated?/1)
 
   # One spelling of the `Mention` an account of ours becomes, shared by the two
@@ -1079,8 +1084,14 @@ defmodule VutuvWeb.Fediverse.Docs do
   defp put_in_reply_to(note, {parent_author, parent_id}),
     do: Map.put(note, "inReplyTo", note_url(parent_author, parent_id))
 
-  defp reply_parent(%Post{reply_ref: %Ecto.Association.NotLoaded{}}), do: nil
-  defp reply_parent(%Post{reply_ref: nil}), do: nil
+  @doc """
+  The vutuv post this one publicly answers, as `{parent_author, parent_id}`, or
+  nil: not an answer, a parent that is gone or no longer public, or an
+  un-preloaded `reply_ref` (`note_preloads/0` loads it). The author is a member
+  or a page, whether or not they federate.
+  """
+  def reply_parent(%Post{reply_ref: %Ecto.Association.NotLoaded{}}), do: nil
+  def reply_parent(%Post{reply_ref: nil}), do: nil
 
   # Read off the ref rather than through `Posts.reply_ref_state/1`, which owns
   # this question for the renderers: a Note wants the parent's id and author and
@@ -1098,7 +1109,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   # answer. Accepted: both halves of the fix need its answer, and preloading the
   # parent's denials instead trades one `exists?` for two preload queries on the
   # path that dominates, a single post's note.
-  defp reply_parent(%Post{reply_ref: reply_ref}) do
+  def reply_parent(%Post{reply_ref: reply_ref}) do
     with parent_id when is_binary(parent_id) <- reply_ref.parent_post_id,
          author when not is_nil(author) <- parent_author(reply_ref),
          false <- Posts.restricted?(%Post{id: parent_id}) do

@@ -11399,11 +11399,20 @@ defmodule Vutuv.Fediverse do
   end
 
   # Everybody who has to hear that this actor is gone: the servers that follow
-  # the member (so their copies go) and — since issue #1160 — the servers whose
-  # accounts the member follows, so they stop delivering to an inbox that no
-  # longer answers.
+  # the member (so their copies go), every other server a post of theirs was
+  # delivered to (the person an answer went to, the followers of the member it
+  # answered: they hold copies too, and only the delivery record names them),
+  # and — since issue #1160 — the servers whose accounts the member follows, so
+  # they stop delivering to an inbox that no longer answers.
   defp actor_delete_inboxes(%User{} = user) do
-    (delivery_inboxes(user) ++ followed_inboxes(user)) |> Enum.uniq()
+    (delivery_inboxes(user) ++ delivered_inboxes(user) ++ followed_inboxes(user))
+    |> Enum.uniq()
+  end
+
+  defp delivered_inboxes(%User{id: user_id}) do
+    Repo.all(
+      from(d in PostDelivery, where: d.user_id == ^user_id, distinct: true, select: d.inbox_uri)
+    )
   end
 
   @doc """
@@ -11633,9 +11642,10 @@ defmodule Vutuv.Fediverse do
   @doc """
   Every inbox one of a member's post activities goes to: the servers that
   followed them, plus — when the post answers a reply from another network
-  (issue #1070) — the inbox of the person answered.
+  (issue #1070) — the inbox of the person answered, and — when it publicly
+  answers a post here — the servers following that post's author.
 
-  That last one is the only inbox vutuv ever posts to without having been asked,
+  The remote inbox is the only one vutuv ever posts to without having been asked,
   which is why the address is vetted before it is ever stored (`own_inbox/1`
   refuses an inbox on a host the actor does not control) and re-vetted per row at
   send time (`attempt/2`: https, not internal, not a blocked server).
@@ -11644,7 +11654,21 @@ defmodule Vutuv.Fediverse do
   answered, so the empty-follower case is not "nothing to do" any more.
   """
   def recipients(%User{} = user, %Post{} = post) do
-    (delivery_inboxes(user) ++ answered_inbox(post)) |> Enum.uniq()
+    (delivery_inboxes(user) ++ answered_inbox(post) ++ thread_inboxes(post)) |> Enum.uniq()
+  end
+
+  # The servers following whoever this post answers here, member or page. That
+  # is Mastodon's rule for an answer under a local post (`StatusReachFinder`),
+  # and the only way those servers see the conversation under the post they
+  # follow: our Notes carry no `replies` collection to fetch it from, so an
+  # answer by somebody nobody over there follows never arrived at all. The same
+  # author the Note names in `cc`, so only a public parent and only an author
+  # who still takes part: a taken-down post or a departed member draws nothing.
+  defp thread_inboxes(%Post{} = post) do
+    post
+    |> Docs.reply_parent()
+    |> Docs.answered_actors()
+    |> Enum.flat_map(&delivery_inboxes/1)
   end
 
   # Read off the struct, never re-queried: on the delete path the sidecar row has
