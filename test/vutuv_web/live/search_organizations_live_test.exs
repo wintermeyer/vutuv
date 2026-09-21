@@ -55,6 +55,16 @@ defmodule VutuvWeb.SearchOrganizationsLiveTest do
     assert has_element?(view, "#search-people-exact li", "Werftleiterin @ Pelikan Werft")
   end
 
+  test "a name and an employer in one query find the person at that employer", %{conn: conn} do
+    member = insert(:activated_user, first_name: "Lukas", last_name: "Kaiser")
+    insert(:work_experience, user: member, organization: "Quarzwerk AG", title: "Entwickler")
+
+    {:ok, view, _html} = live(conn, ~p"/search?q=lukas quarzwerk")
+
+    assert has_element?(view, "#search-people-exact li", "Lukas Kaiser")
+    assert has_element?(view, "#search-people-exact li", "Entwickler @ Quarzwerk AG")
+  end
+
   test "an organization row counts its people and narrows the list to them", %{conn: conn} do
     org = insert(:organization, name: "Lindwurm Maschinenbau")
     now = insert(:activated_user, first_name: "Ilvy", last_name: "Sandhagen")

@@ -30,7 +30,14 @@ kind's own scope is paged (`?page=`, held inside the last page).
 
 **People** are the name matches, then the members whose CV names a matching
 employer or school: any work experience, ended or running, the name of a linked
-public organization page, any education entry. That CV set is a union of three
+public organization page, any education entry. One entry has to hold the words
+the member's first or last name does not, so "lukas siemens" finds Lukas at
+Siemens in either order, while "deutsche bank" does not find somebody who was
+at Deutsche Telekom and later at a bank. Words of three letters or more find
+the entry through the index; a shorter word only filters, and as a whole word
+("tu münchen" wants the TU, not the "tu" inside "Hauptverwaltung"). The
+username is not part of it, as the name search never reads it either. Exact
+mode wants the whole text as one employer or school. That CV set is a union of three
 one-table queries over trigram indexes
 (`20260921114842_add_cv_search_trigram_indexes`), because an OR across tables
 makes Postgres drop every index and scan; Oliver Andrich measured the shape for
