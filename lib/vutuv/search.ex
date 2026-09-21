@@ -10,8 +10,9 @@ defmodule Vutuv.Search do
   reads. Queries support operators, parsed by
   `parse/2`: `vorname:`/`first:` and `nachname:`/`last:` search one name
   field, `tag:`/`skill:` filters both people and posts carrying that tag
-  (issue #946), `@handle` the username, and a fully quoted query (or
-  `exact: true`) turns off prefix and phonetic matching.
+  (issue #946), `firma:`/`company:` and `schule:`/`school:` keep the people
+  whose CV names that employer or school, `@handle` the username, and a fully
+  quoted query (or `exact: true`) turns off prefix and phonetic matching.
   `search_by_email/1` stays as the low-level email matcher.
   """
 
@@ -86,12 +87,27 @@ defmodule Vutuv.Search do
     "ville" => :city,
     "status" => :status,
     "stato" => :status,
-    "statut" => :status
+    "statut" => :status,
+    "firma" => :company,
+    "company" => :company,
+    "employer" => :company,
+    "entreprise" => :company,
+    "azienda" => :company,
+    "schule" => :school,
+    "uni" => :school,
+    "school" => :school,
+    "ecole" => :school,
+    "école" => :school,
+    "scuola" => :school
   }
 
   # The job-availability values the `status:` operator accepts (issue #935);
   # the shared source is `Vutuv.Accounts.User.employment_statuses/0`.
   @status_values ~w(open looking)
+
+  # The people-only filters that combine with a name: each pins the scope to
+  # people, runs on its own, and can power a saved-search alert.
+  @people_filters [:city, :company, :school]
 
   @scopes [:all, :people, :organizations, :tags, :posts]
 
@@ -116,8 +132,12 @@ defmodule Vutuv.Search do
   username, `tag:x` / `skill:x` (has that tag) filters **both people and
   posts** (issue #946), and the people-only filter `ort:x` / `stadt:x` /
   `city:x` (has an address in that city) - both combinable with a name
-  ("müller tag:php"). `status:open` / `status:looking` (issue #935) filters by
-  job-availability, honored only for a signed-in viewer.
+  ("müller tag:php"). So are `firma:x` / `company:x` (a work experience at a
+  matching employer, ended or running) and `schule:x` / `uni:x` / `school:x`
+  (an education entry at a matching school): "müller firma:siemens" is the
+  Müllers who ever worked at Siemens. `status:open` / `status:looking`
+  (issue #935) filters by job-availability, honored only for a signed-in
+  viewer.
   A query wrapped in double quotes sets `exact?` (equality instead of substring
   + phonetics). Options: `:scope` (`:all | :people | :organizations | :tags |
   :posts`, the UI filter; operators override it, reported back as
@@ -147,7 +167,7 @@ defmodule Vutuv.Search do
     # (#846). `tag:` is deliberately NOT here: since issue #946 it finds both
     # people and posts, so it leaves the scope free for the chips to narrow.
     scope_pinned? =
-      Enum.any?([:first_name, :last_name, :slug, :city], &fields[&1]) or status != nil
+      Enum.any?([:first_name, :last_name, :slug | @people_filters], &fields[&1]) or status != nil
 
     scope = if scope_pinned?, do: :people, else: valid_scope(opts[:scope])
 
@@ -159,6 +179,8 @@ defmodule Vutuv.Search do
       last_name: fields[:last_name],
       slug: fields[:slug],
       city: fields[:city],
+      company: fields[:company],
+      school: fields[:school],
       status: status,
       exact?: quoted? or opts[:exact] == true,
       scope: scope,
@@ -168,11 +190,13 @@ defmodule Vutuv.Search do
 
   @doc """
   Whether a parsed people query can power a saved-search alert (issue #935):
-  it names at least one structured operator (tag: / ort: / status:) — a bare
-  free-text or name search never triggers a people alert. The /search save
-  button and the nightly sweeper share this one predicate.
+  it names at least one structured operator (tag: / ort: / firma: / schule: /
+  status:) — a bare free-text or name search never triggers a people alert.
+  The /search save button and the nightly sweeper share this one predicate.
   """
-  def alertable?(%{tag: tag, city: city, status: status}), do: !!(tag || city || status)
+  def alertable?(parsed), do: !!(parsed.tag || parsed.status) or people_filter?(parsed)
+
+  defp people_filter?(parsed), do: Enum.any?(@people_filters, &Map.get(parsed, &1))
 
   defp valid_scope(scope) when scope in @scopes, do: scope
   defp valid_scope(_scope), do: :all
@@ -209,8 +233,8 @@ defmodule Vutuv.Search do
     String.length(parsed.text) >= @min_chars or
       (is_binary(parsed.status) and parsed.logged_in?) or
       Enum.any?(
-        [parsed.tag, parsed.first_name, parsed.last_name, parsed.slug, parsed.city],
-        &(is_binary(&1) and String.length(&1) >= @min_field_chars)
+        [:tag, :first_name, :last_name, :slug | @people_filters],
+        &(is_binary(parsed[&1]) and String.length(parsed[&1]) >= @min_field_chars)
       )
   end
 
@@ -484,7 +508,7 @@ defmodule Vutuv.Search do
   end
 
   defp people_by_filter(parsed) do
-    if parsed.tag || parsed.city || status_filter(parsed) do
+    if parsed.tag || people_filter?(parsed) || status_filter(parsed) do
       parsed |> filtered_users() |> list_people(parsed)
     else
       []
@@ -507,6 +531,8 @@ defmodule Vutuv.Search do
     query
     |> filter_tag(parsed.tag, parsed.exact?)
     |> filter_city(parsed.city, parsed.exact?)
+    |> filter_cv(:company, parsed.company, parsed.exact?)
+    |> filter_cv(:school, parsed.school, parsed.exact?)
     |> filter_status(status_filter(parsed))
   end
 
@@ -574,6 +600,22 @@ defmodule Vutuv.Search do
 
     where(query, [], exists(subquery(sub)))
   end
+
+  # The firma: and schule: people filters: has a work experience at a matching
+  # employer (their own text or a linked public page), or an education entry at
+  # a matching school, ended or running. The same arms the CV search reads, as a
+  # set of ids, so a name search narrowed this way keeps every index it had.
+  defp filter_cv(query, _kind, nil, _exact?), do: query
+
+  defp filter_cv(query, kind, value, exact?),
+    do:
+      where(query, [user: u], u.id in subquery(cv_user_ids(operator_terms(value, exact?), kind)))
+
+  # An operator value is one word of the free text's rule that has to find the
+  # entry by itself, so a short one drives too, as a whole word: "schule:tu"
+  # wants the TU, not Stuttgart.
+  defp operator_terms(value, true), do: cv_terms(value, true)
+  defp operator_terms(value, false), do: {[word_term(value)], []}
 
   # Field search (vorname:/nachname:/@handle) straight on the users table:
   # search terms only store combined names, so they cannot tell first from
@@ -747,13 +789,14 @@ defmodule Vutuv.Search do
 
       parsed
       |> filtered_users()
-      |> where([user: u], u.id in subquery(cv_user_ids(terms)))
+      |> where([user: u], u.id in subquery(cv_user_ids(terms, :any)))
       |> where([user: u], u.id not in ^found_ids)
     end
   end
 
   defp cv_searchable?(parsed) do
     is_nil(parsed.slug) and is_nil(parsed.first_name) and is_nil(parsed.last_name) and
+      is_nil(parsed.company) and is_nil(parsed.school) and
       String.length(parsed.text) >= @min_chars and not email?(parsed.text)
   end
 
@@ -820,9 +863,15 @@ defmodule Vutuv.Search do
   # since a pending or frozen page shows its name nowhere else either), and a
   # school. Each arm finds its entries through a driver (the trigram index does
   # the narrowing) and then asks every word of the query of that same entry or
-  # of its owner's name. The search and `matched_entries/3` both read it, so the
-  # rows a search finds and the line each one explains itself with cannot drift.
-  defp cv_arms({drivers, words}) do
+  # of its owner's name. The search, the `firma:`/`schule:` filters and
+  # `matched_entries/4` all read it, so the rows a search finds and the line
+  # each one explains itself with cannot drift. `{job_arms, school_arms}`, the
+  # side a `kind` leaves out empty.
+  defp cv_arms(terms, :company), do: {job_arms(terms), []}
+  defp cv_arms(terms, :school), do: {[], school_arms(terms)}
+  defp cv_arms(terms, :any), do: {job_arms(terms), school_arms(terms)}
+
+  defp job_arms({drivers, words}) do
     [
       from(w in WorkExperience,
         as: :entry,
@@ -843,7 +892,12 @@ defmodule Vutuv.Search do
         as: :page,
         on: o.id == w.organization_id and organization_public_row(o),
         where: ^cv_entry_match(drivers, words, dynamic([page: o], o.name))
-      ),
+      )
+    ]
+  end
+
+  defp school_arms({drivers, words}) do
+    [
       from(e in Education,
         as: :entry,
         join: u in User,
@@ -880,11 +934,27 @@ defmodule Vutuv.Search do
   # Andrich measured this shape for the member directory (PR #2217) on a copy
   # with 100k members: 54.8 ms as one OR, 0.645 ms as this union, every arm a
   # bitmap scan on its own trigram index.
-  defp cv_user_ids(terms) do
-    terms
-    |> cv_arms()
+  defp cv_user_ids(terms, kind) do
+    {jobs, schools} = cv_arms(terms, kind)
+
+    (jobs ++ schools)
     |> Enum.map(&select(&1, [entry: x], x.user_id))
     |> Enum.reduce(fn arm, acc -> union(acc, ^arm) end)
+  end
+
+  @doc """
+  Which CV entry explains each person of a `page/2` people result, as
+  `matched_entries/4` answers it. Under `firma:` or `schule:` every row
+  qualified through such an entry, so every row names it (the employer when
+  both are given: work comes before school here as everywhere); otherwise only
+  the rows the free text found in a CV do.
+  """
+  def found_by(%{names: names, similar: similar, cv: cv}, parsed) do
+    cond do
+      parsed.company -> matched_entries(names ++ similar, parsed.company, parsed.exact?, :company)
+      parsed.school -> matched_entries(names ++ similar, parsed.school, parsed.exact?, :school)
+      true -> matched_entries(cv, parsed.text, parsed.exact?)
+    end
   end
 
   @doc """
@@ -898,7 +968,9 @@ defmodule Vutuv.Search do
   answered: the one holding the most words of the query ("siemens
   healthineers" prefers the Healthineers role over a plain Siemens one), then
   work before school, a running role before an ended one, the most recent.
-  One query per arm over the rendered ids, never one per row.
+  One query per arm over the rendered ids, never one per row. `kind`
+  (`:company` or `:school`) answers for a `firma:` / `schule:` value instead:
+  that kind of entry only, matched the way the filter matched it.
   """
   # What the result line prints and `Organizations.public_visible?/1` reads, and
   # no more: `description` is a text column LinkedIn imports fill to 10k.
@@ -906,20 +978,24 @@ defmodule Vutuv.Search do
   @page_line_fields ~w(id name slug status frozen_at)a
   @education_line_fields ~w(id user_id school degree start_month start_year end_month end_year)a
 
-  def matched_entries([], _text, _exact?), do: %{}
+  def matched_entries(users, text, exact?, kind \\ :any)
 
-  def matched_entries(users, text, exact?) do
-    case cv_terms(text, exact?) do
+  def matched_entries([], _text, _exact?, _kind), do: %{}
+
+  def matched_entries(users, text, exact?, kind) do
+    terms = if kind == :any, do: cv_terms(text, exact?), else: operator_terms(text, exact?)
+
+    case terms do
       {[], _words} ->
         %{}
 
       terms ->
         ids = Enum.map(users, & &1.id)
-        [by_text, by_page, by_school] = cv_arms(terms)
+        {job_arms, school_arms} = cv_arms(terms, kind)
         words = String.split(text)
 
         jobs =
-          for arm <- [by_text, by_page],
+          for arm <- job_arms,
               {job, page} <-
                 Repo.all(
                   from([entry: w, page: o] in arm,
@@ -930,12 +1006,15 @@ defmodule Vutuv.Search do
               do: {0, %{job | organization_page: page}}
 
         schools =
-          from([entry: e] in by_school,
-            where: e.user_id in ^ids,
-            select: struct(e, ^@education_line_fields)
-          )
-          |> Repo.all()
-          |> Enum.map(&{1, &1})
+          for arm <- school_arms,
+              school <-
+                Repo.all(
+                  from([entry: e] in arm,
+                    where: e.user_id in ^ids,
+                    select: struct(e, ^@education_line_fields)
+                  )
+                ),
+              do: {1, school}
 
         (jobs ++ schools)
         |> Enum.group_by(fn {_rank, entry} -> entry.user_id end)

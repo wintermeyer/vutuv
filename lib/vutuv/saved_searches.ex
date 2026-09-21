@@ -209,7 +209,7 @@ defmodule Vutuv.SavedSearches do
   here, even though the sweeper still applies the filter.
   """
   def summary_segments(%SavedSearch{kind: :people, query: query}) do
-    # /search stores its operators inside `q` (tag:/ort:/status:), not as their
+    # /search stores its operators inside `q` (tag:/ort:/firma:/status:), not as their
     # own URL params, so the labels come from the canonical parse of that q —
     # the same parse the page and the alert sweeper run.
     parsed = (query || "") |> URI.decode_query() |> Map.get("q", "") |> Vutuv.Search.parse()
@@ -219,6 +219,8 @@ defmodule Vutuv.SavedSearches do
         blank_to_nil(parsed.text),
         parsed.tag && "#" <> parsed.tag,
         parsed.city,
+        parsed.company,
+        parsed.school,
         parsed.slug && "@" <> parsed.slug,
         parsed.first_name,
         parsed.last_name,

@@ -230,6 +230,82 @@ defmodule Vutuv.SearchOrganizationsTest do
     end
   end
 
+  describe "the firma: and schule: operators" do
+    test "a name with firma: finds that name among the people who worked there" do
+      wanted = searchable_user("Petra", "Müllerstein")
+      elsewhere = searchable_user("Paul", "Müllerstein")
+      insert(:work_experience, user: wanted, organization: "Quarzwerk AG", end_year: 2019)
+      insert(:work_experience, user: elsewhere, organization: "Somewhere Else")
+
+      assert ids(Search.page("müllerstein firma:quarzwerk").people.names) == [wanted.id]
+    end
+
+    test "firma: keeps the similar-sounding names, filtered the same way" do
+      exact = searchable_user("Petra", "Kolbinger")
+      sounds_like = searchable_user("Paul", "Kohlbinger")
+      insert(:work_experience, user: exact, organization: "Quarzwerk AG")
+      insert(:work_experience, user: sounds_like, organization: "Quarzwerk AG")
+
+      people = Search.page("kolbinger firma:quarzwerk").people
+
+      assert ids(people.names) == [exact.id]
+      assert ids(people.similar) == [sounds_like.id]
+    end
+
+    test "firma: alone lists everybody who worked there, the linked page's name included" do
+      page = insert(:organization, name: "Quarzwerk Holding")
+      own_text = insert(:activated_user)
+      linked = insert(:activated_user)
+      insert(:work_experience, user: own_text, organization: "Quarzwerk AG")
+      insert(:work_experience, user: linked, organization: "QWH", organization_id: page.id)
+      insert(:work_experience, user: insert(:activated_user), organization: "Somewhere Else")
+
+      assert ids(Search.page("firma:quarzwerk").people.names) == ids([own_text, linked])
+    end
+
+    test "schule: finds the people who studied there" do
+      student = insert(:activated_user)
+      insert(:education, user: student, school: "Hochschule Tannenfeld")
+      insert(:work_experience, user: insert(:activated_user), organization: "Tannenfeld GmbH")
+
+      assert ids(Search.page("schule:tannenfeld").people.names) == [student.id]
+    end
+
+    test "a value under three letters is a whole word, as in the free text" do
+      tu = insert(:activated_user)
+      stuttgart = insert(:activated_user)
+      insert(:education, user: tu, school: "TU Dortmund")
+      insert(:education, user: stuttgart, school: "Universität Stuttgart")
+
+      result = Search.page("schule:tu")
+
+      assert ids(result.people.names) == [tu.id]
+      assert Search.found_by(result.people, result.parsed)[tu.id].school == "TU Dortmund"
+    end
+
+    test "with an operator the free text is a name, not a CV word" do
+      # Worked at a place called "Müllerstein Brot" and at Quarzwerk, but is
+      # not called Müllerstein.
+      baker = insert(:activated_user, first_name: "Bernd", last_name: "Baecker")
+      insert(:work_experience, user: baker, organization: "Müllerstein Brot")
+      insert(:work_experience, user: baker, organization: "Quarzwerk AG")
+
+      assert Search.page("müllerstein firma:quarzwerk").people.cv == []
+    end
+
+    test "matched_entries/4 restricted to a kind names the entry of that kind" do
+      member = insert(:activated_user)
+      insert(:work_experience, user: member, organization: "Tannenfeld Werke", title: "Monteur")
+      insert(:education, user: member, school: "Hochschule Tannenfeld")
+
+      assert Search.matched_entries([member], "tannenfeld", false, :school)[member.id].school ==
+               "Hochschule Tannenfeld"
+
+      assert Search.matched_entries([member], "tannenfeld", false, :company)[member.id].title ==
+               "Monteur"
+    end
+  end
+
   describe "organizations as a kind of result" do
     test "a public page is found by name, with the people its page lists" do
       page = insert(:organization, name: "Silberfluss Energie")

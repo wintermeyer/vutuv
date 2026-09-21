@@ -26312,3 +26312,23 @@ msgstr "Cette recherche correspond à plus de personnes que la liste ne peut en 
 #, elixir-autogen, elixir-format
 msgid "more than %{formatted}"
 msgstr "plus de %{formatted}"
+
+#: lib/vutuv_web/live/search_live.ex:611
+#, elixir-autogen, elixir-format
+msgid "company:siemens"
+msgstr "entreprise:airbus"
+
+#: lib/vutuv_web/live/search_live.ex:617
+#, elixir-autogen, elixir-format
+msgid "only people who studied or trained at this school or university"
+msgstr "uniquement les personnes qui ont étudié ou se sont formées dans cette école ou université"
+
+#: lib/vutuv_web/live/search_live.ex:612
+#, elixir-autogen, elixir-format
+msgid "only people who work or worked there, combinable: miller company:siemens"
+msgstr "uniquement les personnes qui y travaillent ou y ont travaillé, combinable : dupont entreprise:airbus"
+
+#: lib/vutuv_web/live/search_live.ex:616
+#, elixir-autogen, elixir-format
+msgid "school:tum"
+msgstr "ecole:polytechnique"
