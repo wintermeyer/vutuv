@@ -873,40 +873,37 @@ defmodule Vutuv.Search do
 
   defp job_arms({drivers, words}) do
     [
-      from(w in WorkExperience,
-        as: :entry,
-        join: u in User,
-        as: :owner,
-        on: u.id == w.user_id,
-        left_join: o in Organization,
-        as: :page,
-        on: o.id == w.organization_id and organization_public_row(o),
-        where: ^cv_entry_match(drivers, words, dynamic([entry: w], w.organization))
-      ),
-      from(w in WorkExperience,
-        as: :entry,
-        join: u in User,
-        as: :owner,
-        on: u.id == w.user_id,
-        join: o in Organization,
-        as: :page,
-        on: o.id == w.organization_id and organization_public_row(o),
-        where: ^cv_entry_match(drivers, words, dynamic([page: o], o.name))
-      )
+      cv_arm(jobs_with_page(:left), drivers, words, dynamic([entry: w], w.organization)),
+      cv_arm(jobs_with_page(:inner), drivers, words, dynamic([page: o], o.name))
     ]
   end
 
-  defp school_arms({drivers, words}) do
-    [
-      from(e in Education,
-        as: :entry,
-        join: u in User,
-        as: :owner,
-        on: u.id == e.user_id,
-        where: ^cv_entry_match(drivers, words, dynamic([entry: e], e.school))
-      )
-    ]
+  # A work experience and its linked public page: optional where the member's
+  # own employer text answers, required where the page's name does.
+  defp jobs_with_page(qual) do
+    join(from(w in WorkExperience, as: :entry), qual, [entry: w], o in Organization,
+      as: :page,
+      on: o.id == w.organization_id and organization_public_row(o)
+    )
   end
+
+  defp school_arms({drivers, words}),
+    do: [cv_arm(from(e in Education, as: :entry), drivers, words, dynamic([entry: e], e.school))]
+
+  # The owner is joined only when a word beyond the driver may stand in their
+  # name: one word, and every `firma:`/`schule:` value, reads nothing of them,
+  # and the join costs a users lookup per matching entry. An entry with a NULL
+  # `user_id` then only reaches an `IN`, where it matches nobody.
+  defp cv_arm(query, drivers, words, field) do
+    query
+    |> join_owner(words)
+    |> where(^cv_entry_match(drivers, words, field))
+  end
+
+  defp join_owner(query, []), do: query
+
+  defp join_owner(query, _words),
+    do: join(query, :inner, [entry: x], u in User, as: :owner, on: u.id == x.user_id)
 
   # Some driver in the entry, and every word in the entry or in the name.
   defp cv_entry_match([first | rest], words, field) do
@@ -933,13 +930,14 @@ defmodule Vutuv.Search do
   # OR that reads a second table gives up every index in it and scans. Oliver
   # Andrich measured this shape for the member directory (PR #2217) on a copy
   # with 100k members: 54.8 ms as one OR, 0.645 ms as this union, every arm a
-  # bitmap scan on its own trigram index.
+  # bitmap scan on its own trigram index. `union_all`: the list only feeds an
+  # `IN`, which ignores duplicates anyway.
   defp cv_user_ids(terms, kind) do
     {jobs, schools} = cv_arms(terms, kind)
 
     (jobs ++ schools)
     |> Enum.map(&select(&1, [entry: x], x.user_id))
-    |> Enum.reduce(fn arm, acc -> union(acc, ^arm) end)
+    |> Enum.reduce(fn arm, acc -> union_all(acc, ^arm) end)
   end
 
   @doc """
