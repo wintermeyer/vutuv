@@ -139,7 +139,7 @@ defmodule VutuvWeb.Plug.Locale do
   # `VutuvWeb.ShellLive`). Without that, /messages and /notifications flipped
   # the whole chrome back to English for German users.
   #
-  # An unsupported result (nil, or a browser subtag like "fr" that no config
+  # An unsupported result (nil, or a browser subtag like "nl" that no config
   # locale matches) falls back to "en" rather than being put into Gettext, the
   # `<html lang>` and the session as a dead value that renders English content
   # under a foreign lang tag.
