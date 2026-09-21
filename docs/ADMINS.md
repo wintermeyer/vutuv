@@ -236,7 +236,7 @@ Everything else has a default (the vutuv.de production value):
 | `MEDIA_KIT_MAX_LOGOS` | `5` | Most logo variants one member or one page may offer, counted separately from the photos. Five covers the light, dark, monochrome and square marks a design manual names, with one spare |
 | `SAVED_SEARCHES_MAX_PER_MEMBER` | `10` | Most saved searches (with e-mail alerts) one member may store (anti-abuse). A member at the cap is asked to delete one first |
 | `GEO_COUNTRIES` | `DE,AT,CH` | Comma-separated ISO 3166-1 alpha-2 codes whose bundled GeoNames postal data is loaded for offline zip → coordinate resolution on job postings. To add a country, drop its GeoNames zip export (`download.geonames.org/export/zip/<CC>.zip` → extracted `<CC>.txt`, optionally gzipped to `<CC>.txt.gz`) into `priv/geo/` and add the code here. Fully offline — no outbound calls |
-| `IMAGE_MODERATION_ENABLED` | `true` | `false` turns AI image moderation off (images publish immediately, as before the feature). While enabled, **every** image — avatars, covers, post / job-posting / organization images and the automatic link and homepage screenshots — waits invisible to everyone but its owner until a local Ollama vision model approves it; an unsafe image is deleted on the spot and the owner notified. Fail-closed: with Ollama unreachable, new images queue up and are scanned automatically once it is back — nothing is ever auto-approved. Set `false` only on installations without Ollama |
+| `IMAGE_MODERATION_ENABLED` | `true` | `false` turns AI image moderation off (images publish immediately, as before the feature). While enabled, **every** image — avatars, covers, post / job-posting / organization images and the automatic link and homepage screenshots — waits invisible to everyone but its owner until a local Ollama vision model approves it (a screenshot of a site on the admin's trusted list excepted, see "Trusted sites skip the image check"); an unsafe image is deleted on the spot and the owner notified. Fail-closed: with Ollama unreachable, new images queue up and are scanned automatically once it is back — nothing is ever auto-approved. Set `false` only on installations without Ollama |
 | `AI_CHECK_STALL_SECONDS` | `1800` | How long the scanner may be unreachable before a post waiting on one of its verdicts stops telling its author that a check is in progress and says plainly that the check cannot run. It changes **words, not the queue**: nothing is refused, nothing is released early, the retry goes on at its usual five-minute pace, and the post publishes itself the moment a verdict lands. Raise it on an installation whose GPU box is routinely away for an hour, so a normal absence is not called a stall; the chip in the app bar stops counting such a post as work in flight either way |
 | `IMAGE_PIXELATION_WINDOW_SECONDS` | `3600` | How long a picture waiting for that verdict shows readers a **pixelated preview** of itself — a separately stored file reduced to 64 cells on its long edge, not the picture behind a blur filter, so what reaches a reader carries none of the detail. It keeps a post card whole while the scan runs, and the real picture replaces it live the moment the verdict lands. Past this window the card falls back to a grey "being checked" tile, so a derivative of an unvetted picture never sits on a public page indefinitely. `0` switches the pixelated preview off entirely, which is the strictest posture |
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL of the Ollama instance every AI feature talks to (image scan, translations, tag merge assist, employment-reference analysis). May be a **comma-separated list** (`http://gpu-box:11434,http://second-gpu:11434,http://localhost:11434`), which is read two ways at once. For a single call it is a **priority list**: every instance but the last is tried with a 30 s budget and skipped on any failure, the last one is the patient fallback (120 s, covers a CPU cold load). For calls that overlap it is also a **pool**: the second one starts on the least busy instance, so a second GPU takes work rather than waiting for the first to break. Verdicts are identical either way — the list only buys speed |
@@ -1031,6 +1031,36 @@ old consent-dialog pictures disappear on their own within a few passes.
 `SCREENSHOT_PAGE_CHECK=false` turns the whole thing off (an installation
 without Ollama, or one whose GPU should only do the safety scan); the blocklist
 then stays exactly what you write into it.
+
+### Trusted sites skip the image check
+
+With image moderation on, every screenshot waits for the AI safety scan
+before anyone but its owner sees it, the same as an uploaded photo. For a site
+like a public broadcaster that scan finds nothing to object to and still costs
+a model run per capture; on vutuv.de one news site accounted for close to half
+of all post screenshots. It can also misfire: news photos of a cannabis debate
+were thrown out as "drug paraphernalia".
+
+**`/admin` → Trusted sites** (`/admin/screenshots?tab=trusted`) lists the
+sites whose captures are released the moment they are stored. The list starts
+empty. An entry is a site, never a path:
+
+| Entry | Covers |
+| --- | --- |
+| `tagesschau.de` | `tagesschau.de` and `www.tagesschau.de`, nothing else |
+| `*.tagesschau.de` | the site and every subdomain |
+
+A bare entry deliberately does **not** cover other subdomains, the opposite of
+the blocklist: on a platform like `substack.com` or `github.io` every
+subdomain belongs to somebody else. Trust a site only when you trust
+everything it shows, its ads and embedded videos included. What counts is
+where the capture browser ended up, not the link a member posted: a capture is
+released without the scan only when every page the browser showed is on the
+list, so a trusted site that redirects somewhere else is scanned as usual.
+
+The list skips the safety scan and nothing else. The page check above still
+runs, the blocklist still wins, and removing a site only affects captures taken
+after that; pictures released while it was trusted stay up.
 
 ## "I didn't do anything!" — the account-activity log
 

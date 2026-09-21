@@ -69,7 +69,7 @@ defmodule VutuvWeb.LinkThumbArrivesTest do
   # The profile queue's Chromium seam: only the browser step is stubbed, so the
   # store, the scan enqueue and the announcement all run for real.
   defp capture_link(tmp),
-    do: PageScreenshot.capture_due(capture: fn _url -> {:ok, framed_capture(tmp)} end)
+    do: PageScreenshot.capture_due(capture: fn _url -> {:ok, framed_capture(tmp), false} end)
 
   defp scan(kind, subject) do
     %ImageScan{

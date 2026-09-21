@@ -1467,6 +1467,34 @@ thread auto-scroll for that agent (issue #1033,
 `Vutuv.SocialFeed.Http.own_agent?/1`). Keep new on-arrival scroll/focus
 behaviour off the capture path for the same reason.
 
+### Trusted sites skip the safety scan: `Vutuv.ScreenshotTrust`
+
+Every capture waits for the AI safety scan like an upload does. An admin can
+exempt a site at `/admin/screenshots?tab=trusted` (`screenshot_trusted_hosts`,
+empty on every installation): its captures are stored `approved` and never
+enter quarantine. Measured on the dev copy of vutuv.de, one news site was
+1,493 of 3,399 post-screenshot scans between 19 July and 14 September 2026,
+and two of them were false `drugs` rejections of news photos.
+
+Three decisions shape it. **Entries are narrower than the blocklist's**: a
+bare `tagesschau.de` covers the apex and `www.` only, `*.tagesschau.de` adds
+the subdomains, and there are no paths, because a trust entry that covers too
+much waves a stranger's subdomain past the scan. **The decision reads where
+the browser ended up**, not the link: `PageScreenshot.Cdp` records every URL
+the page's top frame committed (`Page.frameNavigated` on the page session,
+iframes excluded), `capture_framed/2` answers `{:ok, path, trusted?}`, and
+`ScreenshotTrust.rendered_trusted?/1` wants all of them trusted and at least
+one recorded, so an open redirect on a trusted site cannot publish an
+unscanned picture of another. **The store decides where the bytes go**:
+`Vutuv.Screenshot.store/2` takes `trusted:` and writes such a capture to the
+served tree without a mosaic, while the queue stores the matching state from
+`ScreenshotTrust.initial_moderation/1` and skips the scan, so there is no
+release step that could die halfway. A YouTube thumbnail is never trusted: it
+is the uploader's artwork, not the site's page.
+
+The page check (`Vision`) still runs on trusted sites and the blocklist still
+wins. The check is one indexed query per capture, so it has no cache.
+
 ### SSRF egress control (GHSA-mmjf-8cwc-6vwv, CWE-918)
 
 The captured URL is member-supplied, so headless Chromium is a

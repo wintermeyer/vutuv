@@ -371,3 +371,8 @@ msgstr "Ce fichier est plus grand que %{limit}. Veuillez en envoyer un plus peti
 #, elixir-autogen, elixir-format
 msgid "First name or last name or nickname must be present"
 msgstr "Veuillez indiquer un prénom ou un nom."
+
+#: lib/vutuv_web/views/error_helpers.ex:211
+#, elixir-autogen, elixir-format
+msgid "must be a site without a path, e.g. tagesschau.de"
+msgstr "doit être un site sans chemin, par ex. tagesschau.de"

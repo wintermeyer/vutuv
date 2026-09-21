@@ -31,6 +31,7 @@ defmodule Vutuv.PageScreenshot do
   alias Vutuv.Repo
   alias Vutuv.ScreenshotBlocklist
   alias Vutuv.ScreenshotBlocklist.Vision
+  alias Vutuv.ScreenshotTrust
   alias Vutuv.SocialFeed.Http
   alias Vutuv.Ssrf
   alias Vutuv.Ssrf.SocksProxy
@@ -199,8 +200,8 @@ defmodule Vutuv.PageScreenshot do
     stamp_attempt(url)
 
     case capture.(url) do
-      {:ok, framed_path} ->
-        store(url, framed_path)
+      {:ok, framed_path, trusted?} ->
+        store(url, framed_path, trusted?)
         File.rm(framed_path)
         :ok
 
@@ -251,8 +252,7 @@ defmodule Vutuv.PageScreenshot do
   @doc """
   Blocklist check, redirect resolution, then `capture_framed/2` on whatever the
   chain ends at — the whole preflight a page a member merely *named* needs.
-  Returns `{:ok, framed_webp_path}` (the caller stores it and must `File.rm/1`
-  it) or `{:error, reason}`; `id` only names the temp files.
+  Answers what `capture_framed/2` answers; `id` only names the temp files.
 
   This is the right entry point wherever the URL is somebody's **homepage**
   rather than a link to one particular document: an apex that redirects to
@@ -279,8 +279,15 @@ defmodule Vutuv.PageScreenshot do
 
   @doc """
   Captures `url_value`, wraps it in a browser-window frame, and returns
-  `{:ok, framed_webp_path}` (the caller stores it and must `File.rm/1` it) or
-  `{:error, reason}`. `id` only names the temp files. Never raises.
+  `{:ok, framed_webp_path, trusted?}` (the caller stores it and must
+  `File.rm/1` it) or `{:error, reason}`. `id` only names the temp files. Never
+  raises.
+
+  `trusted?` says whether every page the browser showed is a trusted site
+  (`Vutuv.ScreenshotTrust.rendered_trusted?/1`), in which case the caller
+  releases the capture without the AI image scan. It is decided here, on the
+  navigations Chromium reports, because this is the only place that knows
+  where the browser really ended up.
 
   Shared by the profile-link path (`Url`) and the post link-screenshot queue
   (`Vutuv.Posts.Screenshots`), so the SSRF guard and the capture→frame pipeline
@@ -344,10 +351,11 @@ defmodule Vutuv.PageScreenshot do
           # not our browser drawing around it. It answers `:ok` for anything
           # it cannot judge, so a capture is never lost to a check that could
           # not run (`Vutuv.ScreenshotBlocklist.Vision`).
-          with :ok <- capture(url_value, page_path, proxy_port: proxy_port, consent: true),
+          with {:ok, top_frame_urls} <-
+                 render(url_value, page_path, proxy_port: proxy_port, consent: true),
                :ok <- Vision.review(url_value, page_path),
                {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url_value, framed_path) do
-            {:ok, framed_path}
+            {:ok, framed_path, ScreenshotTrust.rendered_trusted?(top_frame_urls)}
           end
         after
           File.rm(page_path)
@@ -454,7 +462,7 @@ defmodule Vutuv.PageScreenshot do
     |> Req.get()
   end
 
-  defp store(url, framed_path) do
+  defp store(url, framed_path, trusted?) do
     upload = %Plug.Upload{
       content_type: "image/webp",
       filename: "#{url.id}.webp",
@@ -465,14 +473,17 @@ defmodule Vutuv.PageScreenshot do
       url
       # `broken?: false` rides along rather than following as a second update
       # of the same row: a page we just photographed is by definition reachable.
-      |> Url.changeset(%{screenshot: upload, broken?: false})
+      |> Url.changeset(%{screenshot: upload, broken?: false, trusted_capture?: trusted?})
       |> Repo.update()
 
     # The fresh capture waits in AI-moderation limbo until the scan releases
     # it (Vutuv.Moderation.ImageScans) — a screenshot of an NSFW page must
-    # not reach the public link card.
+    # not reach the public link card — unless it shows a trusted site.
     with {:ok, updated} <- result do
-      ImageScans.enqueue("url_screenshot", updated.id, updated.user_id, updated.screenshot)
+      if updated.screenshot_moderation != "approved" do
+        ImageScans.enqueue("url_screenshot", updated.id, updated.user_id, updated.screenshot)
+      end
+
       # Announced whether or not the gate still holds it (issue #1928): a held
       # capture draws its mosaic preview (issue #1720), so the capture landing
       # is itself something to show, and the tile that has been grey since the
@@ -525,6 +536,12 @@ defmodule Vutuv.PageScreenshot do
   Returns `:ok` or `{:error, reason}`. Never raises.
   """
   def capture(url, out_path, opts \\ []) do
+    with {:ok, _top_frame_urls} <- render(url, out_path, opts), do: :ok
+  end
+
+  # `capture/3` plus the addresses the top frame committed, which only the
+  # link-preview path asks for (`capture_proxied/2`).
+  defp render(url, out_path, opts) do
     case binary() do
       nil -> {:error, :chromium_not_found}
       bin -> run(bin, url, out_path, opts)

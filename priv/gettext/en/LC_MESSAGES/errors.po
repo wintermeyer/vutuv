@@ -391,3 +391,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "First name or last name or nickname must be present"
 msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:211
+#, elixir-autogen, elixir-format
+msgid "must be a site without a path, e.g. tagesschau.de"
+msgstr ""

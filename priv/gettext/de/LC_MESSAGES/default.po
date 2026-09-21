@@ -26984,3 +26984,66 @@ msgstr "Online"
 msgctxt "admin dashboard"
 msgid "right now"
 msgstr "gerade jetzt"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:162
+#, elixir-autogen, elixir-format
+msgid "%{host} is no longer trusted."
+msgstr "%{host} gilt nicht mehr als vertrauenswürdig."
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:148
+#, elixir-autogen, elixir-format
+msgid "%{host} is trusted now."
+msgstr "%{host} gilt jetzt als vertrauenswürdig."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:237
+#, elixir-autogen, elixir-format
+msgid "Edit the trusted sites"
+msgstr "Vertrauenswürdige Websites bearbeiten"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:426
+#, elixir-autogen, elixir-format
+msgid "Screenshots of these sites skip the AI image check and show at once. Trust a site only when you trust everything it shows, ads and embedded videos included. A capture is only released when every page the browser showed is on this list, so a trusted site that forwards somewhere else is checked as usual."
+msgstr "Screenshots dieser Websites überspringen die KI-Bildprüfung und erscheinen sofort. Vertrauen Sie einer Website nur, wenn Sie allem trauen, was sie zeigt, auch Werbung und eingebetteten Videos. Freigegeben wird eine Aufnahme nur, wenn jede Seite, die der Browser gezeigt hat, auf dieser Liste steht. Leitet eine vertrauenswürdige Website woandershin weiter, wird also wie gewohnt geprüft."
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:445
+#: lib/vutuv_web/live/admin/screenshot_live.ex:482
+#, elixir-autogen, elixir-format
+msgid "Site"
+msgstr "Website"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:473
+#, elixir-autogen, elixir-format
+msgid "Sites"
+msgstr "Websites"
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:239
+#, elixir-autogen, elixir-format
+msgid "Sites whose screenshots skip the AI image check, such as a public broadcaster. Their captures show at once and cost the check no work."
+msgstr "Websites, deren Screenshots die KI-Bildprüfung überspringen, etwa ein öffentlich-rechtlicher Sender. Ihre Aufnahmen erscheinen sofort und kosten die Prüfung keine Arbeit."
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:498
+#, elixir-autogen, elixir-format
+msgid "Stop trusting %{host}?"
+msgstr "%{host} nicht mehr vertrauen?"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:475
+#, elixir-autogen, elixir-format
+msgid "The list is empty, so every screenshot is checked."
+msgstr "Die Liste ist leer, also wird jeder Screenshot geprüft."
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:252
+#: lib/vutuv_web/live/admin/screenshot_live.ex:424
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:233
+#, elixir-autogen, elixir-format
+msgid "Trusted sites"
+msgstr "Vertrauenswürdige Websites"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:646
+#, elixir-autogen, elixir-format
+msgid "the site and every subdomain"
+msgstr "die Website und jede Subdomain"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:645
+#, elixir-autogen, elixir-format
+msgid "the site and www., no other subdomain"
+msgstr "die Website und www., keine andere Subdomain"

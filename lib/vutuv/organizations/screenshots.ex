@@ -45,6 +45,7 @@ defmodule Vutuv.Organizations.Screenshots do
   alias Vutuv.PageScreenshot
   alias Vutuv.Repo
   alias Vutuv.ScreenshotBlocklist
+  alias Vutuv.ScreenshotTrust
 
   require Logger
 
@@ -235,8 +236,8 @@ defmodule Vutuv.Organizations.Screenshots do
     job = mark_capturing(job)
 
     case capture.(job) do
-      {:ok, %{screenshot: file, width: width, height: height}} ->
-        mark_ready(job, file, width, height)
+      {:ok, %{screenshot: file, width: width, height: height} = captured} ->
+        mark_ready(job, file, width, height, Map.get(captured, :trusted, false))
 
       {:error, reason} ->
         if permanent_failure?(reason),
@@ -260,7 +261,7 @@ defmodule Vutuv.Organizations.Screenshots do
   defp permanent_failure?(_reason), do: false
 
   defp capture_and_store(%OrganizationScreenshot{} = job) do
-    with {:ok, framed_path} <- PageScreenshot.capture_resolved(job.url, job.id) do
+    with {:ok, framed_path, trusted?} <- PageScreenshot.capture_resolved(job.url, job.id) do
       upload = %Plug.Upload{
         content_type: "image/webp",
         filename: "#{job.id}.webp",
@@ -268,9 +269,15 @@ defmodule Vutuv.Organizations.Screenshots do
       }
 
       result =
-        case Vutuv.Screenshot.store({upload, job}) do
+        case Vutuv.Screenshot.store({upload, job}, trusted: trusted?) do
           {:ok, file_name} ->
-            {:ok, %{screenshot: file_name, width: @display_width, height: @display_height}}
+            {:ok,
+             %{
+               screenshot: file_name,
+               width: @display_width,
+               height: @display_height,
+               trusted: trusted?
+             }}
 
           {:error, reason} ->
             {:error, reason}
@@ -286,11 +293,12 @@ defmodule Vutuv.Organizations.Screenshots do
     job
   end
 
-  defp mark_ready(%OrganizationScreenshot{} = job, file_name, width, height) do
+  defp mark_ready(%OrganizationScreenshot{} = job, file_name, width, height, trusted?) do
     # A fresh capture starts in AI-moderation limbo: it is rendered only once
     # the scan releases it, otherwise a screenshot of an NSFW page would bypass
-    # the upload gate (`Vutuv.Moderation.ImageScans`).
-    moderation = ImageScans.initial_state()
+    # the upload gate (`Vutuv.Moderation.ImageScans`). A trusted site's capture
+    # is the exception (`Vutuv.ScreenshotTrust`).
+    moderation = ScreenshotTrust.initial_moderation(trusted?)
 
     {:ok, ready} =
       job

@@ -74,8 +74,15 @@ defmodule Vutuv.PageScreenshot.Cdp do
   def capture_seconds, do: @capture_seconds
 
   @doc """
-  Captures `url` to `out_path` as a PNG. Returns `:ok` or `{:error, reason}`,
-  and never raises: `Vutuv.PageScreenshot` runs it from an unsupervised task.
+  Captures `url` to `out_path` as a PNG. Returns `{:ok, top_frame_urls}` or
+  `{:error, reason}`, and never raises: `Vutuv.PageScreenshot` runs it from an
+  unsupervised task.
+
+  `top_frame_urls` is every address the page's top frame committed, in order:
+  the linked page, and wherever a `<meta refresh>` or a script carried the
+  browser after it. The trusted-sites check (`Vutuv.ScreenshotTrust`) needs
+  all of them, because a trusted page that navigates on to another site is not
+  a trusted picture.
 
   `opts[:consent]` injects the cookie-consent blocker. Off by default, because
   a capture that alters the page is not always what the caller wants — see
@@ -182,11 +189,19 @@ defmodule Vutuv.PageScreenshot.Cdp do
 
   defp consent_settled(_state, _now), do: nil
 
+  # The navigations are read from the state the request hands back: events are
+  # still dispatched while the reply is awaited, so one that committed right
+  # before the shutter is in it.
   defp screenshot(state, out_path) do
     case request(state, "Page.captureScreenshot", %{format: "png"}, state.session) do
-      {:ok, %{"data" => data}, _state} -> write(data, out_path)
-      {:ok, _other, _state} -> {:error, :no_screenshot_data}
-      {:error, reason} -> {:error, reason}
+      {:ok, %{"data" => data}, state} ->
+        with :ok <- write(data, out_path), do: {:ok, Enum.reverse(state.top_urls)}
+
+      {:ok, _other, _state} ->
+        {:error, :no_screenshot_data}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -222,6 +237,8 @@ defmodule Vutuv.PageScreenshot.Cdp do
       probe_ms: if(injection == :disabled, do: @settle_ms, else: @consent_probe_ms),
       session: nil,
       loaded_at: nil,
+      # Every address the top frame committed, newest first.
+      top_urls: [],
       cmp_at: nil,
       done_at: nil,
       exited: nil,
@@ -327,6 +344,23 @@ defmodule Vutuv.PageScreenshot.Cdp do
   end
 
   @doc """
+  The address a `Page.frameNavigated` event commits to the page's **top**
+  frame, or `nil` for any other frame.
+
+  Two kinds of frame are not the page and must not count: a same-origin
+  iframe arrives on the page's own session but names a `parentId`, and a
+  cross-origin one (an ad, an embed) arrives on a session of its own. The
+  repeated `page_session` in the head is deliberate: the event has to come
+  from exactly that session.
+  """
+  def top_frame_url(%{"frame" => %{"url" => url} = frame}, page_session, page_session)
+      when is_binary(url) do
+    if frame["parentId"], do: nil, else: url
+  end
+
+  def top_frame_url(_params, _event_session, _page_session), do: nil
+
+  @doc """
   Splits a read buffer into complete protocol frames plus the leftover.
 
   The pipe transport terminates each JSON message with a NUL byte, and a read
@@ -371,6 +405,13 @@ defmodule Vutuv.PageScreenshot.Cdp do
 
   defp handle_event(state, "Page.loadEventFired", _params, _session) do
     %{state | loaded_at: state.loaded_at || now()}
+  end
+
+  defp handle_event(state, "Page.frameNavigated", params, session) do
+    case top_frame_url(params, session, state.session) do
+      nil -> state
+      url -> %{state | top_urls: [url | state.top_urls]}
+    end
   end
 
   defp handle_event(state, "Runtime.bindingCalled", params, session) do

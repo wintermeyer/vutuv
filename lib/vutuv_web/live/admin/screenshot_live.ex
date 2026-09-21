@@ -1,7 +1,7 @@
 defmodule VutuvWeb.Admin.ScreenshotLive do
   @moduledoc """
   The admin view over the post link-screenshot subsystem
-  (`Vutuv.Posts.Screenshots`), at `/admin/screenshots`. Three tabs:
+  (`Vutuv.Posts.Screenshots`), at `/admin/screenshots`. Four tabs:
 
     * **Queue** — the unfinished jobs (`pending` / `capturing` / `failed`), so an
       admin can see what is waiting, in flight, or gave up (with the last error),
@@ -12,10 +12,12 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     * **Blocklist** — the editor for the pages this installation never captures
       (`Vutuv.ScreenshotBlocklist`): add a domain or a URL, drop one again, try
       a URL against the list to see what an entry really covers, and clean up
-      the captures taken before an entry existed.
+      the captures taken before an entry existed;
+    * **Trusted** — the sites whose captures skip the AI image scan
+      (`Vutuv.ScreenshotTrust`): add one, drop one again.
 
-  Queue and Gallery are offset-paginated (`<.pager>`); the blocklist is a short
-  list an admin reads whole.
+  Queue and Gallery are offset-paginated (`<.pager>`); the two lists are short
+  enough for an admin to read whole.
 
   Lives in the `:admin` live_session (`on_mount :require_admin`); the dead
   `:admin` pipeline 403s the disconnected render for non-admins.
@@ -32,6 +34,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
   alias Vutuv.ScreenshotBlocklist
+  alias Vutuv.ScreenshotTrust
   alias VutuvWeb.UserHelpers
 
   @impl true
@@ -52,16 +55,18 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
      |> assign(:rows, rows)
      |> assign(:total, total)
      |> assign(:counts, Screenshots.counts())
-     |> load_blocklist()}
+     |> load_blocklist()
+     |> load_trusted()}
   end
 
   defp tab_param(%{"tab" => "gallery"}), do: "gallery"
   defp tab_param(%{"tab" => "blocklist"}), do: "blocklist"
+  defp tab_param(%{"tab" => "trusted"}), do: "trusted"
   defp tab_param(_params), do: "queue"
 
   defp load("gallery", params), do: Screenshots.gallery_page(params)
-  # The blocklist is short enough to read whole, so it has no pager.
-  defp load("blocklist", _params), do: {[], 0}
+  # The two lists are short enough to read whole, so they have no pager.
+  defp load(list, _params) when list in ["blocklist", "trusted"], do: {[], 0}
   defp load(_queue, params), do: Screenshots.queue_page(params)
 
   # The blocklist itself is cheap (a handful of rows), so both the tab count
@@ -73,6 +78,13 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     |> assign(:entries, entries)
     |> assign(:entry_form, to_form(ScreenshotBlocklist.change_entry()))
     |> assign(:check_result, recheck(socket.assigns[:check_url]))
+  end
+
+  # Loaded on every tab like the blocklist, since the tab label counts it.
+  defp load_trusted(socket) do
+    socket
+    |> assign(:hosts, ScreenshotTrust.list_hosts())
+    |> assign(:host_form, to_form(ScreenshotTrust.change_host()))
   end
 
   @impl true
@@ -128,6 +140,29 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
      |> assign(:check_result, recheck(url))}
   end
 
+  def handle_event("add-host", %{"host" => attrs}, socket) do
+    case ScreenshotTrust.create_host(attrs) do
+      {:ok, host} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("%{host} is trusted now.", host: host.host))
+         |> reload()}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :host_form, to_form(changeset))}
+    end
+  end
+
+  def handle_event("delete-host", %{"id" => id}, socket) do
+    host = ScreenshotTrust.get_host!(id)
+    {:ok, _deleted} = ScreenshotTrust.delete_host(host)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, gettext("%{host} is no longer trusted.", host: host.host))
+     |> reload()}
+  end
+
   def handle_event("purge", _params, socket) do
     # All three queues, through the one function that knows there are three —
     # this button used to skip the organization homepages.
@@ -163,6 +198,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     |> assign(:total, total)
     |> assign(:counts, Screenshots.counts())
     |> load_blocklist()
+    |> load_trusted()
   end
 
   # The compact queue-table form: a member is named by handle, a page by name
@@ -182,7 +218,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
       crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("Link screenshots")]}
     />
 
-    <nav class="mb-4 flex gap-2" aria-label={gettext("Views")}>
+    <nav class="mb-4 flex flex-wrap gap-2" aria-label={gettext("Views")}>
       <.link
         patch={~p"/admin/screenshots?tab=queue"}
         class={tab_class(@tab == "queue")}
@@ -205,6 +241,16 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
       >
         {gettext("Blocklist")}
         <span class="tabular-nums">({compact_count(length(@entries))})</span>
+      </.link>
+      <.link
+        id="tab-trusted"
+        patch={~p"/admin/screenshots?tab=trusted"}
+        class={tab_class(@tab == "trusted")}
+        aria-current={@tab == "trusted" && "page"}
+      >
+        <%!-- Not the bare "Trusted" msgid: that one describes a reporter. --%>
+        {gettext("Trusted sites")}
+        <span class="tabular-nums">({compact_count(length(@hosts))})</span>
       </.link>
     </nav>
 
@@ -374,6 +420,90 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                 {gettext("Remove them now")}
               </.button>
             </p>
+          <% @tab == "trusted" -> %>
+            <h1>{gettext("Trusted sites")}</h1>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              {gettext(
+                "Screenshots of these sites skip the AI image check and show at once. Trust a site only when you trust everything it shows, ads and embedded videos included. A capture is only released when every page the browser showed is on this list, so a trusted site that forwards somewhere else is checked as usual."
+              )}
+            </p>
+
+            <.form
+              for={@host_form}
+              id="trusted-form"
+              phx-submit="add-host"
+              class="mt-4 flex flex-wrap items-start gap-2"
+            >
+              <div class="min-w-0 flex-1">
+                <input
+                  type="text"
+                  id="trusted-host"
+                  name="host[host]"
+                  value={@host_form[:host].value}
+                  placeholder="tagesschau.de"
+                  autocomplete="off"
+                  aria-label={gettext("Site")}
+                  aria-invalid={@host_form[:host].errors != [] && "true"}
+                  class={input_class(@host_form, :host)}
+                />
+                {error_tag(@host_form, :host)}
+              </div>
+              <div class="min-w-0 flex-1">
+                <input
+                  type="text"
+                  id="trusted-note"
+                  name="host[note]"
+                  value={@host_form[:note].value}
+                  placeholder={gettext("Why (optional)")}
+                  autocomplete="off"
+                  aria-label={gettext("Note")}
+                  class={input_class(@host_form, :note)}
+                />
+                {error_tag(@host_form, :note)}
+              </div>
+              <.button type="submit" id="trusted-add">{gettext("Add")}</.button>
+            </.form>
+
+            <ul class="mt-3 space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li :for={{example, meaning} <- trusted_examples()}>
+                <code class="font-semibold">{example}</code> {meaning}
+              </li>
+            </ul>
+
+            <h2 class="card__label mt-6">{gettext("Sites")}</h2>
+            <p :if={@hosts == []} class="card__empty">
+              {gettext("The list is empty, so every screenshot is checked.")}
+            </p>
+
+            <div :if={@hosts != []} class="card__tablewrap">
+              <table class="pure-table">
+                <thead>
+                  <tr>
+                    <th>{gettext("Site")}</th>
+                    <th>{gettext("Note")}</th>
+                    <th>{gettext("Added")}</th>
+                    <th><span class="sr-only">{gettext("Actions")}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={host <- @hosts} id={"trusted-host-#{host.id}"}>
+                    <td class="breakwrap font-semibold">{host.host}</td>
+                    <td class="breakwrap text-slate-600 dark:text-slate-400">{host.note}</td>
+                    <td><.local_time at={host.inserted_at} id={"trusted-added-#{host.id}"} /></td>
+                    <td>
+                      <.button
+                        variant="danger"
+                        phx-click="delete-host"
+                        phx-value-id={host.id}
+                        data-confirm={gettext("Stop trusting %{host}?", host: host.host)}
+                      >
+                        {gettext("Remove")}
+                      </.button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           <% @tab == "gallery" -> %>
             <h1>{gettext("Captured screenshots")}</h1>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -485,7 +615,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
         <% end %>
 
         <.pager
-          :if={@tab != "blocklist"}
+          :if={@tab not in ["blocklist", "trusted"]}
           params={@params}
           total={@total}
           per_page={Screenshots.per_page()}
@@ -505,6 +635,15 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
       {"example.com/news", gettext("that path and everything below it")},
       {"example.com/*/private", gettext("* stands for exactly one path segment")},
       {"https://example.com/story-1", gettext("one page (the scheme is ignored)")}
+    ]
+  end
+
+  # The trust grammar is two lines, so it stands open rather than behind a
+  # disclosure; the second one is the one an admin has to know about.
+  defp trusted_examples do
+    [
+      {"tagesschau.de", gettext("the site and www., no other subdomain")},
+      {"*.tagesschau.de", gettext("the site and every subdomain")}
     ]
   end
 

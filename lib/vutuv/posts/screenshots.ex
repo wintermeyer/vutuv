@@ -47,6 +47,7 @@ defmodule Vutuv.Posts.Screenshots do
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
   alias Vutuv.ScreenshotBlocklist
+  alias Vutuv.ScreenshotTrust
   alias Vutuv.SocialFeed.Http
   alias Vutuv.YoutubeThumbnail
 
@@ -425,9 +426,17 @@ defmodule Vutuv.Posts.Screenshots do
       )
 
     case capture.(job) do
-      {:ok, %{screenshot: file, width: width, height: height}} ->
-        MediaJobs.finish(media_job, detail: "captured")
-        mark_ready(job, file, width, height)
+      {:ok, %{screenshot: file, width: width, height: height} = captured} ->
+        # Only a page capture can be trusted; the YouTube thumbnail is the
+        # uploader's artwork, not the site's, and carries no such key. A
+        # capture that does not say is scanned.
+        trusted? = Map.get(captured, :trusted, false)
+
+        MediaJobs.finish(media_job,
+          detail: if(trusted?, do: "captured, trusted site: not scanned", else: "captured")
+        )
+
+        mark_ready(job, file, width, height, trusted?)
 
       {:error, reason} ->
         MediaJobs.fail(media_job, reason)
@@ -499,10 +508,11 @@ defmodule Vutuv.Posts.Screenshots do
 
   # The classic capture: capture only a plain HTTP-200 link, then reuse the
   # shared pipeline and store through the same uploader profile links use.
-  # Returns the stored filename + display size.
+  # Returns the stored filename + display size, and whether the browser only
+  # showed trusted sites (`Vutuv.ScreenshotTrust`).
   defp page_capture_and_store(%PostScreenshot{} = job) do
     with :ok <- ensure_http_ok(job.url),
-         {:ok, framed_path} <- Vutuv.PageScreenshot.capture_framed(job.url, job.id) do
+         {:ok, framed_path, trusted?} <- Vutuv.PageScreenshot.capture_framed(job.url, job.id) do
       upload = %Plug.Upload{
         content_type: "image/webp",
         filename: "#{job.id}.webp",
@@ -510,9 +520,15 @@ defmodule Vutuv.Posts.Screenshots do
       }
 
       result =
-        case Vutuv.Screenshot.store({upload, job}) do
+        case Vutuv.Screenshot.store({upload, job}, trusted: trusted?) do
           {:ok, file_name} ->
-            {:ok, %{screenshot: file_name, width: @display_width, height: @display_height}}
+            {:ok,
+             %{
+               screenshot: file_name,
+               width: @display_width,
+               height: @display_height,
+               trusted: trusted?
+             }}
 
           {:error, reason} ->
             {:error, reason}
@@ -589,11 +605,12 @@ defmodule Vutuv.Posts.Screenshots do
     job
   end
 
-  defp mark_ready(%PostScreenshot{} = job, file_name, width, height) do
+  defp mark_ready(%PostScreenshot{} = job, file_name, width, height, trusted?) do
     # A fresh capture starts in AI-moderation limbo: it is announced (and
     # rendered) only once the scan releases it — otherwise a screenshot of an
     # NSFW page would bypass the upload gate (Vutuv.Moderation.ImageScans).
-    moderation = ImageScans.initial_state()
+    # A trusted site's capture is the exception (Vutuv.ScreenshotTrust).
+    moderation = ScreenshotTrust.initial_moderation(trusted?)
 
     {:ok, ready} =
       job

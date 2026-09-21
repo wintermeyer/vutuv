@@ -32,6 +32,31 @@ defmodule Vutuv.PageScreenshot.CdpTest do
     end
   end
 
+  describe "top_frame_url/3" do
+    test "records a navigation of the page's own top frame" do
+      params = %{"frame" => %{"id" => "F1", "url" => "https://www.tagesschau.de/story"}}
+
+      assert Cdp.top_frame_url(params, "page", "page") == "https://www.tagesschau.de/story"
+    end
+
+    test "ignores an iframe, same-origin or cross-origin" do
+      # The trusted-sites decision reads these URLs, and an ad or embed in an
+      # iframe is not the page the admin vouched for. A same-origin iframe
+      # rides the page's session with a parentId; a cross-origin one arrives
+      # in a session of its own.
+      iframe = %{"frame" => %{"id" => "F2", "parentId" => "F1", "url" => "https://ads.example/"}}
+      oopif = %{"frame" => %{"id" => "F3", "url" => "https://ads.example/"}}
+
+      assert Cdp.top_frame_url(iframe, "page", "page") == nil
+      assert Cdp.top_frame_url(oopif, "iframe-session", "page") == nil
+    end
+
+    test "a frame without a URL records nothing" do
+      assert Cdp.top_frame_url(%{"frame" => %{"id" => "F1"}}, "page", "page") == nil
+      assert Cdp.top_frame_url(%{}, "page", "page") == nil
+    end
+  end
+
   describe "command/2" do
     test "hands the protocol pipe to the descriptors Chromium expects" do
       {_cmd, args} = Cdp.command("/usr/bin/chromium", ["--headless=new"])

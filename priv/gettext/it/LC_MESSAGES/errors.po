@@ -391,3 +391,8 @@ msgstr "Questo file è più grande di %{limit}. Caricane uno più piccolo."
 #, elixir-autogen, elixir-format
 msgid "First name or last name or nickname must be present"
 msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:211
+#, elixir-autogen, elixir-format
+msgid "must be a site without a path, e.g. tagesschau.de"
+msgstr "deve essere un sito senza percorso, ad es. tagesschau.de"

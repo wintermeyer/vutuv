@@ -220,6 +220,19 @@ only a reassurance and waits at the foot, below the cards. --%>
         "Pages never to screenshot, because a headless capture only ever gets their cookie banner or login wall. Add a domain or a single URL, and the links stay plain instead."
       )}
     </.admin_card>
+
+    <.admin_card
+      icon="shield"
+      title={gettext("Trusted sites")}
+      href={~p"/admin/screenshots?tab=trusted"}
+      id="admin-screenshot-trusted-link"
+      count={@screenshot_trusted_count}
+      cta={gettext("Edit the trusted sites")}
+    >
+      {gettext(
+        "Sites whose screenshots skip the AI image check, such as a public broadcaster. Their captures show at once and cost the check no work."
+      )}
+    </.admin_card>
   </.admin_group>
 
   <.admin_group title={gettext("Communication")}>

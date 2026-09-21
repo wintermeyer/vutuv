@@ -206,7 +206,9 @@ defmodule VutuvWeb.ErrorHelpers do
         "We could not find this account on that instance. Please check the address."
       ),
       dgettext_noop("errors", "That instance did not answer. Please try again in a moment."),
-      dgettext_noop("errors", "Too many checks for now. Please try again later.")
+      dgettext_noop("errors", "Too many checks for now. Please try again later."),
+      # Vutuv.ScreenshotTrust.Host, the admin's trusted-sites form.
+      dgettext_noop("errors", "must be a site without a path, e.g. tagesschau.de")
     ]
   end
 end

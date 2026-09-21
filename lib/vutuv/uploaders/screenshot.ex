@@ -35,8 +35,13 @@ defmodule Vutuv.Screenshot do
   Stores the screenshot versions for `{upload, url}` and returns
   `{:ok, "<hash><ext>"}` (to persist in the `screenshot` field), or
   `{:error, :invalid_file}`.
+
+  `trusted: true` marks a capture of a site the admin trusts
+  (`Vutuv.ScreenshotTrust`): it goes straight to the served tree, since no scan
+  will come to release it. The caller stores the matching moderation state,
+  `Vutuv.ScreenshotTrust.initial_moderation/1`.
   """
-  def store({%Plug.Upload{} = upload, scope}) do
+  def store({%Plug.Upload{} = upload, scope}, opts \\ []) do
     if Vutuv.Uploads.valid_extension?(upload.filename, @extension_whitelist) do
       dir = disk_dir(scope)
       hash = Vutuv.Uploads.content_hash(upload.path)
@@ -44,10 +49,8 @@ defmodule Vutuv.Screenshot do
       # With AI image moderation on, a fresh capture waits in the quarantine
       # tree (nginx has no location for it) until the scan releases it — a
       # screenshot of an NSFW page must not bypass the upload gate.
-      target_dir =
-        if ImageScans.enabled?(),
-          do: Vutuv.Uploads.quarantine_dir(storage_dir(scope)),
-          else: dir
+      held? = ImageScans.enabled?() and not Keyword.get(opts, :trusted, false)
+      target_dir = if held?, do: Vutuv.Uploads.quarantine_dir(storage_dir(scope)), else: dir
 
       File.mkdir_p!(target_dir)
 
@@ -57,7 +60,7 @@ defmodule Vutuv.Screenshot do
            :ok <- clear_versions(target_dir),
            :ok <- write_versions(rotated, target_dir, hash),
            :ok <- clear_displaced_versions(target_dir, dir) do
-        Pixelation.write_if_enabled(rotated, dir, hash)
+        write_mosaic(held?, rotated, dir, hash)
         :ok = Originals.store(storage_dir(scope), upload.path, ext)
         {:ok, "#{hash}#{ext}"}
       else
@@ -67,6 +70,11 @@ defmodule Vutuv.Screenshot do
       {:error, :invalid_file}
     end
   end
+
+  # The mosaic stands in for a held capture only; a released one clears
+  # whatever an earlier held capture left behind.
+  defp write_mosaic(true, rotated, dir, hash), do: Pixelation.write_if_enabled(rotated, dir, hash)
+  defp write_mosaic(false, _rotated, dir, _hash), do: Pixelation.clear(dir)
 
   # Quarantine-first captures clear the old public thumb only after the new
   # derive succeeded; the classic in-place store already cleared its target.

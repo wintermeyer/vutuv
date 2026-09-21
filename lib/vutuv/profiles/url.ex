@@ -5,7 +5,7 @@ defmodule Vutuv.Profiles.Url do
 
   import Vutuv.ChangesetHelpers, only: [validate_url: 1]
 
-  alias Vutuv.Moderation.ImageScans
+  alias Vutuv.ScreenshotTrust
 
   schema "urls" do
     field(:value, :string)
@@ -137,20 +137,24 @@ defmodule Vutuv.Profiles.Url do
   # the raw params — a member could put any picture in the slot the profile
   # presents as an automatic capture OF THE LINKED PAGE, and the file was
   # written to disk from inside the changeset, so it landed even when the row
-  # was never inserted. Never add a string-key clause here.
-  defp put_screenshot(changeset, %{screenshot: %Plug.Upload{} = upload}),
-    do: store_screenshot(changeset, upload)
+  # was never inserted. Never add a string-key clause here. The same guard
+  # covers `:trusted_capture?`, which exempts the capture from the AI scan.
+  defp put_screenshot(changeset, %{screenshot: %Plug.Upload{} = upload} = params),
+    do: store_screenshot(changeset, upload, Map.get(params, :trusted_capture?, false))
 
   defp put_screenshot(changeset, _params), do: changeset
 
-  defp store_screenshot(changeset, upload) do
-    case Vutuv.Screenshot.store({upload, Ecto.Changeset.apply_changes(changeset)}) do
+  defp store_screenshot(changeset, upload, trusted?) do
+    scope = Ecto.Changeset.apply_changes(changeset)
+
+    case Vutuv.Screenshot.store({upload, scope}, trusted: trusted?) do
       {:ok, file_name} ->
         changeset
         |> put_change(:screenshot, file_name)
-        # A fresh capture starts in AI-moderation limbo; the caller
-        # (Vutuv.PageScreenshot) enqueues the scan after the row commits.
-        |> put_change(:screenshot_moderation, ImageScans.initial_state())
+        # A fresh capture starts in AI-moderation limbo unless it shows a
+        # trusted site; the caller (Vutuv.PageScreenshot) enqueues the scan
+        # after the row commits.
+        |> put_change(:screenshot_moderation, ScreenshotTrust.initial_moderation(trusted?))
 
       {:error, _reason} ->
         add_error(changeset, :screenshot, "is not a valid image")
