@@ -149,6 +149,87 @@ defmodule Vutuv.SearchOrganizationsTest do
     end
   end
 
+  describe "a name and an employer in one query" do
+    test "finds the person of that name at that employer, and only them" do
+      wanted = insert(:activated_user, first_name: "Lukas", last_name: "Kaiser")
+      namesake = insert(:activated_user, first_name: "Lukas", last_name: "Brandl")
+      colleague = insert(:activated_user, first_name: "Anna", last_name: "Weber")
+      insert(:work_experience, user: wanted, organization: "Quarzwerk AG", title: "Entwickler")
+      insert(:work_experience, user: namesake, organization: "Somewhere Else")
+      insert(:work_experience, user: colleague, organization: "Quarzwerk AG")
+
+      assert ids(Search.page("lukas quarzwerk").people.cv) == [wanted.id]
+      assert ids(Search.page("quarzwerk lukas").people.cv) == [wanted.id]
+    end
+
+    test "the words may spread over a name and a school" do
+      student = insert(:activated_user, first_name: "Ilvy", last_name: "Sandhagen")
+      insert(:education, user: student, school: "Hochschule Tannenfeld")
+
+      assert ids(Search.page("ilvy tannenfeld").people.cv) == [student.id]
+    end
+
+    test "a name alone is no CV match" do
+      member = insert(:activated_user, first_name: "Quirinius", last_name: "Nord")
+      insert(:work_experience, user: member, organization: "Elsewhere GmbH")
+
+      assert Search.page("quirinius").people.cv == []
+    end
+
+    test "every word has to land somewhere" do
+      member = insert(:activated_user, first_name: "Lukas", last_name: "Kaiser")
+      insert(:work_experience, user: member, organization: "Quarzwerk AG")
+
+      assert Search.page("lukas quarzwerk berlin").people.cv == []
+    end
+
+    test "a short word still narrows, it just does not drive the search" do
+      ag = insert(:activated_user)
+      gmbh = insert(:activated_user)
+      insert(:work_experience, user: ag, organization: "Quarzwerk AG")
+      insert(:work_experience, user: gmbh, organization: "Quarzwerk GmbH")
+
+      assert ids(Search.page("quarzwerk ag").people.cv) == [ag.id]
+    end
+
+    test "a short word matches a whole word, never the inside of one" do
+      student = insert(:activated_user)
+      clerk = insert(:activated_user)
+      insert(:education, user: student, school: "TU Tannenfeld")
+      insert(:work_experience, user: clerk, organization: "Hauptverwaltung Tannenfeld")
+
+      assert ids(Search.page("tu tannenfeld").people.cv) == [student.id]
+    end
+
+    test "the words of an employer have to stand in the same entry" do
+      scattered = insert(:activated_user)
+      insert(:work_experience, user: scattered, organization: "Zinnober Telekom")
+      insert(:work_experience, user: scattered, organization: "Kobaltbank")
+      banker = insert(:activated_user)
+      insert(:work_experience, user: banker, organization: "Zinnober Kobaltbank AG")
+
+      assert ids(Search.page("zinnober kobaltbank").people.cv) == [banker.id]
+    end
+
+    test "a username is not a name here, as it is not in the name search" do
+      handle =
+        insert(:activated_user, first_name: "Peter", last_name: "Braun", username: "lukasfan")
+
+      insert(:work_experience, user: handle, organization: "Quarzwerk AG")
+
+      assert Search.page("lukasfan quarzwerk").people.cv == []
+    end
+
+    test "the row names the entry the employer word matched" do
+      member = insert(:activated_user, first_name: "Lukas", last_name: "Kaiser")
+      insert(:work_experience, user: member, organization: "Nordlicht Studio", title: "Designer")
+      insert(:work_experience, user: member, organization: "Quarzwerk AG", title: "Entwickler")
+
+      assert Search.matched_entries([member], "lukas quarzwerk", false)[member.id].title ==
+               "Entwickler"
+    end
+  end
+
   describe "organizations as a kind of result" do
     test "a public page is found by name, with the people its page lists" do
       page = insert(:organization, name: "Silberfluss Energie")

@@ -728,20 +728,26 @@ defmodule Vutuv.Search do
 
   # --- people found through their CV ---------------------------------------
 
-  # Members whose CV names an employer or a school matching the free text, on
-  # the same terms as the name search: the tag/city/status filters apply, and the
-  # people-only field operators (`@handle`, `vorname:`) and an email mean the
-  # searcher asked for something else. Everybody the name search already found
-  # is left out, so nobody is listed twice. `nil` when there is nothing to ask.
+  # Members the free text finds through one entry of their CV: an employer (their
+  # own text or a linked public page) or a school holds the words the name does
+  # not. So "lukas siemens" finds Lukas at Siemens in either order, while
+  # "deutsche bank" does not find somebody who was at Deutsche Telekom and later
+  # at a bank. On the same terms as the name search: the tag/city/status filters
+  # apply, and the people-only field operators (`@handle`, `vorname:`) and an
+  # email mean the searcher asked for something else. Everybody the name search
+  # already found is left out, so nobody is listed twice. `nil` when there is
+  # nothing to ask.
   defp cv_query(%{scope: scope}, _found) when scope not in [:all, :people], do: nil
 
   defp cv_query(parsed, found) do
-    if cv_searchable?(parsed) do
+    terms = cv_terms(parsed.text, parsed.exact?)
+
+    if elem(terms, 0) != [] and cv_searchable?(parsed) do
       found_ids = Enum.map(found, & &1.id)
 
       parsed
       |> filtered_users()
-      |> where([user: u], u.id in subquery(cv_user_ids(parsed.text, parsed.exact?)))
+      |> where([user: u], u.id in subquery(cv_user_ids(terms)))
       |> where([user: u], u.id not in ^found_ids)
     end
   end
@@ -750,6 +756,35 @@ defmodule Vutuv.Search do
     is_nil(parsed.slug) and is_nil(parsed.first_name) and is_nil(parsed.last_name) and
       String.length(parsed.text) >= @min_chars and not email?(parsed.text)
   end
+
+  # `{drivers, words}`, each term `{:like, pattern}` or `{:word, regex}`. The
+  # drivers find the entry: in exact mode the whole text (the whole employer
+  # name), otherwise each word of at least three letters, since a shorter one
+  # forms no trigram and would scan every table it touched. With more than one
+  # word, each of them has to stand in that same entry or in the member's first
+  # or last name, a short one as a whole word: "tu münchen" wants the TU, not
+  # the "tu" inside "Hauptverwaltung München". The username stays out, as the
+  # name search beside this never reads it either.
+  defp cv_terms(text, true), do: {[{:like, equals(text)}], []}
+
+  defp cv_terms(text, false) do
+    words = String.split(text)
+    drivers = for word <- words, long_word?(word), do: {:like, contains(word)}
+    {drivers, if(match?([_, _ | _], words), do: Enum.map(words, &word_term/1), else: [])}
+  end
+
+  defp long_word?(word), do: String.length(word) >= @min_chars
+
+  defp word_term(word) do
+    if long_word?(word),
+      do: {:like, contains(word)},
+      else: {:word, "\\m" <> Regex.replace(~r/[^[:alnum:]]/u, word, "\\\\\\0") <> "\\M"}
+  end
+
+  # One term against one column: a substring, or a whole word (Postgres's `\m`
+  # and `\M` are the start and end of a word).
+  defp term_match(field, {:like, pattern}), do: dynamic(ilike(^field, ^pattern))
+  defp term_match(field, {:word, regex}), do: dynamic(fragment("? ~* ?", ^field, ^regex))
 
   defp fetch_cv(nil, _offset, _limit), do: []
   defp fetch_cv(_query, _offset, limit) when limit <= 0, do: []
@@ -779,45 +814,74 @@ defmodule Vutuv.Search do
     Enum.reject(similar, &MapSet.member?(matched, &1.id))
   end
 
-  # The one rule for "this CV names the place", as three one-table queries: the
-  # member's own employer text, the name of a linked **public** organization
-  # page (the SQL side of `WorkExperience.linked_organization/1`, since a
-  # pending or frozen page shows its name nowhere else either), and a school.
-  # Both `cv_user_ids/2` and `matched_entries/3` read it, so the rows a search
-  # finds and the line each one explains itself with cannot drift apart.
-  defp cv_arms(pattern) do
+  # The one rule for "this CV entry answers the query", as three one-table
+  # queries: the member's own employer text, the name of a linked **public**
+  # organization page (the SQL side of `WorkExperience.linked_organization/1`,
+  # since a pending or frozen page shows its name nowhere else either), and a
+  # school. Each arm finds its entries through a driver (the trigram index does
+  # the narrowing) and then asks every word of the query of that same entry or
+  # of its owner's name. The search and `matched_entries/3` both read it, so the
+  # rows a search finds and the line each one explains itself with cannot drift.
+  defp cv_arms({drivers, words}) do
     [
       from(w in WorkExperience,
         as: :entry,
+        join: u in User,
+        as: :owner,
+        on: u.id == w.user_id,
         left_join: o in Organization,
         as: :page,
         on: o.id == w.organization_id and organization_public_row(o),
-        where: ilike(w.organization, ^pattern)
+        where: ^cv_entry_match(drivers, words, dynamic([entry: w], w.organization))
       ),
       from(w in WorkExperience,
         as: :entry,
+        join: u in User,
+        as: :owner,
+        on: u.id == w.user_id,
         join: o in Organization,
         as: :page,
         on: o.id == w.organization_id and organization_public_row(o),
-        where: ilike(o.name, ^pattern)
+        where: ^cv_entry_match(drivers, words, dynamic([page: o], o.name))
       ),
-      from(e in Education, as: :entry, where: ilike(e.school, ^pattern))
+      from(e in Education,
+        as: :entry,
+        join: u in User,
+        as: :owner,
+        on: u.id == e.user_id,
+        where: ^cv_entry_match(drivers, words, dynamic([entry: e], e.school))
+      )
     ]
   end
 
-  defp cv_pattern(text, true), do: equals(text)
-  defp cv_pattern(text, false), do: contains(text)
+  # Some driver in the entry, and every word in the entry or in the name.
+  defp cv_entry_match([first | rest], words, field) do
+    driven =
+      Enum.reduce(rest, term_match(field, first), fn term, acc ->
+        dynamic(^acc or ^term_match(field, term))
+      end)
+
+    first_name = dynamic([owner: u], u.first_name)
+    last_name = dynamic([owner: u], u.last_name)
+
+    Enum.reduce(words, driven, fn term, acc ->
+      dynamic(
+        ^acc and
+          (^term_match(field, term) or ^term_match(first_name, term) or
+             ^term_match(last_name, term))
+      )
+    end)
+  end
 
   # Everybody with a work experience (any, ended or running) or an education
-  # entry naming the place. A **union of one-table queries**, never an OR across
-  # tables: Postgres builds a bitmap only over arms of one relation, so an OR
-  # that reads a second table gives up every index in it and scans. Oliver
+  # entry answering the query. A **union of one-table queries**, never an OR
+  # across tables: Postgres builds a bitmap only over arms of one relation, so an
+  # OR that reads a second table gives up every index in it and scans. Oliver
   # Andrich measured this shape for the member directory (PR #2217) on a copy
   # with 100k members: 54.8 ms as one OR, 0.645 ms as this union, every arm a
   # bitmap scan on its own trigram index.
-  defp cv_user_ids(text, exact?) do
-    text
-    |> cv_pattern(exact?)
+  defp cv_user_ids(terms) do
+    terms
     |> cv_arms()
     |> Enum.map(&select(&1, [entry: x], x.user_id))
     |> Enum.reduce(fn arm, acc -> union(acc, ^arm) end)
@@ -831,8 +895,10 @@ defmodule Vutuv.Search do
   A result row normally shows a member's current job, which explains nothing
   when the search found them through a role they left in 2016 or a university
   they attended. So the page asks, for the rows it renders, which entry
-  answered. Work before school, a running role before an ended one, then the
-  most recent. One query per arm over the rendered ids, never one per row.
+  answered: the one holding the most words of the query ("siemens
+  healthineers" prefers the Healthineers role over a plain Siemens one), then
+  work before school, a running role before an ended one, the most recent.
+  One query per arm over the rendered ids, never one per row.
   """
   # What the result line prints and `Organizations.public_visible?/1` reads, and
   # no more: `description` is a text column LinkedIn imports fill to 10k.
@@ -843,39 +909,60 @@ defmodule Vutuv.Search do
   def matched_entries([], _text, _exact?), do: %{}
 
   def matched_entries(users, text, exact?) do
-    ids = Enum.map(users, & &1.id)
-    [by_text, by_page, by_school] = text |> cv_pattern(exact?) |> cv_arms()
+    case cv_terms(text, exact?) do
+      {[], _words} ->
+        %{}
 
-    jobs =
-      for arm <- [by_text, by_page],
-          {job, page} <-
-            Repo.all(
-              from([entry: w, page: o] in arm,
-                where: w.user_id in ^ids,
-                select: {struct(w, ^@job_line_fields), struct(o, ^@page_line_fields)}
-              )
-            ),
-          do: {0, %{job | organization_page: page}}
+      terms ->
+        ids = Enum.map(users, & &1.id)
+        [by_text, by_page, by_school] = cv_arms(terms)
+        words = String.split(text)
 
-    schools =
-      from([entry: e] in by_school,
-        where: e.user_id in ^ids,
-        select: struct(e, ^@education_line_fields)
-      )
-      |> Repo.all()
-      |> Enum.map(&{1, &1})
+        jobs =
+          for arm <- [by_text, by_page],
+              {job, page} <-
+                Repo.all(
+                  from([entry: w, page: o] in arm,
+                    where: w.user_id in ^ids,
+                    select: {struct(w, ^@job_line_fields), struct(o, ^@page_line_fields)}
+                  )
+                ),
+              do: {0, %{job | organization_page: page}}
 
-    (jobs ++ schools)
-    |> Enum.group_by(fn {_rank, entry} -> entry.user_id end)
-    |> Map.new(fn {user_id, entries} ->
-      {_rank, entry} = Enum.min_by(entries, &entry_rank/1)
-      {user_id, entry}
-    end)
+        schools =
+          from([entry: e] in by_school,
+            where: e.user_id in ^ids,
+            select: struct(e, ^@education_line_fields)
+          )
+          |> Repo.all()
+          |> Enum.map(&{1, &1})
+
+        (jobs ++ schools)
+        |> Enum.group_by(fn {_rank, entry} -> entry.user_id end)
+        |> Map.new(fn {user_id, entries} ->
+          {_rank, entry} = Enum.min_by(entries, &entry_rank(&1, words))
+          {user_id, entry}
+        end)
+    end
   end
 
-  defp entry_rank({kind, entry}) do
-    {kind, if(is_nil(entry.end_year), do: 0, else: 1), -(entry.end_year || 0),
-     -(entry.start_year || 0), entry.id}
+  defp entry_rank({kind, entry}, words) do
+    {-word_hits(entry, words), kind, if(is_nil(entry.end_year), do: 0, else: 1),
+     -(entry.end_year || 0), -(entry.start_year || 0), entry.id}
+  end
+
+  # How many words of the query the entry carries, in either name an employer
+  # can be known by, or the school.
+  defp word_hits(%Education{school: school}, words), do: count_words(school, words)
+
+  defp word_hits(%WorkExperience{} = job, words) do
+    page_name = if job.organization_page, do: job.organization_page.name
+    count_words("#{job.organization} #{page_name}", words)
+  end
+
+  defp count_words(text, words) do
+    text = String.downcase(text || "")
+    Enum.count(words, &String.contains?(text, &1))
   end
 
   # --- organizations --------------------------------------------------------
