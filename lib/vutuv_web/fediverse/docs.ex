@@ -393,12 +393,18 @@ defmodule VutuvWeb.Fediverse.Docs do
     |> Map.put("published", note["published"])
   end
 
-  @doc "Update(Note): an edited public post (id unique per edit)."
+  @doc """
+  Update(Note): an edited public post, or one whose late picture arrived. Its
+  Note names `updated` as the moment it is built, never `updated_at`: Mastodon
+  keeps its old copy unless that stamp is newer than the one it holds, and a
+  released picture moves no `updated_at` (see docs/architecture/fediverse.md,
+  "Post lifecycle"). The same stamp keeps the id unique.
+  """
   def update_activity(%Post{} = post, user) do
-    note = note(post, user)
-    stamp = post.updated_at |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601()
+    updated = iso8601(NaiveDateTime.utc_now())
+    note = post |> note(user) |> Map.put("updated", updated)
 
-    envelope(user, "Update", note["id"] <> "#update-#{stamp}", note)
+    envelope(user, "Update", note["id"] <> "#update-" <> updated, note)
   end
 
   @doc "Delete(Tombstone): a removed post (or one whose audience closed)."
@@ -754,6 +760,13 @@ defmodule VutuvWeb.Fediverse.Docs do
     |> put_in_reply_to(remote || parent)
     |> put_tag(post, remote, answered, hashtags)
     |> put_attachments(post)
+    |> put_updated(post)
+  end
+
+  # A server that fetches an edited post by its id learns that it changed, the
+  # same fact `update_activity/2` delivers.
+  defp put_updated(note, post) do
+    if Posts.edited?(post), do: Map.put(note, "updated", iso8601(post.updated_at)), else: note
   end
 
   # The author's declared language federates as AS2 `contentMap` (issue
