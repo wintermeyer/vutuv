@@ -48,6 +48,7 @@ defmodule Vutuv.Notifications.MailClassTest do
     {:verification_notice, :transactional},
     {:daily_report_email, :transactional},
     {:account_deleted_notice, :transactional},
+    {:signup_trap_report_email, :transactional},
     {:organization_verified_notice, :transactional},
     {:organization_unverified_notice, :transactional},
     {:organization_domain_dropped_notice, :transactional},
@@ -318,6 +319,27 @@ defmodule Vutuv.Notifications.MailClassTest do
         post_count: 1,
         joined_at: ~N[2024-01-02 10:00:00],
         deleted_at: ~U[2026-07-01 12:34:56Z]
+      })
+
+  defp build_mail(:signup_trap_report_email),
+    do:
+      Emailer.signup_trap_report_email(%{
+        total: 1,
+        week_end: ~U[2026-09-21 05:00:00Z],
+        retention_days: 14,
+        by_rule: [{"same_lowercase_name", 1}],
+        domains: [{"trap.example", 1}],
+        ips: [{"203.0.113.7", 1}],
+        listed: [
+          %Vutuv.SignupTrap.Entry{
+            rule: "same_lowercase_name",
+            first_name: "pwded",
+            last_name: "pwded",
+            email: "bot@trap.example",
+            params: %{},
+            inserted_at: ~U[2026-09-18 12:00:00Z]
+          }
+        ]
       })
 
   defp build_mail(:organization_verified_notice),

@@ -289,6 +289,12 @@ defmodule VutuvWeb.PageController do
       {:ok, user} ->
         handle_post_registration_login(conn, Vutuv.Accounts.first_email_value(user))
 
+      # A scripted sign-up (`Vutuv.SignupTrap`): the screen a real one gets,
+      # and neither an account nor a mail behind it.
+      {:trapped, email} ->
+        {:ok, conn} = Vutuv.Accounts.pretend_registration(conn, email)
+        ControllerHelpers.render_pin_screen(conn)
+
       {:error, changeset} ->
         # Don't betray that the address exists: render the identical screen a
         # fresh sign-up gets, and let the owner's inbox carry the truth (a

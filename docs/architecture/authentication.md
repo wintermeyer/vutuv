@@ -90,3 +90,28 @@ somebody who has just arrived, and the profile underneath already shows the
 completion checklist. The returning member's "Welcome back, …" (plus the
 unread-conversations nudge) is unchanged.
 
+
+## Scripted sign-ups (`Vutuv.SignupTrap`)
+
+Some registrations come from scripts that create accounts in bulk, and they
+read the PIN mail, so the PIN alone does not stop them. `Vutuv.SignupTrap`
+recognises them by what they type (today: the same lowercase word as first and
+last name, four letters or more) and answers with the ordinary PIN screen
+while creating nothing: `Accounts.register_user/3` returns `{:trapped, email}`
+and the controller calls `Accounts.pretend_registration/2`, the same pin
+cookie and screen without any mail. The trap only looks at a form that would
+otherwise have created an account, so an invalid one still gets its errors.
+
+What the form submitted, with the IP address, user agent and
+`Accept-Language`, goes to `trapped_registrations`. `Vutuv.SignupTrap.Reporter`
+ticks hourly and calls `SignupTrap.run/2`, which deletes entries after 14 days
+and mails the operator every unreported entry from before the last Monday,
+07:00 German time. The due list is a query, not a timer, so a restart costs an
+hour at most; the entries stay row-locked while their mail goes out, so the
+two slots of a deploy never send it twice, and a failed delivery rolls the
+`reported_at` stamp back.
+
+A new rule is an entry in `@rules` (its name and the label the report shows),
+a `rule?/2` clause and a test in `test/vutuv/signup_trap_test.exs`. Run it
+over the dev database's accounts first and read every one it would have
+caught: a real person caught by a rule never gets a PIN and is never told why.

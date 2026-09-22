@@ -155,7 +155,7 @@ Everything else has a default (the vutuv.de production value):
 | `MAILER_FROM_ADDRESS` | `no-reply@vutuv.de` | **Set this.** From address on every email |
 | `BOUNCE_ADDRESS` | `bounces@vutuv.de` | **Set this**, to a mailbox on your own domain that really accepts mail — bounces (DSNs) are addressed to it. It is the SMTP envelope sender only and never appears as a header, so it needs no display name and no human reading it; an alias or an automated handler is enough. Do not use a person's address: it is not shown to recipients, but it is what a remote postmaster replies to |
 | `OPERATOR_NAME` | `Wintermeyer Consulting` | **Set this.** Your name: site/email footer credit and operator-notice recipient name |
-| `OPERATOR_EMAIL` | `sw@wintermeyer-consulting.de` | **Set this.** Receives the daily report, ad bookings and cancellations, and account-deletion records; also the `security.txt` contact. **This pair is shown to visitors**, by name and as a `mailto:`, on the two pages that cannot say what went wrong: the 500 error page and the offline page the service worker keeps. Both ask the reader to come back later and to write to you if it persists, quoting the status code and the UTC minute, so use an address a human reads |
+| `OPERATOR_EMAIL` | `sw@wintermeyer-consulting.de` | **Set this.** Receives the daily report, the weekly report of trapped sign-ups, ad bookings and cancellations, and account-deletion records; also the `security.txt` contact. **This pair is shown to visitors**, by name and as a `mailto:`, on the two pages that cannot say what went wrong: the 500 error page and the offline page the service worker keeps. Both ask the reader to come back later and to write to you if it persists, quoting the status code and the UTC minute, so use an address a human reads |
 | `OPERATOR_URL` | `https://wintermeyer-consulting.de` | **Set this.** Linked from the site/email footer |
 | `OPERATOR_ADDRESS` | (vutuv.de's) | **Set this.** One-line postal address in every email footer |
 | `SOURCE_URL` | `https://github.com/wintermeyer/vutuv` | Where the source of the software you run can be read — the footer's "Source" link and the commit link beside it, the bug-report links on the 400 error page and in the developer docs, and the `source_url` / `repository` fields both API discovery documents publish. **Change this if you run a modified vutuv:** the link claims to be the source of what your users are running, so once you have patched anything, ours is no longer an honest answer. vutuv is MIT, so this is about accuracy rather than a licence obligation |
@@ -272,6 +272,8 @@ A few rarely-changed switches are compile-time settings in
 `/system/ads`, the review at `/admin/ads`, booking and cancellation notices to
 `OPERATOR_EMAIL`), `:sweep_ad_sightings` (forgets which ads a member
 saw 90 days after the last sighting; on by default),
+`:signup_trap_report` (the weekly report of scripted sign-ups, see
+[Scripted sign-ups](#scripted-sign-ups); on by default),
 `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
@@ -1364,6 +1366,19 @@ You don't have to catch every spammer by hand: once enough different members
 independently report the same profile as **spam**, it is automatically frozen
 pending your review. The nightly operator report lists the day's spam
 deactivations. A spam mark is never shown publicly.
+
+### Scripted sign-ups
+
+Some sign-ups come from scripts that create accounts in bulk. vutuv
+recognises the ones it has rules for (today: the same lowercase word as first
+and last name, four letters or more) and shows them the usual PIN screen, but
+creates no account and sends no mail. What such a form submitted, with the IP
+address and browser, is kept for 14 days. Every Monday at 07:00 German time
+`OPERATOR_EMAIL` receives a table of the past week's catches, with the most
+frequent mail domains and IP addresses, which is what the next rule is written
+from. A real person caught by mistake never gets a PIN, so look through that
+mail. Because the IP address is stored, mention this in your privacy policy
+(`/admin/legal`); vutuv.de's policy has a section on it.
 
 ### Reports from people who have no account
 

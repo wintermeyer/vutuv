@@ -1043,6 +1043,92 @@ defmodule Vutuv.Notifications.Emailer do
     })
   end
 
+  @doc """
+  The sign-up trap's weekly report (`Vutuv.SignupTrap`): every registration a
+  rule caught in the finished week, with everything its form sent, and the
+  rules, mail domains and IP addresses that came up most. Fixed German
+  recipient and template, like the other operator notices; the caller only
+  sends it for a week that caught somebody.
+  """
+  def signup_trap_report_email(summary) do
+    report = in_locale("de", fn -> signup_trap_display(summary) end)
+
+    base_email()
+    |> put_class(:transactional)
+    |> to(operator_recipient())
+    |> subject("vutuv: #{report.total} bis #{report.week_end_date}")
+    |> render_bodies("signup_trap_report", "de", %{report: report})
+  end
+
+  # The summary as the strings the two bodies print, so the templates stay
+  # logic-free. Times are German wall-clock time; counts go through the
+  # locale's grouping, which is why this runs inside `in_locale("de", …)`.
+  defp signup_trap_display(summary) do
+    %{
+      total:
+        case summary.total do
+          1 -> "1 abgefangene Registrierung"
+          n -> "#{UI.delimited_count(n)} abgefangene Registrierungen"
+        end,
+      week_end: berlin_minute(summary.week_end),
+      week_end_date: summary.week_end |> Vutuv.BerlinTime.date() |> Calendar.strftime("%d.%m.%Y"),
+      retention_days: summary.retention_days,
+      sections: [
+        ranked_section("Nach Regel", summary.by_rule, &Vutuv.SignupTrap.rule_label/1),
+        ranked_section("Häufigste E-Mail-Domains", summary.domains, & &1),
+        ranked_section("Häufigste IP-Adressen", summary.ips, & &1)
+      ],
+      rows: Enum.map(summary.listed, &trapped_row/1),
+      more:
+        case summary.total - length(summary.listed) do
+          0 -> nil
+          n -> "… und #{UI.delimited_count(n)} weitere, die noch in der Datenbank stehen."
+        end
+    }
+  end
+
+  defp ranked_section(title, pairs, label) do
+    rows =
+      Enum.map(pairs, fn {value, count} ->
+        %{label: label.(value), count: UI.delimited_count(count)}
+      end)
+
+    %{title: title, rows: rows}
+  end
+
+  # One entry both ways: the named facts the text body lists line by line, and
+  # the `cells` + `note` the HTML body's `email_table/1` takes.
+  defp trapped_row(entry) do
+    row = %{
+      time: berlin_minute(entry.inserted_at),
+      name: [entry.first_name, entry.last_name] |> Enum.reject(&is_nil/1) |> Enum.join(" "),
+      email: dash(entry.email),
+      tags: dash(entry.tag_list),
+      ip: dash(entry.ip_address),
+      user_agent: dash(entry.user_agent),
+      language: dash(entry.accept_language),
+      rule: Vutuv.SignupTrap.rule_label(entry.rule),
+      extra:
+        entry.params
+        |> Enum.sort()
+        |> Enum.map_join(", ", fn {key, value} -> "#{key}=#{value}" end)
+        |> dash()
+    }
+
+    Map.merge(row, %{
+      cells: [row.time, row.name, row.email, row.tags, row.ip],
+      note:
+        "Browser: #{row.user_agent} · Sprache: #{row.language} · " <>
+          "Regel: #{row.rule} · Weitere Angaben: #{row.extra}"
+    })
+  end
+
+  defp dash(value) when value in [nil, ""], do: "–"
+  defp dash(value), do: value
+
+  defp berlin_minute(%DateTime{} = utc),
+    do: utc |> Vutuv.BerlinTime.naive() |> Calendar.strftime("%d.%m.%Y %H:%M")
+
   ## Organization pages (see Vutuv.Organizations)
 
   @doc "Operator notice: an organization page was newly verified (a human reviews each one)."

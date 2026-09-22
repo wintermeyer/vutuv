@@ -162,6 +162,9 @@ config :vutuv, :fetch_reference_skill, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false
+# The sign-up trap's hourly report tick would touch the sandbox from outside;
+# tests call Vutuv.SignupTrap.run/2 directly.
+config :vutuv, :signup_trap_report, false
 # The 23:59 head-count recorder behind the investor page's growth curve; same
 # sandbox reason. Vutuv.PeopleHistory.record/1 is called directly in
 # people_history_test.exs instead.
