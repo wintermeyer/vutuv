@@ -286,12 +286,10 @@ lands here). --%>
         <%!-- Employment status (issue #870) + the "Jobsuche" details (issue
         #928: availability visibility + salary expectation). The details panel
         is revealed only once a status is chosen, so a member who leaves this at
-        "Not open to work" sees exactly one control (no clutter): the server
-        renders the panel hidden when no status is set, and the
-        EmploymentVisibility enhancement in app.js toggles it as the status
-        select changes. With JS off the panel appears after the first save (the
-        safe "members"/"hidden" defaults apply until then). --%>
-        <% status_set? = Phoenix.HTML.Form.input_value(f, :employment_status) not in [nil, ""] %>
+        "Not open to work" sees exactly one control (no clutter). A `:has()`
+        rule in app.css hides the panel while the blank option is selected, so
+        it follows the select live, JS or not (the safe "members"/"hidden"
+        defaults apply until a status is saved). --%>
         <div data-employment-status-field>
           <%!-- "Availability", not "Employment status": the select is about
           being open to offers, not about being employed at all. --%>
@@ -302,7 +300,7 @@ lands here). --%>
           </p>
           <%= error_tag f, :employment_status %>
 
-          <div data-jobsearch-details class={["mt-4 space-y-5", !status_set? && "hidden"]}>
+          <div data-jobsearch-details class="mt-4 space-y-5">
             <div>
               <%= label f, :employment_status_visibility, gettext("Who can see your availability?"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
               <%= select f, :employment_status_visibility, visibility_options(), class: input_class() %>
@@ -424,10 +422,8 @@ lands here). --%>
             <%!-- The native date input offers no clear button in some browsers
             (Safari on macOS), so a member could set a birthday but never remove
             it (issue #901). This is a real clear_birthdate submit (works with JS
-            off — the controller nils the date). With JS the birthday-remove
-            enhancement in app.js intercepts the click and asks for confirmation
-            in the dialog below, then submits for real. Shown only while a
-            birthday is set. --%>
+            off — the controller nils the date). With JS `data-modal-open` opens
+            the confirmation dialog below instead. Shown only while a birthday is set. --%>
             <.button
               :if={@user.birthdate}
               type="submit"
@@ -436,7 +432,7 @@ lands here). --%>
               variant="danger-ghost"
               class="mt-2"
               formnovalidate
-              data-birthday-remove
+              data-modal-open="birthday-remove-modal"
               aria-haspopup="dialog"
               aria-controls="birthday-remove-modal"
             >
@@ -449,6 +445,30 @@ lands here). --%>
               </svg>
               {gettext("Remove date of birth")}
             </.button>
+            <%!-- "Are you sure?" dialog for removing the date of birth, opened by
+            the trigger's `data-modal-open`. It sits inside the edit form, so
+            its Remove button is that form's clear_birthdate submit and the
+            controller nils the date even though the date input still carries
+            its old value. JS off never sees it: the trigger is a plain submit
+            then. --%>
+            <.modal_dialog :if={@user.birthdate} id="birthday-remove-modal" aria-labelledby="birthday-remove-title">
+              <h2 id="birthday-remove-title" class="text-lg font-bold text-slate-900 dark:text-white">
+                {gettext("Remove your date of birth?")}
+              </h2>
+              <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
+                )}
+              </p>
+              <div class="mt-6 flex justify-end gap-3">
+                <.button variant="secondary" data-modal-close>
+                  {gettext("Cancel")}
+                </.button>
+                <.button type="submit" variant="danger" name="clear_birthdate" value="1" formnovalidate autofocus>
+                  {gettext("Remove date of birth")}
+                </.button>
+              </div>
+            </.modal_dialog>
           </div>
 
           <%!-- How much of the birthday the public profile (and its agent
@@ -492,41 +512,6 @@ lands here). --%>
     action={~p"/settings/profile/gravatar"}
   >
   </.form>
-
-  <%!-- "Are you sure?" dialog for removing the date of birth. Rendered only while
-  a birthday is set (like the trigger) and hidden until the birthday-remove
-  enhancement in app.js opens it; its Remove button submits the edit form's
-  clear_birthdate control for real. JS off never sees it — the trigger is a plain
-  submit then. Uses the same overlay recipe as the keyboard-shortcuts help. --%>
-  <div
-    :if={@user.birthdate}
-    id="birthday-remove-modal"
-    class="hidden fixed inset-0 z-[60] items-center justify-center p-4 [&:not(.hidden)]:flex"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="birthday-remove-title"
-    data-block-shortcuts
-  >
-    <div data-birthday-remove-backdrop class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"></div>
-    <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-      <h2 id="birthday-remove-title" class="text-lg font-bold text-slate-900 dark:text-white">
-        {gettext("Remove your date of birth?")}
-      </h2>
-      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-        {gettext(
-          "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
-        )}
-      </p>
-      <div class="mt-6 flex justify-end gap-3">
-        <.button variant="secondary" data-birthday-remove-cancel>
-          {gettext("Cancel")}
-        </.button>
-        <.button variant="danger" data-birthday-remove-confirm>
-          {gettext("Remove date of birth")}
-        </.button>
-      </div>
-    </div>
-  </div>
 
   <%!-- On phones the sidebar is hidden, so list the sibling profile sections
   here — a member who tapped "Edit profile" to add a job must not hit a dead

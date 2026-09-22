@@ -35,7 +35,7 @@
 // LiveView root: a patch of the page underneath must not be able to take the
 // open card with it. That is also why the fragment carries no `phx-` link and
 // no fixed id (see the template).
-import { canHover, copyText, request, revealPreviewClamp } from "./util"
+import { canHover, copyText, flashText, plainClick, request, revealPreviewClamp } from "./util"
 
 // Where each kind of handle is answered, and how the request names it. The acts
 // (`ACTS` below) are paths under the same base, so a card's buttons reach the
@@ -441,11 +441,7 @@ async function copyAddress(button) {
 
   if (!said || !label) return
 
-  const was = label.textContent
-  label.textContent = said
-  window.setTimeout(() => {
-    if (label.isConnected) label.textContent = was
-  }, 1500)
+  flashText(label, said)
 }
 
 document.addEventListener("click", (e) => {
@@ -509,7 +505,7 @@ document.addEventListener("click", (e) => {
   // request just to find out that they may not. The shell renders the account
   // menu for a signed-in reader on every page, dead render included, which is
   // the marker the keyboard shortcuts already read.
-  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  if (e.button !== 0 || !plainClick(e)) return
   if (!document.querySelector("[data-account-menu]")) return
 
   keepTheClick(e)

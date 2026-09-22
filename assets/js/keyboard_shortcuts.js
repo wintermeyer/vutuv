@@ -13,7 +13,7 @@
 // Cross-page navigation is a plain location change so it works identically on
 // classic controller pages and LiveView pages.
 
-import { onReady } from "./util"
+import { closeCardMenus, onReady } from "./util"
 
 const DESKTOP = window.matchMedia("(hover: hover) and (pointer: fine)")
 
@@ -140,43 +140,22 @@ function overlay() {
   return document.getElementById("shortcuts-overlay")
 }
 
-// A designed confirm dialog (e.g. the profile editor's "Remove date of birth")
-// marks itself [data-block-shortcuts] and shows by dropping its `hidden` class.
-// While one is open it is modal, so every shortcut but Escape must stay inert
-// behind it — otherwise "n"/"g …" would act on the page under the dialog.
+// A modal is open: a native <dialog> (this help, the profile editor's "Remove
+// date of birth", …) or the welcome questions, which mark themselves
+// [data-block-shortcuts]. Every shortcut must stay inert behind it — otherwise
+// "n"/"g …" would act on the page under the dialog.
 function blockingModalOpen() {
-  return !!document.querySelector("[data-block-shortcuts]:not(.hidden)")
+  return !!document.querySelector("dialog[open], [data-block-shortcuts]")
 }
 
-function overlayOpen() {
-  const o = overlay()
-  return o && !o.classList.contains("hidden")
-}
-
-// The element focus was on before the dialog opened, so it can be restored
-// when the dialog closes (don't strand keyboard focus on a now-hidden node).
-let lastFocused = null
-
+// The help is a native <dialog> (VutuvWeb.UI.modal_dialog/1): `showModal()`
+// traps the focus, answers Escape and hands the focus back on close, and the
+// delegated helper in app.js closes it from its ✕ and its backdrop.
 function openOverlay() {
   // Close any open dropdown first so the menu doesn't sit under the modal.
-  document
-    .querySelectorAll("details[data-menu][open]")
-    .forEach((m) => m.removeAttribute("open"))
+  closeCardMenus()
   const o = overlay()
-  if (!o) return
-  lastFocused = document.activeElement
-  o.classList.remove("hidden")
-  // Move focus into the dialog so Esc / Tab land there and screen readers
-  // announce it.
-  o.querySelector("[data-overlay-close]")?.focus()
-}
-
-function closeOverlay() {
-  const o = overlay()
-  if (!o || o.classList.contains("hidden")) return
-  o.classList.add("hidden")
-  if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus()
-  lastFocused = null
+  if (o && !o.open) o.showModal()
 }
 
 let gPending = false
@@ -190,30 +169,22 @@ function resetSequence() {
 function handleKey(e) {
   if (fromForeignShadowRoot(e)) return
 
-  // Escape closes the overlay even on touch / inside fields, so a keyboard user
-  // is never trapped. Everything else below is desktop-only.
+  // Escape belongs to whatever dialog is open; here it only ends a pending
+  // "g …" sequence. Everything else below is desktop-only.
   if (e.key === "Escape") {
-    if (overlayOpen()) closeOverlay()
     resetSequence()
     return
   }
 
-  // A non-shortcuts confirm dialog (data-block-shortcuts) is open: it owns Esc
-  // itself and every other key must not reach the shortcut handlers below.
-  if (blockingModalOpen()) return
-
-  // While the help dialog is open it is modal: Tab stays trapped on its close
-  // button, "?" closes it, and every other shortcut is inert behind it.
-  if (overlayOpen()) {
-    if (e.key === "Tab") {
-      e.preventDefault()
-      overlay().querySelector("[data-overlay-close]")?.focus()
-    } else if (e.key === "?") {
-      e.preventDefault()
-      closeOverlay()
-    }
+  // "?" closes the help it opened, the one key it answers besides Escape.
+  if (e.key === "?" && overlay()?.open) {
+    e.preventDefault()
+    overlay().close()
     return
   }
+
+  // A dialog is open, and every other key must not reach the shortcuts below.
+  if (blockingModalOpen()) return
 
   if (!DESKTOP.matches) return
   if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -272,19 +243,10 @@ document.addEventListener("keydown", handleKey)
 // from another page). Runs on DOM ready and after every live navigation.
 onReady(focusComposerFromHash)
 
-// The account-menu "Keyboard shortcuts" item, the overlay's close button, and a
-// backdrop click. Delegated so it keeps working for markup the LiveView shell
-// re-renders.
+// The account-menu "Keyboard shortcuts" item. Delegated so it keeps working
+// for markup the LiveView shell re-renders.
 document.addEventListener("click", (e) => {
-  if (e.target.closest("[data-shortcuts-trigger]")) {
-    e.preventDefault()
-    openOverlay()
-    return
-  }
-  if (
-    e.target.closest("[data-overlay-close]") ||
-    e.target.hasAttribute("data-overlay-backdrop")
-  ) {
-    closeOverlay()
-  }
+  if (!e.target.closest("[data-shortcuts-trigger]")) return
+  e.preventDefault()
+  openOverlay()
 })

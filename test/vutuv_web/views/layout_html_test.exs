@@ -98,12 +98,9 @@ defmodule VutuvWeb.LayoutHTMLTest do
   test "the layout carries the keyboard-shortcuts help overlay", %{conn: conn} do
     body = conn |> get(~p"/impressum") |> html_response(200)
 
-    assert body =~ ~s(id="shortcuts-overlay")
-    assert body =~ ~s(role="dialog")
     assert body =~ "Keyboard shortcuts"
-    # The overlay opens via JS; it must start hidden.
-    [overlay_tag] = Regex.run(~r/<div[^>]*id="shortcuts-overlay"[^>]*>/, body)
-    assert overlay_tag =~ "hidden"
+    # A native <dialog> the JS opens with showModal(); it must start closed.
+    assert [_overlay] = elements(body, "dialog#shortcuts-overlay:not([open])")
   end
 
   # Cmd/Ctrl+Enter submits the post and message composers (issue #1196); the

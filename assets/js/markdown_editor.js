@@ -31,7 +31,8 @@
 // at the remembered cursor position. The thumbnail row's "Insert" button pushes
 // `mde-insert-image` for an explicit at-cursor insert. An image's alignment
 // lives as a `#left`/`#right`/`#center` src fragment (no fragment = full
-// width), edited via the toolbar's img-* buttons while an image is selected.
+// width), edited via the selection bubble's img-* buttons while an image is
+// selected.
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core"
 import {
   commonmark,
@@ -62,13 +63,12 @@ import { ACTIVE_CLASS, followsCaret, markActiveRow, stepIndex, suggestKey } from
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
 import { inputRules, InputRule } from "@milkdown/kit/prose/inputrules"
 import { emojiForShortcode, SHORTCODE_AT_CARET } from "./emoji_data.js"
-import { request } from "./util.js"
+import { getJSON } from "./util.js"
 // No emoji picker import: the panel went with the toolbar button it hung off
 // (issue #1886). `emojiForShortcode` above stays — typing `:tada:` still
 // becomes 🎉, which costs no pixels and no control.
 import {
   showMentions,
-  closeMentions,
   closeMentionsFor,
   mentionsOpenFor,
   moveMention,
@@ -185,19 +185,6 @@ const imagePolicy = (allowImages) =>
           ranges.reverse().forEach(([from, to]) => tr.delete(from, to))
           return tr
         },
-      })
-  )
-
-// Watches the selection so the bubble can reveal the alignment controls while
-// an image node is selected (and mark the active alignment on them).
-const imageSelectionWatch = (hook) =>
-  $prose(
-    () =>
-      new Plugin({
-        key: new PluginKey("MDE_IMAGE_SELECT"),
-        view: () => ({
-          update: (view) => hook.syncImageSelection(view),
-        }),
       })
   )
 
@@ -624,7 +611,7 @@ export const MarkdownEditor = {
       .use(chromeWatch(this))
 
     if (this.imagesEnabled) {
-      editor = editor.use(imageSelectionWatch(this)).use(imageFileCapture(this))
+      editor = editor.use(imageFileCapture(this))
       this.wireImageEvents()
     }
 
@@ -988,7 +975,7 @@ export const MarkdownEditor = {
     const language = word.split(":")[0]
     // A diff's colon segment is the language inside it, everything else's is
     // the file name — the same rule the server reads the short form by.
-    const diff = /^(diff|patch|udiff)$/i.test(language)
+    const diff = DIFF_WORDS.test(language)
     // A fence info string may hold no space, so a title that has one keeps it
     // as `%20` — which is exactly what the server decodes it back from.
     const rest = (diff ? attr("lang") : attr("title")) || ""
@@ -1166,7 +1153,7 @@ export const MarkdownEditor = {
     // type it again), which would otherwise redraw the list and throw away the
     // row somebody had arrowed down to.
     const seq = ++this.mentionSeq
-    const items = await this.fetchJson(this.root.dataset.mentionUrl, { q: term })
+    const items = await getJSON(this.root.dataset.mentionUrl, { q: term })
     if (this.destroyed_ || seq !== this.mentionSeq) return
     if (!items || !this.mentionRun || this.mentionRun.term !== term) return
 
@@ -1277,7 +1264,7 @@ export const MarkdownEditor = {
         // on. (The caller's own stopPropagation covers the rest.)
         event.stopPropagation()
         this.mentionRun = null
-        closeMentions()
+        closeMentionsFor(this.root)
       },
     })
   },
@@ -1325,7 +1312,7 @@ export const MarkdownEditor = {
     })
     if (pending.size === 0) return
 
-    const answer = await this.fetchJson(this.root.dataset.mentionCheckUrl, {
+    const answer = await getJSON(this.root.dataset.mentionCheckUrl, {
       handles: [...pending].join(","),
     })
     if (!answer || this.destroyed_) return
@@ -1361,27 +1348,6 @@ export const MarkdownEditor = {
     return (this.root.dataset.mentionBudget || "")
       .replace("{used}", String(used.size))
       .replace("{max}", String(max))
-  },
-
-  // A JSON GET that never throws at the caller: a mention picker is an
-  // enhancement, so a dropped connection (or a session that expired into a
-  // login redirect) means no suggestions, not a broken editor.
-  //
-  // Through `util.js`' `request/2` rather than a bare `fetch`, which is where
-  // this app's fetch conventions already live — including the one that bites
-  // here: **no** `accept: application/json`, because these routes ride the
-  // ordinary browser pipeline, where an explicit JSON Accept is read as a
-  // request for an agent document rather than for the member's own page.
-  async fetchJson(url, params) {
-    if (!url) return null
-
-    try {
-      const response = await request(`${url}?${new URLSearchParams(params)}`)
-      if (!response.ok) return null
-      return await response.json()
-    } catch (_error) {
-      return null
-    }
   },
 
   // --- inline images (post composer only) ---
@@ -1507,7 +1473,8 @@ export const MarkdownEditor = {
   },
 
   // Reveal the alignment buttons while an image is selected and mark the
-  // active choice (aria-pressed drives the button styling).
+  // active choice (aria-pressed drives the button styling). From syncChrome,
+  // ahead of the bubble that shows them.
   syncImageSelection(view) {
     const selection = view.state.selection
     const node =
@@ -1533,6 +1500,7 @@ export const MarkdownEditor = {
   // openSlash on it threw away an arrow-key choice the member had just made.
   syncChrome(view, prev) {
     if (prev && prev.doc === view.state.doc && prev.selection.eq(view.state.selection)) return
+    if (this.imagesEnabled) this.syncImageSelection(view)
     this.syncBubble(view)
     this.syncHeadingState(view)
     this.syncSlash(view)
@@ -1807,9 +1775,7 @@ export const MarkdownEditor = {
     // after a click on the composer's photo button or a sidebar link. Same
     // listener, same reasoning, as mention_picker.js.
     this._away = (e) => {
-      if (this.root.contains(e.target)) return
-      if (this.bubble) this.bubble.hidden = true
-      this.closeSlash()
+      if (!this.root.contains(e.target)) this.closeOverlays()
     }
     document.addEventListener("mousedown", this._away)
 

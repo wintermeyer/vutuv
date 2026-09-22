@@ -1111,24 +1111,28 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   test "the Remove-date-of-birth control opens a confirm dialog before clearing", %{conn: conn} do
-    # The remove control is a real submit (no-JS fallback) hooked by app.js, which
-    # intercepts the click and asks "Are you sure?" in a designed dialog before
-    # submitting for real. Assert both the hooked trigger and the dialog markup
-    # render so the JS enhancement has something to wire (issue #901 polish).
+    # The remove control is a real submit (no-JS fallback) that opens a native
+    # <dialog> via `data-modal-open`; the dialog sits inside the edit form, so
+    # its Remove button is the same clear_birthdate submit.
     {conn, user} = create_and_login_user(conn)
 
     user |> Ecto.Changeset.change(%{birthdate: ~D[1990-04-15]}) |> Repo.update!()
 
     html = conn |> get(~p"/settings/profile") |> html_response(200)
 
-    # Trigger: still a real clear_birthdate submit (no-JS path), now hooked.
-    assert html =~ "data-birthday-remove"
-    assert html =~ ~s(name="clear_birthdate")
+    assert [_trigger] =
+             elements(
+               html,
+               ~s(form button[name="clear_birthdate"][data-modal-open="birthday-remove-modal"])
+             )
 
-    # The confirm dialog and its two controls.
-    assert html =~ ~s(id="birthday-remove-modal")
-    assert html =~ "data-birthday-remove-confirm"
-    assert html =~ "data-birthday-remove-cancel"
+    assert [_confirm] =
+             elements(
+               html,
+               ~s(form dialog#birthday-remove-modal button[type="submit"][name="clear_birthdate"])
+             )
+
+    assert [_cancel] = elements(html, "dialog#birthday-remove-modal button[data-modal-close]")
   end
 
   test "the Remove-date-of-birth control and dialog are hidden when no birthdate is set",

@@ -61,11 +61,13 @@ defmodule VutuvWeb.UI do
       data-max={@max}
       data-over={to_string(@used > @max)}
       aria-live="polite"
-      class="shrink-0 whitespace-nowrap text-sm text-slate-600 data-[over=true]:font-medium data-[over=true]:text-red-600 dark:text-slate-400 dark:data-[over=true]:text-red-400"
+      class="group/count shrink-0 whitespace-nowrap text-sm text-slate-600 data-[over=true]:font-medium data-[over=true]:text-red-600 dark:text-slate-400 dark:data-[over=true]:text-red-400"
     >
+      <%!-- ✓ or ⚠ follows the readout's `data-over`, which the server renders
+      and app.js flips as the writer types. --%>
       <span data-char-count>{@used}</span>/{@max} {gettext("characters")}
-      <span data-char-ok aria-hidden="true" class="text-emerald-600 dark:text-emerald-400">✓</span>
-      <span data-char-over aria-hidden="true" class="hidden">⚠</span>
+      <span aria-hidden="true" class="text-emerald-600 group-data-[over=true]/count:hidden dark:text-emerald-400">✓</span>
+      <span aria-hidden="true" class="hidden group-data-[over=true]/count:inline">⚠</span>
     </p>
     """
   end
@@ -4162,6 +4164,33 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  A native `<dialog>` modal. A control carrying `data-modal-open="<id>"` opens
+  it; anything inside carrying `data-modal-close`, Escape and a click on the
+  backdrop close it (the delegated helper in app.js). `showModal()` brings the
+  focus trap, the inert page behind it and the focus return, so none of that is
+  written by hand, and the keyboard shortcuts stay quiet while one is open.
+
+  `m-auto` is load-bearing: a native dialog centres itself with `margin: auto`,
+  and Tailwind's preflight zeroes every margin, which parks the modal in the
+  top-left corner.
+  """
+  attr(:id, :string, required: true)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def modal_dialog(assigns) do
+    ~H"""
+    <dialog
+      id={@id}
+      class="m-auto max-h-[90vh] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl bg-white p-6 text-slate-900 shadow-xl ring-1 ring-slate-200 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-800"
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </dialog>
+    """
+  end
+
+  @doc """
   The Copy control on its own — the `data-copy` enhancement in `app.js`, which
   swaps its label to "Copied" for a moment.
 
@@ -4186,7 +4215,6 @@ defmodule VutuvWeb.UI do
       data-copy
       data-copy-target={@target}
       data-copy-text={@text}
-      data-label-copy={gettext("Copy")}
       data-label-copied={gettext("Copied")}
       class={[
         "shrink-0 rounded-md bg-white text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700",

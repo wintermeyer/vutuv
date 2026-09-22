@@ -5,12 +5,15 @@
 // the right part sits inside it.
 //
 // What lives here is what the two croppers had as identical copies: the
-// stage DOM chunk, the geometry (layout / draw / clampOffsets and the
-// crop-fraction math) and the teardown. Everything that genuinely differs —
-// the rest of the dialog DOM, the zoom and pan interactions, where the
-// fractions go on Save — stays local to the croppers. Escape used to live
-// here too and moved to util.js `bindEscape` once a third dialog (the welcome
-// modal) needed it: it is about dialogs, not about cropping.
+// dialog shell (title, hint, stage, zoom slider, Cancel/Save, dismissal), the
+// geometry (layout / draw / clampOffsets and the crop-fraction math) and the
+// teardown. Everything that genuinely differs — the photo dialog's chip row
+// and reset button, the zoom and pan interactions, where the fractions go on
+// Save — stays local to the croppers.
+
+import { bindEscape, buttonPrimary, buttonSecondary } from "./util"
+
+export const MAX_ZOOM = 4 // up to 4x past "cover" fit
 
 // Tiny DOM builder both dialogs use. Tailwind scans assets/js, so utility
 // classes written through it are part of the build (app.css `@source "../js"`).
@@ -26,7 +29,7 @@ export function el(tag, className, text) {
 // visual cue, not a separate region). layout() sizes the stage in pixels —
 // it fits a viewport-height budget, so it is not always full width; mx-auto
 // keeps it centered.
-export function buildStage() {
+function buildStage() {
   const stage = el(
     "div",
     "relative mx-auto mt-3 touch-none select-none overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
@@ -35,6 +38,48 @@ export function buildStage() {
   const frame = el("div", "pointer-events-none absolute inset-0 rounded-lg ring-2 ring-white/70")
   stage.append(canvas, frame)
   return { stage, canvas }
+}
+
+// The dialog shell both croppers open: an overlay holding the title, the hint,
+// any `extras` (the photo dialog's ratio chips) above the stage, the zoom
+// slider and the Cancel/Save row, with `lead` (the photo dialog's reset) at the
+// row's start. `onDismiss` answers a backdrop click and Escape.
+export function buildCropDialog(labels, onDismiss, { extras = [], lead = null } = {}) {
+  const overlay = el("div", "fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4")
+  const dialog = el(
+    "div",
+    "max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-xl dark:bg-slate-900"
+  )
+  const title = el("h2", "text-base font-semibold text-slate-900 dark:text-white", labels.title)
+  const hint = el("p", "mt-1 text-xs text-slate-600 dark:text-slate-400", labels.hint)
+
+  const { stage, canvas } = buildStage()
+
+  const zoom = el("input", "mt-3 block w-full accent-brand-600")
+  zoom.type = "range"
+  zoom.min = "1"
+  zoom.max = String(MAX_ZOOM)
+  zoom.step = "0.01"
+  zoom.value = "1"
+  zoom.setAttribute("aria-label", labels.zoom)
+
+  const actions = el("div", "mt-4 flex flex-wrap items-center justify-end gap-3")
+  const cancel = el("button", buttonSecondary, labels.cancel)
+  cancel.type = "button"
+  const save = el("button", buttonPrimary, labels.save)
+  save.type = "button"
+  if (lead) actions.appendChild(lead)
+  actions.append(cancel, save)
+
+  dialog.append(title, hint, ...extras, stage, zoom, actions)
+  overlay.appendChild(dialog)
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) onDismiss()
+  })
+  bindEscape(overlay, onDismiss)
+
+  return { overlay, stage, canvas, zoom, save, cancel }
 }
 
 // The geometry controller for one open dialog. All geometry is in CSS pixels

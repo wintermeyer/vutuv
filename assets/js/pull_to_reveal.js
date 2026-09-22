@@ -74,7 +74,7 @@ export const PullToReveal = {
 
     this.onStart = (event) => {
       if (this.phase() || event.touches.length !== 1) return
-      if (window.scrollY > 0 || !pill() || document.getElementById("band-sheet")) return
+      if (window.scrollY > 0 || !pill() || document.getElementById("filter-panel")) return
       this.startY = event.touches[0].clientY
     }
 

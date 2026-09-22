@@ -21,8 +21,11 @@ import {
   bindEscape,
   canHover,
   cancelIdle,
+  closeCardMenus,
   copyText,
   csrfToken,
+  flashText,
+  getJSON,
   keyActivates,
   localGet,
   localSet,
@@ -269,8 +272,14 @@ if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(sweepPreviewClamps)
 }
 
+// Only a change of width can re-wrap lines. A phone fires `resize` whenever its
+// URL bar slides in or out during a scroll, and re-measuring every card on each
+// of those is a forced layout per card for nothing.
 let previewClampResizeTimer
+let previewClampWidth = window.innerWidth
 window.addEventListener("resize", () => {
+  if (window.innerWidth === previewClampWidth) return
+  previewClampWidth = window.innerWidth
   clearTimeout(previewClampResizeTimer)
   previewClampResizeTimer = setTimeout(sweepPreviewClamps, 150)
 })
@@ -1169,6 +1178,17 @@ document.addEventListener("click", (event) => {
       event.preventDefault()
       dialog.close()
     }
+    return
+  }
+
+  // A click on the backdrop lands on the dialog itself, outside its box.
+  const dialog = event.target
+  if (dialog instanceof HTMLDialogElement && dialog.open) {
+    const box = dialog.getBoundingClientRect()
+    const inside =
+      event.clientX >= box.left && event.clientX <= box.right &&
+      event.clientY >= box.top && event.clientY <= box.bottom
+    if (!inside) dialog.close()
   }
 })
 
@@ -1803,6 +1823,8 @@ const Hooks = {
         edgeFrame = null
         edgeY = null
       }
+      // A rail torn down mid-drag never sees its `dragend`.
+      this._stopEdgeScroll = stopEdgeScroll
 
       // The row the dragged element should sit before, by the capped line above.
       const rowAfter = (y) =>
@@ -1833,18 +1855,22 @@ const Hooks = {
       // Re-armed on `pointermove` as well as on entering, because a LiveView
       // patch of the rail (a count ticking) strips an attribute the server did
       // not render, and the pointer may already be sitting on the grip when it
-      // happens. Both handlers cost nothing once the right row is armed.
-      const disarm = () =>
-        items().forEach((row) => {
-          if (row.querySelector("[data-reorder-handle]")) row.removeAttribute("draggable")
-        })
+      // happens. Both handlers cost nothing once the right row is armed, and
+      // nothing while the pointer is off every grip.
+      let armed = null
+
+      const disarm = () => {
+        armed?.removeAttribute("draggable")
+        armed = null
+      }
 
       const arm = (e) => {
         if (this.dragging) return
         const row = e.target.closest("[data-reorder-handle]")?.closest(selector) || null
-        if (row && row.getAttribute("draggable") === "true") return
+        if (row === armed && (!row || row.getAttribute("draggable") === "true")) return
         disarm()
         if (row) row.setAttribute("draggable", "true")
+        armed = row
       }
 
       list.addEventListener("pointerover", arm)
@@ -1881,10 +1907,12 @@ const Hooks = {
         e.preventDefault()
         if (!this.dragging) return
         edgeY = e.clientY
+        // Move only when the place changed: a DOM write on every `dragover`
+        // would force the next event's row measurements to relayout.
         const after = rowAfter(e.clientY)
         if (after == null) {
-          list.appendChild(this.dragging)
-        } else if (after !== this.dragging) {
+          if (list.lastElementChild !== this.dragging) list.appendChild(this.dragging)
+        } else if (this.dragging.nextElementSibling !== after) {
           list.insertBefore(this.dragging, after)
         }
       })
@@ -1909,6 +1937,9 @@ const Hooks = {
         this._refocus = row.dataset.id
         push()
       })
+    },
+    destroyed() {
+      this._stopEdgeScroll()
     },
     // Animate the arrow/keyboard reorders with FLIP: snapshot each row's top
     // before the server patch (beforeUpdate), then after it (updated) jump each
@@ -2141,8 +2172,10 @@ const Hooks = {
           return
         }
 
-        if (before) strip.insertBefore(drag.tile, tile)
-        else strip.insertBefore(drag.tile, tile.nextSibling)
+        // Only a real move writes: an idle insert would relayout the strip
+        // that the next event's `nearest` measures.
+        const next = before ? tile : tile.nextSibling
+        if (drag.tile.nextSibling !== next) strip.insertBefore(drag.tile, next)
       })
 
       // Once lifted, the finger is dragging a tile, not the page.
@@ -2384,23 +2417,13 @@ function setupSlugAvailability() {
     }
 
     timer = setTimeout(async () => {
-      try {
-        const url = `${input.dataset.availabilityUrl}?value=${encodeURIComponent(value)}`
-        // No explicit Accept header: the route lives in the :browser pipeline,
-        // whose `accepts ["html"]` 406s an "application/json" Accept; fetch's
-        // default */* negotiates fine and the action responds with JSON anyway.
-        const resp = await fetch(url)
-        if (!resp.ok) return
-        const data = await resp.json()
-        // A slower response for an older value must not overwrite the verdict
-        // for what is in the input now.
-        if (input.value.trim() !== value) return
-        hint.textContent = data.message
-        hint.classList.toggle("editform__hint--ok", data.available)
-        hint.classList.toggle("editform__hint--error", !data.available)
-      } catch (_e) {
-        // Network hiccup: keep quiet, the server still validates on submit.
-      }
+      const data = await getJSON(input.dataset.availabilityUrl, { value })
+      // A slower response for an older value must not overwrite the verdict
+      // for what is in the input now.
+      if (!data || input.value.trim() !== value) return
+      hint.textContent = data.message
+      hint.classList.toggle("editform__hint--ok", data.available)
+      hint.classList.toggle("editform__hint--error", !data.available)
     }, 300)
   })
 }
@@ -2500,18 +2523,11 @@ function setupOrganizationLink() {
         suggestion = null
         return renderState()
       }
-      try {
-        const url = `${box.dataset.suggestUrl}?q=${encodeURIComponent(value)}`
-        const resp = await fetch(url)
-        if (!resp.ok) return
-        const data = await resp.json()
-        // Ignore a stale response for an organization value already replaced.
-        if (orgInput.value.trim() !== value) return
-        suggestion = data.organization
-        renderState()
-      } catch (_e) {
-        // Network hiccup: stay quiet, the free-text organization still works.
-      }
+      const data = await getJSON(box.dataset.suggestUrl, { q: value })
+      // Ignore a stale response for an organization value already replaced.
+      if (!data || orgInput.value.trim() !== value) return
+      suggestion = data.organization
+      renderState()
     }
 
     orgInput.addEventListener("input", () => {
@@ -2766,6 +2782,10 @@ function countingBoxes(group) {
   ]
 }
 
+function chosenCount(group) {
+  return countingBoxes(group).filter((b) => b.checked).length
+}
+
 function showSelectNotice(group, show) {
   const notice = group.querySelector("[data-select-notice]")
   if (notice) notice.hidden = !show
@@ -2779,7 +2799,7 @@ function showSelectNotice(group, show) {
 function syncFreeCount(group, limit) {
   const el = group.querySelector("[data-select-free]")
   if (!el) return
-  const chosen = countingBoxes(group).filter((b) => b.checked).length
+  const chosen = chosenCount(group)
   const template = el.dataset.labelSelected
   if (template) {
     el.textContent = template
@@ -2807,7 +2827,7 @@ function wireSelectAll(btn) {
     // never reach its deselect state on a group it can never fill.
     const filled =
       limit !== null &&
-      countingBoxes(group).filter((b) => b.checked).length >= limit
+      chosenCount(group) >= limit
     btn.dataset.state = allChecked || filled ? "all" : "some"
     btn.textContent =
       btn.dataset.state === "all"
@@ -2846,7 +2866,7 @@ function wireSelectAll(btn) {
       limit !== null &&
       box.checked &&
       !box.hasAttribute("data-duplicate") &&
-      countingBoxes(group).filter((b) => b.checked).length > limit
+      chosenCount(group) > limit
     ) {
       box.checked = false
       showSelectNotice(group, true)
@@ -2897,8 +2917,8 @@ onReady(setupDeleteGate)
 // permanent profile link). Progressive enhancement: with JS off the target is
 // select-all so it can be copied by hand; this just makes it one click. The
 // button copies the textContent of the element named by data-copy-target (an
-// id) and, for ~1.5s, swaps its label from data-label-copy to data-label-copied
-// so no translated text is hardcoded here. The copy itself (and the fallback
+// id) and, for ~1.5s, swaps its label for data-label-copied so no translated
+// text is hardcoded here. The copy itself (and the fallback
 // for a browser or an installation without a secure context) is `copyText/1` in
 // util.js, shared with the mention card.
 function wireCopyButton(btn) {
@@ -2907,19 +2927,10 @@ function wireCopyButton(btn) {
   const source = () =>
     btn.dataset.copyText || (target ? target.textContent.trim() : "")
   const copied = btn.dataset.labelCopied
-  const idle = btn.dataset.labelCopy || btn.textContent
-  let revert
 
   btn.addEventListener("click", () => {
     copyText(source())
-      .then(() => {
-        if (!copied) return
-        btn.textContent = copied
-        clearTimeout(revert)
-        revert = setTimeout(() => {
-          btn.textContent = idle
-        }, 1500)
-      })
+      .then(() => copied && flashText(btn, copied))
       .catch(() => {})
   })
 }
@@ -2952,13 +2963,7 @@ document.addEventListener("click", (e) => {
       const said = item.dataset.copyDone
       if (!label || !said) return
 
-      const was = label.textContent
-      label.textContent = said
-      setTimeout(() => {
-        if (!label.isConnected) return
-        label.textContent = was
-        item.closest("details[data-menu]")?.removeAttribute("open")
-      }, 1200)
+      flashText(label, said, 1200, () => item.closest("details[data-menu]")?.removeAttribute("open"))
     })
     // The copy really failed (no clipboard permission). Say nothing rather
     // than claim it worked: the link is one ordinary click away.
@@ -3109,18 +3114,13 @@ function wireCharCounter(wrap) {
   const input = wrap.querySelector("[data-char-count-input]")
   const readout = wrap.querySelector("[data-char-count-readout]")
   const output = wrap.querySelector("[data-char-count]")
-  const ok = wrap.querySelector("[data-char-ok]")
-  const over = wrap.querySelector("[data-char-over]")
   const max = readout && parseInt(readout.dataset.max, 10)
   if (!input || !readout || !output || !max) return
 
   const update = () => {
     const used = [...input.value].length
-    const isOver = used > max
     output.textContent = used
-    readout.dataset.over = isOver ? "true" : "false"
-    if (ok) ok.classList.toggle("hidden", isOver)
-    if (over) over.classList.toggle("hidden", !isOver)
+    readout.dataset.over = String(used > max)
   }
 
   input.addEventListener("input", update)
@@ -3211,55 +3211,6 @@ function setupTagInputs() {
 }
 onReady(setupTagInputs)
 
-// Reveal the "Jobsuche" details panel only once an employment status is chosen
-// (issue #928, see user/edit.html.heex). A member who leaves the status at "Not
-// open to work" should see one clean control; the panel ([data-jobsearch-details]
-// -- availability visibility + salary expectation, server-rendered hidden when
-// no status is set) appears as soon as they pick "Open to offers" / "Looking for
-// a job" and hides again when they clear it. Plain <div> wrappers, so toggling
-// `hidden` alone governs display (no competing display utility). With JS off the
-// server-side state stands and the panel surfaces after the first save.
-function wireEmploymentVisibility(select) {
-  if (!once(select, "employmentVisibility")) return
-  const wrap = select
-    .closest("[data-employment-status-field]")
-    ?.querySelector("[data-jobsearch-details]")
-  if (!wrap) return
-
-  const sync = () => wrap.classList.toggle("hidden", select.value === "")
-  select.addEventListener("change", sync)
-  sync()
-}
-
-function setupEmploymentVisibility() {
-  document
-    .querySelectorAll("[data-employment-status-select]")
-    .forEach(wireEmploymentVisibility)
-}
-onReady(setupEmploymentVisibility)
-
-// The Arbeitszeugnis form's publish confirmation (see job_reference/
-// form_content.html.heex). Publishing a Zeugnis hands a former employer's
-// graded judgement of a person to anyone, including search engines, and cannot
-// be taken back -- so the changeset demands a separate tick on the
-// private->public step. That tick is the one deliberate speed bump on this
-// form, and it was being spent on every save: an unticked confirmation box
-// under a form that saves fine reads as an unmet requirement, and after a few
-// of those nobody reads it on the save where it matters. So it appears with
-// the decision it confirms and goes away with it.
-// Same shape as the employment panel above: a plain wrapper whose only display
-// governor is `hidden` (issue #880), server-rendered visible, so with JS off
-// the box is simply always there to tick.
-function wirePublicConsent(toggle) {
-  if (!once(toggle, "publicConsent")) return
-  const wrap = toggle.closest("[data-public-visibility]")?.querySelector("[data-public-consent]")
-  if (!wrap) return
-
-  const sync = () => wrap.classList.toggle("hidden", !toggle.checked)
-  toggle.addEventListener("change", sync)
-  sync()
-}
-
 // The file drop zone on a classic form (the Arbeitszeugnis upload, see
 // job_reference/form_content.html.heex). Two things the native input cannot do:
 // take a dragged file, and say something before the upload starts.
@@ -3339,97 +3290,6 @@ function setupUploadDrops() {
 }
 onReady(setupUploadDrops)
 
-function setupPublicConsent() {
-  document
-    .querySelectorAll('[data-public-visibility] input[name="job_reference[public?]"]')
-    .forEach(wirePublicConsent)
-}
-onReady(setupPublicConsent)
-
-// The profile editor's "Remove date of birth" control (see user/edit.html.heex).
-// The native <input type="date"> gives no clear affordance in some browsers
-// (Safari on macOS renders spinners with no ✕), so a member could set a birthday
-// but never remove it (issue #901). The trigger is a real submit
-// (name=clear_birthdate) so it still works with JS off; here we intercept it and
-// ask "Are you sure?" in a designed dialog first, then submit for real. We use
-// form.requestSubmit(trigger) so the trigger's name/value ride along and the
-// controller nils the date even though the date input still carries its old
-// value (form.submit() would drop the submitter, and thus clear_birthdate).
-function setupBirthdayRemove() {
-  const trigger = document.querySelector("[data-birthday-remove]")
-  const modal = document.getElementById("birthday-remove-modal")
-  if (!trigger || !modal || !once(modal, "birthdayRemove")) return
-
-  const confirmBtn = modal.querySelector("[data-birthday-remove-confirm]")
-  let lastFocused = null
-
-  const open = () => {
-    lastFocused = document.activeElement
-    modal.classList.remove("hidden")
-    confirmBtn?.focus()
-  }
-  const close = () => {
-    modal.classList.add("hidden")
-    if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus()
-    lastFocused = null
-  }
-
-  trigger.addEventListener("click", (e) => {
-    e.preventDefault()
-    open()
-  })
-
-  confirmBtn?.addEventListener("click", () => {
-    const form = trigger.form
-    close()
-    if (form && form.requestSubmit) {
-      form.requestSubmit(trigger)
-    } else if (form) {
-      // Fallback for browsers without requestSubmit: carry clear_birthdate by hand.
-      const hidden = document.createElement("input")
-      hidden.type = "hidden"
-      hidden.name = trigger.name
-      hidden.value = trigger.value
-      form.appendChild(hidden)
-      form.submit()
-    }
-  })
-
-  // Cancel button and backdrop dismiss without removing anything.
-  modal.addEventListener("click", (e) => {
-    if (
-      e.target.closest("[data-birthday-remove-cancel]") ||
-      e.target.hasAttribute("data-birthday-remove-backdrop")
-    ) {
-      close()
-    }
-  })
-
-  // Esc closes; Tab cycles between the two buttons so focus can't slip behind
-  // the modal. (The keyboard-shortcuts handler also swallows shortcuts while a
-  // [data-block-shortcuts] modal is open, so "n"/"g …" don't fire behind it.)
-  modal.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      e.preventDefault()
-      close()
-      return
-    }
-    if (e.key !== "Tab") return
-    const buttons = modal.querySelectorAll("button")
-    if (buttons.length === 0) return
-    const first = buttons[0]
-    const last = buttons[buttons.length - 1]
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  })
-}
-onReady(setupBirthdayRemove)
-
 // The one-time welcome questions (see welcome_components.ex), floating over the
 // profile a brand-new member's registration PIN landed them on. The ✕ and the
 // "Skip for now" button are ordinary submits carrying `skip`, so the window
@@ -3437,8 +3297,8 @@ onReady(setupBirthdayRemove)
 // to answer, Esc and a click on the backdrop, and routes both through that same
 // submit. Closing IS the answer -- the server stamps welcome_completed_at and
 // never asks again -- so there is no client-side "hide" that would leave the
-// two sides disagreeing. (The keyboard-shortcuts handler leaves Esc to a
-// [data-block-shortcuts] dialog, which this is.)
+// two sides disagreeing. (The keyboard-shortcuts handler leaves Esc to any
+// open dialog, and [data-block-shortcuts] is how this one says it is open.)
 function setupWelcomeModal() {
   const modal = document.getElementById("welcome-modal")
   const skip = document.getElementById("welcome-skip")
@@ -3455,90 +3315,28 @@ onReady(setupWelcomeModal)
 // it flips, in either direction: taking part means posts leave vutuv for good,
 // and leaving asks the other servers to forget an account they may then not show
 // again. Both are unreversible, so the submit is intercepted and the matching
-// dialog opened; its confirm button fills the `fediverse_ack` field and submits
-// for real. With JS off nothing here runs and the plain submit lands on the
-// server-side confirmation page, which asks the same question — the switch can
+// dialog opened; its confirm button submits for real with `fediverse_ack`.
+// With JS off nothing here runs and the plain submit lands on the server-side
+// confirmation page, which asks the same question — the switch can
 // never flip unacknowledged.
 function setupFediverseConsent() {
   const form = document.getElementById("fediverse-form")
   if (!form || !once(form, "fediverseConsent")) return
 
   const checkbox = form.querySelector("[data-fediverse-switch]")
-  const ack = form.querySelector("[data-fediverse-ack]")
-  const modals = {
-    true: document.getElementById("fediverse-consent-on"),
-    false: document.getElementById("fediverse-consent-off"),
-  }
-  if (!checkbox || !ack) return
-
-  let openModal = null
-  let lastFocused = null
-
-  const close = () => {
-    openModal?.classList.add("hidden")
-    openModal = null
-    if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus()
-    lastFocused = null
-  }
-
-  const open = (modal) => {
-    lastFocused = document.activeElement
-    openModal = modal
-    modal.classList.remove("hidden")
-    modal.querySelector("[data-fediverse-consent-confirm]")?.focus()
-  }
+  if (!checkbox) return
 
   form.addEventListener("submit", (e) => {
     // Only the switch itself needs acknowledging; saving the other settings on
-    // this page must not raise a dialog about a change nobody made.
-    if (ack.value === "1" || checkbox.checked === checkbox.defaultChecked) return
+    // this page must not raise a dialog about a change nobody made. The
+    // dialog's own confirm button is the acknowledgement.
+    if (e.submitter?.name === "fediverse_ack" || checkbox.checked === checkbox.defaultChecked) return
 
-    const modal = modals[String(checkbox.checked)]
-    if (!modal) return
+    const modal = document.getElementById(`fediverse-consent-${checkbox.checked ? "on" : "off"}`)
+    if (!modal?.showModal) return
 
     e.preventDefault()
-    open(modal)
-  })
-
-  Object.values(modals).forEach((modal) => {
-    if (!modal) return
-
-    modal.addEventListener("click", (e) => {
-      if (e.target.closest("[data-fediverse-consent-confirm]")) {
-        ack.value = "1"
-        close()
-        form.requestSubmit ? form.requestSubmit() : form.submit()
-        return
-      }
-
-      if (
-        e.target.closest("[data-fediverse-consent-cancel]") ||
-        e.target.hasAttribute("data-fediverse-consent-backdrop")
-      ) {
-        close()
-      }
-    })
-
-    // Esc closes; Tab cycles inside the dialog so focus can't slip behind it.
-    modal.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault()
-        close()
-        return
-      }
-      if (e.key !== "Tab") return
-      const buttons = modal.querySelectorAll("button")
-      if (buttons.length === 0) return
-      const first = buttons[0]
-      const last = buttons[buttons.length - 1]
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    })
+    modal.showModal()
   })
 }
 onReady(setupFediverseConsent)
@@ -3547,17 +3345,10 @@ onReady(setupFediverseConsent)
 // <details> toggle does everything except light-dismiss, so close any open
 // menu when clicking outside it or pressing Escape. Event delegation keeps
 // this working for menus added to the DOM later.
-document.addEventListener("click", (e) => {
-  document.querySelectorAll("details[data-menu][open]").forEach((menu) => {
-    if (!menu.contains(e.target)) menu.removeAttribute("open")
-  })
-})
+document.addEventListener("click", (e) => closeCardMenus(e.target))
 
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return
-  document
-    .querySelectorAll("details[data-menu][open]")
-    .forEach((menu) => menu.removeAttribute("open"))
+  if (e.key === "Escape") closeCardMenus()
 })
 
 // Multipart enctype fallback (issue #1227). One member's Safari submitted the
@@ -3648,7 +3439,7 @@ function loadFullVideo(control) {
   const figure = control.closest("[data-video-figure]")
   const video = figure && figure.querySelector("video[data-video-player]")
   const raw = figure && figure.getAttribute("data-hd-sources")
-  if (!video || !raw || figure.hasAttribute("data-hd-loaded")) return
+  if (!video || !raw || figure.hasAttribute(HD_LOADED)) return
   let sources = []
   try {
     sources = JSON.parse(raw)
@@ -3672,7 +3463,7 @@ function loadFullVideo(control) {
       if (at > 0) video.currentTime = at
       if (playing) video.play().catch(() => {})
       control.removeAttribute("aria-busy")
-      figure.setAttribute("data-hd-loaded", "")
+      figure.setAttribute(HD_LOADED, "")
     },
     { once: true },
   )

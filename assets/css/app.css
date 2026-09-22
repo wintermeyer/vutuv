@@ -716,3 +716,16 @@ html[data-nav-pressing] main {
     background: var(--color-slate-700);
   }
 }
+
+/* ---------- Panels that follow the control in front of them ----------
+   Pure CSS, so the panel follows the input live with JS off too.
+   The Jobsuche details (issue #928, user/edit.html.heex and the welcome
+   questions) appear once an availability is chosen; "Not open to work" is the
+   blank option. The Arbeitszeugnis publish confirmation
+   (job_reference/form_content.html.heex) appears only while "show publicly"
+   is ticked, since it confirms that act and nothing else. */
+[data-employment-status-field]:has([data-employment-status-select] option[value=""]:checked)
+  [data-jobsearch-details],
+[data-public-visibility]:not(:has([data-public-toggle]:checked)) [data-public-consent] {
+  display: none;
+}

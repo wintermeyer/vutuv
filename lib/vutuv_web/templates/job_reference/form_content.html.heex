@@ -295,7 +295,7 @@
     <legend>{gettext("Visibility")}</legend>
 
     <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-      <%= checkbox f, :public?, class: checkbox_class() %>
+      <%= checkbox f, :public?, class: checkbox_class(), data: [public_toggle: true] %>
       <span>
         {gettext("Show this reference publicly on my profile")}
         <span class="mt-1 block text-xs text-slate-600 dark:text-slate-400">
@@ -314,9 +314,8 @@
           form has on saves that do not need it. The changeset asks for it on
           the private→public step alone, so the markup now says the same.
 
-          The wrapper carries no display utility: `hidden` is the only thing
-          governing it (issue #880), and the server renders it visible, so with
-          JS off the box is simply there to tick. --%>
+          A rule in app.css hides it while "show publicly" is unticked, so it
+          follows the box with JS off too. --%>
     <div
       :if={is_nil(assigns[:reference]) || !@reference.public?}
       class="mt-3"

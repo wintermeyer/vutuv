@@ -348,7 +348,6 @@ defmodule VutuvWeb.ImportConnectionsLive do
         class="mt-6 space-y-4"
       >
         <label
-          data-dropzone
           phx-drop-target={@uploads.archive.ref}
           class="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition-colors hover:border-brand-400 hover:bg-brand-50 has-[:focus-visible]:border-brand-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-brand-500 dark:hover:bg-slate-800"
         >

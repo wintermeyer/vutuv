@@ -55,12 +55,6 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
       >
         <.form_error changeset={@changeset} />
 
-        <%!-- Set to "1" by whichever consent modal the member agreed to. Empty
-              on a plain submit, which sends them to the full-page confirmation
-              instead (see fediverse_confirm.html.heex), so the switch cannot
-              flip unacknowledged with or without JavaScript. --%>
-        <input type="hidden" name="fediverse_ack" value="" data-fediverse-ack />
-
         <.setting_toggle label={gettext("Take part in the Fediverse")}>
           <:checkbox>
             <%= checkbox f, :fediverse_followers?, class: checkbox_class(), data: [fediverse_switch: true] %>
@@ -229,39 +223,32 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
     </.card>
   </div>
 
-  <%!-- The two consent dialogs, one per direction of the switch. Hidden until
-        the fediverseConsent enhancement in app.js opens the matching one on
-        submit; its confirm button sets the ack field and submits for real. With
-        JS off neither is ever seen and the plain submit lands on the
-        full-page confirmation, which asks the same question with the same
-        words. Same overlay recipe as the birthday-remove dialog. --%>
-  <div
+  <%!-- The two consent dialogs, one per direction of the switch, opened by the
+        fediverseConsent enhancement in app.js on submit. The confirm button is
+        a submitter of the form carrying `fediverse_ack=1`; a plain submit
+        carries no ack and lands on the full-page confirmation (see
+        fediverse_confirm.html.heex), which asks the same question with the
+        same words, so the switch cannot flip unacknowledged with or without
+        JavaScript. --%>
+  <.modal_dialog
     :for={
       {id, on?} <- [{"fediverse-consent-on", true}, {"fediverse-consent-off", false}]
     }
     id={id}
-    class="hidden fixed inset-0 z-[60] items-center justify-center p-4 [&:not(.hidden)]:flex"
-    role="dialog"
-    aria-modal="true"
     aria-labelledby={"#{id}-title"}
-    data-block-shortcuts
   >
-    <div data-fediverse-consent-backdrop class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm">
+    <.fediverse_consent_notice switching_on={on?} title_id={"#{id}-title"} />
+    <div class="mt-6 flex flex-wrap justify-end gap-3">
+      <.button variant="secondary" data-modal-close>
+        {gettext("Cancel")}
+      </.button>
+      <.button type="submit" form="fediverse-form" name="fediverse_ack" value="1" autofocus>
+        <%= if on? do %>
+          {gettext("I understand, take part")}
+        <% else %>
+          {gettext("I understand, switch off")}
+        <% end %>
+      </.button>
     </div>
-    <div class="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-      <.fediverse_consent_notice switching_on={on?} title_id={"#{id}-title"} />
-      <div class="mt-6 flex flex-wrap justify-end gap-3">
-        <.button variant="secondary" data-fediverse-consent-cancel>
-          {gettext("Cancel")}
-        </.button>
-        <.button data-fediverse-consent-confirm>
-          <%= if on? do %>
-            {gettext("I understand, take part")}
-          <% else %>
-            {gettext("I understand, switch off")}
-          <% end %>
-        </.button>
-      </div>
-    </div>
-  </div>
+  </.modal_dialog>
 </.settings_shell>

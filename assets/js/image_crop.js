@@ -22,10 +22,7 @@
 // the plain file input still submits and the server falls back to its centered
 // crop — exactly the behaviour from before this file existed.
 
-import { buildStage, createCropStage, cropString, el } from "./crop_stage"
-import { bindEscape, buttonPrimary, buttonSecondary } from "./util"
-
-const MAX_ZOOM = 4 // up to 4x past "cover" fit
+import { MAX_ZOOM, buildCropDialog, createCropStage, cropString } from "./crop_stage"
 
 // Delegated so it works regardless of when the inputs appear in the DOM.
 function register() {
@@ -104,7 +101,8 @@ function openCropper(input, hidden, bitmap) {
     zoom: input.dataset.cropZoom || "Zoom",
   }
 
-  const ui = buildModal(aspect, labels)
+  // `cancel` is a function declaration below, hoisted, so it can be named here.
+  const ui = buildCropDialog(labels, cancel)
   document.body.appendChild(ui.overlay)
 
   // st owns the stage geometry — layout, cover-fit zoom floor, offsets and
@@ -189,64 +187,19 @@ function openCropper(input, hidden, bitmap) {
   function save() {
     // The visible frame maps to this image-space rectangle; hand the server
     // the fractions Vutuv.Uploads.Crop expects.
-    const { x, y, w, h } = st.fractions()
-    if (hidden) hidden.value = cropString({ x, y, w, h })
-    showPreview(input, ui, x, y, w, h, bitmap)
+    const crop = st.fractions()
+    if (hidden) hidden.value = cropString(crop)
+    showPreview(input, crop, bitmap)
     st.destroy()
   }
 
   ui.save.addEventListener("click", save)
   ui.cancel.addEventListener("click", cancel)
-  ui.overlay.addEventListener("click", (e) => {
-    if (e.target === ui.overlay) cancel()
-  })
-  bindEscape(ui.overlay, cancel)
-}
-
-// Builds the modal DOM. Tailwind scans assets/js, so these utility classes are
-// part of the build (see app.css `@source "../js"`).
-function buildModal(aspect, labels) {
-  const overlay = el("div", "fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4")
-  const dialog = el(
-    "div",
-    "max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-xl dark:bg-slate-900"
-  )
-  const title = el("h2", "text-base font-semibold text-slate-900 dark:text-white", labels.title)
-  const hint = el("p", "mt-1 text-xs text-slate-600 dark:text-slate-400", labels.hint)
-
-  const { stage, canvas } = buildStage()
-
-  const zoom = el("input", "mt-3 block w-full accent-brand-600")
-  zoom.type = "range"
-  zoom.min = "1"
-  zoom.max = String(MAX_ZOOM)
-  zoom.step = "0.01"
-  zoom.value = "1"
-  zoom.setAttribute("aria-label", labels.zoom)
-
-  const actions = el("div", "mt-4 flex items-center justify-end gap-3")
-  const cancel = el(
-    "button",
-    buttonSecondary,
-    labels.cancel
-  )
-  cancel.type = "button"
-  const save = el(
-    "button",
-    buttonPrimary,
-    labels.save
-  )
-  save.type = "button"
-  actions.append(cancel, save)
-
-  dialog.append(title, hint, stage, zoom, actions)
-  overlay.appendChild(dialog)
-  return { overlay, dialog, stage, canvas, zoom, save, cancel }
 }
 
 // After Save, show the chosen crop as a small preview next to the input so the
 // member sees what they picked without reopening the modal.
-function showPreview(input, ui, x, y, w, h, bitmap) {
+function showPreview(input, { x, y, w, h }, bitmap) {
   const img = document.querySelector(`[data-crop-preview="${input.dataset.cropTarget}"]`)
   if (!img) return
   const sx = x * bitmap.width

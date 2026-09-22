@@ -29,9 +29,9 @@ export function onReady(fn) {
 // must never compete with the page it is speculating about. Returns a handle for
 // cancelIdle(). Safari has no requestIdleCallback, so it falls back to a timeout
 // long enough to be clear of the first paint and the LiveView connect.
-export function whenIdle(fn, timeout = 3000) {
+export function whenIdle(fn) {
   if (typeof requestIdleCallback === "function") {
-    return { idle: requestIdleCallback(fn, { timeout }) }
+    return { idle: requestIdleCallback(fn, { timeout: 3000 }) }
   }
 
   return { timer: setTimeout(fn, 1500) }
@@ -109,6 +109,22 @@ export function request(url, opts = {}) {
   })
 }
 
+// GET a JSON answer from one of our own routes, or null on any failure — for
+// lookups whose server re-checks on submit anyway, so a hiccup stays quiet.
+// **No** `accept: application/json`: these routes ride the ordinary browser
+// pipeline, whose `accepts ["html"]` reads an explicit JSON Accept as a request
+// for an agent document (or 406s it); fetch's default */* negotiates fine.
+export async function getJSON(url, params = {}) {
+  if (!url) return null
+
+  try {
+    const response = await request(`${url}?${new URLSearchParams(params)}`)
+    return response.ok ? await response.json() : null
+  } catch (_error) {
+    return null
+  }
+}
+
 // POST a JSON body with the CSRF token and resolve the parsed JSON response.
 export function postJSON(url, body) {
   return request(url, {
@@ -116,6 +132,14 @@ export function postJSON(url, body) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   }).then((resp) => resp.json())
+}
+
+// Shut every open card ⋯ menu (<details data-menu>, VutuvWeb.UI.card_menu)
+// except `keep`, the one a click landed in.
+export function closeCardMenus(keep = null) {
+  document.querySelectorAll("details[data-menu][open]").forEach((menu) => {
+    if (!keep || !menu.contains(keep)) menu.removeAttribute("open")
+  })
 }
 
 // True when the viewer asked for less motion; gate every decorative animation on
@@ -237,13 +261,33 @@ export function copyText(text) {
   }
 }
 
-// The kit's button recipe, for the two dialogs JavaScript builds itself (the
-// avatar crop modal and the post-photo crop modal). `VutuvWeb.UI.button_class/1`
-// is the owner on the server side and cannot reach here, so this is the one
-// deliberate copy — kept in one place rather than four, and kept honest by
-// `button_recipe_test.exs`, which scans this directory too. Both dialogs used
-// to spell it themselves and had missed the 40px height, so a crop dialog's
-// Cancel/Save stood 4px shorter than every button around it.
+// The "Copied" answer of a copy control: `text` stands in `label` for `ms`,
+// then the label's own words come back and `after` runs. A second flash inside
+// that window restarts it instead of taking the flashed word for the original.
+const flashes = new WeakMap()
+
+export function flashText(label, text, ms = 1500, after = null) {
+  const running = flashes.get(label)
+  if (running) clearTimeout(running.timer)
+  const was = running ? running.was : label.textContent
+  label.textContent = text
+
+  const timer = setTimeout(() => {
+    flashes.delete(label)
+    if (!label.isConnected) return
+    label.textContent = was
+    after?.()
+  }, ms)
+  flashes.set(label, { was, timer })
+}
+
+// The kit's button recipe, for the one dialog JavaScript builds itself (the
+// crop dialog shell in crop_stage.js, which both croppers open).
+// `VutuvWeb.UI.button_class/1` is the owner on the server side and cannot
+// reach here, so this is the one deliberate copy, kept honest by
+// `button_recipe_test.exs`, which scans this directory too. The two croppers
+// used to spell it themselves and had missed the 40px height, so a crop
+// dialog's Cancel/Save stood 4px shorter than every button around it.
 const BUTTON_BASE =
   "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
 
