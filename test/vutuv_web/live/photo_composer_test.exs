@@ -655,15 +655,60 @@ defmodule VutuvWeb.PhotoComposerTest do
     } do
       image = upload_photo!(live, user)
 
-      assert has_element?(live, ~s([data-photo-alt-missing="#{image.id}"]))
+      # The amber ALT is what an author looking for the description taps
+      # first, so it has to be part of the photo's button.
+      assert has_element?(
+               live,
+               ~s(button[phx-click="photo-open"][phx-value-id="#{image.id}"] [data-photo-alt-missing="#{image.id}"])
+             )
 
       open_panel(live, image)
+
+      assert has_element?(
+               live,
+               ~s(input[name="photo[#{image.id}][alt]"][maxlength="#{PostImage.max_alt_length()}"])
+             )
+
+      assert has_element?(
+               live,
+               ~s(input[name="photo[#{image.id}][caption]"][maxlength="#{PostImage.max_caption_length()}"])
+             )
 
       live
       |> form("#composer-form", %{"photo" => %{image.id => %{"alt" => "A blue rectangle"}}})
       |> render_change()
 
       refute has_element?(live, ~s([data-photo-alt-missing="#{image.id}"]))
+    end
+
+    # A text longer than its column used to fail the settings write after the
+    # fact: the post appeared, its alt text and caption gone without a word.
+    # `maxlength` stops the typing; a restored draft or a crafted submit still
+    # arrives here.
+    test "a description too long to save stops the post instead of vanishing", %{
+      live: live,
+      user: user
+    } do
+      image = upload_photo!(live, user)
+      too_long = String.duplicate("a", PostImage.max_alt_length() + 1)
+
+      open_panel(live, image)
+
+      live
+      |> form("#composer-form", %{
+        "photo" => %{image.id => %{"caption" => "Abendlicht", "alt" => too_long}}
+      })
+      |> render_change()
+
+      # Closed again, so the submit carries no photo texts, like a restored
+      # draft whose panel nobody opened.
+      open_panel(live, image)
+      live |> form("#composer-form") |> render_submit()
+
+      refute Repo.get_by(Post, user_id: user.id)
+      assert has_element?(live, "#composer-error")
+      # The panel reopens on the photo in question, so the field is in view.
+      assert has_element?(live, ~s(input[name="photo[#{image.id}][alt]"]))
     end
   end
 
