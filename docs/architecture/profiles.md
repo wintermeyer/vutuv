@@ -511,6 +511,36 @@ inline markers stripped to their text, a `[label](url)` link kept as
 the raw source (CommonMark by spec), and the CV builder's one-line entry
 hints use `MarkdownBlocks.plain/1` so no literal `**markers**` show there.
 
+## The CV card's thumbnail
+
+The profile's CV card shows the CV's first page, and the page is the print
+document itself, not a stored picture. `VutuvWeb.CV.first_page_document/2`
+builds it through the viewer's eyes on every profile load, one more arm of
+`UserProfileLive.load_profile/1`'s `Vutuv.Concurrent.run/1`, and the card draws
+it in a sandboxed `srcdoc` frame scaled to 88 px. So nothing has to be
+regenerated when a member edits a station, and each viewer sees the CV they
+would download (the owner's private email included, nobody else's).
+
+Three things keep it cheap. Entries stop once roughly a page of text is
+reached, and the lists the print puts after them go too, so a long history
+does not ride along below the crop. The photo is the served avatar's URL
+(`build(user, photo: :url)`) rather than the data URI the print view derives
+from the original. And the server renders the page once: the `CVLoupe` hook
+(`assets/js/cv_loupe.js`) clones the frame on the first mouse hover. Measured
+on the dev copy (2026-09-22, 1,307 members with a work history): the document
+is 4.3 KB at the median, 7.7 KB at p95 and 14.5 KB at most, and it builds in
+0.7 ms at the median, 2.6 ms at p95.
+
+It is built from the bare member row with the CV's own preloads, which repeats
+some of the profile's reads. Reusing the profile's preloads would cost fewer
+queries, but those are capped for the cards (languages, links, certificates),
+and a thumbnail built from them would quietly stop matching the download
+whenever a cap changes.
+
+The build is a `Vutuv.Concurrent.run/1` arm, and `run/1` hands each task the
+caller's Gettext locale; before it did, the headings came out English on a
+German page.
+
 ## Languages profile section
 
 Members list the **languages they speak** with a proficiency level (issue #865,

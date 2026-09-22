@@ -52,6 +52,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Tags
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
+  alias VutuvWeb.CV
   alias VutuvWeb.EducationHTML
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Live.ComposerPanel
@@ -870,7 +871,7 @@ defmodule VutuvWeb.UserProfileLive do
     # them, not the sum. The pin is taken out of the timeline afterwards
     # (`without_pinned/2`) — read together, it is not known while the timeline
     # runs — and one engagement read serves both.
-    [user, pinned_post, entries, press | count_rows] =
+    [user, pinned_post, entries, press, cv_page | count_rows] =
       Concurrent.run([
         fn -> preload_user_for_show(base_user, owner?) end,
         fn -> Vutuv.Posts.pinned_post(base_user, current_user) end,
@@ -879,7 +880,12 @@ defmodule VutuvWeb.UserProfileLive do
         # come back in one read (fifteen rows at the caps), and the card needs
         # the rows themselves rather than a number — a pending picture is drawn
         # for its owner and stood in for by a pixelated tile for everybody else.
-        fn -> PressKit.public_shelves(base_user, current_user) end
+        fn -> PressKit.public_shelves(base_user, current_user) end,
+        # The CV card's thumbnail. Built from the bare row with the CV's own
+        # preloads, not from the profile's: those cap languages, links and
+        # certificates for their cards, and the thumbnail has to show the page
+        # the download prints.
+        fn -> CV.first_page_document(base_user, current_user) end
         | count_loads(base_user, current_user)
       ])
 
@@ -1008,6 +1014,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:work_info, profile_headline(user, header_job, 60))
     |> assign(:recommended_users, recommended_users)
     |> assign(:suggested_posts_by_id, suggested_posts_by_id)
+    |> assign(:cv_page, cv_page)
     |> assign(:press, press)
     |> assign(:totals, totals)
     # Builds the social slice (counts, header pill state, follow previews); reads

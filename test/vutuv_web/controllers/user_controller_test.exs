@@ -568,9 +568,10 @@ defmodule VutuvWeb.UserControllerTest do
       |> get(~p"/#{user}")
       |> html_response(200)
 
-    assert html =~ "Koblenz"
     # A German viewer looking at a German address does not need "Deutschland".
-    refute html =~ "Deutschland"
+    # The card, not the page: the CV card's thumbnail prints the whole address.
+    assert text_of(html, "#profile-addresses") =~ "Koblenz"
+    refute text_of(html, "#profile-addresses") =~ "Deutschland"
 
     # The address itself is the one link, to the viewer's map service (Google
     # for a logged-out viewer); the other providers are not offered here.

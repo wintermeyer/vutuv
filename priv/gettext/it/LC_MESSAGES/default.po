@@ -8997,12 +8997,15 @@ msgstr ""
 "solo ciò che può già vedere lì, e gli indirizzi e-mail privati compaiono "
 "solo nel tuo."
 
-#: lib/vutuv_web/components/ui.ex:1950
+#: lib/vutuv_web/components/ui.ex:1970
 #, elixir-autogen, elixir-format
-msgid "This profile as a formatted CV for job applications. Open it to pick what to include, anonymize it, print or download."
-msgstr ""
-"Questo profilo come CV impaginato per le candidature. Aprilo per scegliere "
-"cosa includere, renderlo anonimo, stamparlo o scaricarlo."
+msgid "CV preview"
+msgstr "Anteprima del CV"
+
+#: lib/vutuv_web/components/ui.ex:1987
+#, elixir-autogen, elixir-format
+msgid "This profile as a CV for job applications: pick what to include, anonymize, print or download."
+msgstr "Questo profilo come CV per le candidature: scegliere cosa includere, rendere anonimo, stampare o scaricare."
 
 #: lib/vutuv_web/templates/export/index.html.heex:17
 #, elixir-autogen, elixir-format

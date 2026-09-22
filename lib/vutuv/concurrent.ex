@@ -28,14 +28,27 @@ defmodule Vutuv.Concurrent do
   exactly as it did when these ran in a row. `$callers` travels into each
   task, which is what lets the Ecto SQL sandbox find the test's connection —
   so these stay plain `Task`s rather than anything supervised.
+
+  The caller's Gettext locale travels too. A task starts with an empty process
+  dictionary, which is where Gettext keeps it, so a load that renders text
+  (the profile's CV thumbnail) came out English on a German page.
   """
 
   @max_concurrency 4
 
   @doc "Runs the zero-arity `loads` side by side and returns their results in order."
   def run(loads) when is_list(loads) do
+    locale = Gettext.get_locale(VutuvWeb.Gettext)
+
     loads
-    |> Task.async_stream(& &1.(), max_concurrency: @max_concurrency, timeout: :infinity)
+    |> Task.async_stream(
+      fn load ->
+        Gettext.put_locale(VutuvWeb.Gettext, locale)
+        load.()
+      end,
+      max_concurrency: @max_concurrency,
+      timeout: :infinity
+    )
     |> Enum.map(fn {:ok, result} -> result end)
   end
 end

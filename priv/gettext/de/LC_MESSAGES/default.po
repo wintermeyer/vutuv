@@ -9033,13 +9033,15 @@ msgstr ""
 "Besuchers enthält nur, was er dort ohnehin sehen kann, und private E-Mail-"
 "Adressen erscheinen nur in Ihrem eigenen."
 
-#: lib/vutuv_web/components/ui.ex:1950
+#: lib/vutuv_web/components/ui.ex:1970
 #, elixir-autogen, elixir-format
-msgid "This profile as a formatted CV for job applications. Open it to pick what to include, anonymize it, print or download."
-msgstr ""
-"Dieses Profil als formatierter Lebenslauf für Bewerbungen. Öffnen Sie ihn, "
-"um auszuwählen, was enthalten sein soll, ihn zu anonymisieren, zu drucken "
-"oder herunterzuladen."
+msgid "CV preview"
+msgstr "Lebenslauf-Vorschau"
+
+#: lib/vutuv_web/components/ui.ex:1987
+#, elixir-autogen, elixir-format
+msgid "This profile as a CV for job applications: pick what to include, anonymize, print or download."
+msgstr "Dieses Profil als Lebenslauf für Bewerbungen: auswählen, anonymisieren, drucken oder herunterladen."
 
 #: lib/vutuv_web/templates/export/index.html.heex:17
 #, elixir-autogen, elixir-format
