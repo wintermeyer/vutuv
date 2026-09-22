@@ -28,6 +28,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
+  alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
@@ -392,12 +393,18 @@ defmodule VutuvWeb.Fediverse.Docs do
     |> Map.put("published", note["published"])
   end
 
-  @doc "Update(Note): an edited public post (id unique per edit)."
+  @doc """
+  Update(Note): an edited public post, or one whose late picture arrived. Its
+  Note names `updated` as the moment it is built, never `updated_at`: Mastodon
+  keeps its old copy unless that stamp is newer than the one it holds, and a
+  released picture moves no `updated_at` (see docs/architecture/fediverse.md,
+  "Post lifecycle"). The same stamp keeps the id unique.
+  """
   def update_activity(%Post{} = post, user) do
-    note = note(post, user)
-    stamp = post.updated_at |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601()
+    updated = iso8601(NaiveDateTime.utc_now())
+    note = post |> note(user) |> Map.put("updated", updated)
 
-    envelope(user, "Update", note["id"] <> "#update-#{stamp}", note)
+    envelope(user, "Update", note["id"] <> "#update-" <> updated, note)
   end
 
   @doc "Delete(Tombstone): a removed post (or one whose audience closed)."
@@ -722,8 +729,14 @@ defmodule VutuvWeb.Fediverse.Docs do
     }
   end
 
-  @doc "The Note a public post federates as."
-  def note(%Post{} = post, user) do
+  @doc """
+  The Note a public post federates as, its added words (the review and
+  license lines) in the post's own language, the one `contentMap` declares.
+  """
+  def note(%Post{} = post, user),
+    do: PostComponents.in_post_language(post, fn -> build_note(post, user) end)
+
+  defp build_note(post, user) do
     remote = remote_target(post)
     # The answered post, looked up once for both signals it feeds (issue #1739):
     # the `inReplyTo` that says this *is* an answer, and the `cc`/`Mention` that
@@ -747,6 +760,13 @@ defmodule VutuvWeb.Fediverse.Docs do
     |> put_in_reply_to(remote || parent)
     |> put_tag(post, remote, answered, hashtags)
     |> put_attachments(post)
+    |> put_updated(post)
+  end
+
+  # A server that fetches an edited post by its id learns that it changed, the
+  # same fact `update_activity/2` delivers.
+  defp put_updated(note, post) do
+    if Posts.edited?(post), do: Map.put(note, "updated", iso8601(post.updated_at)), else: note
   end
 
   # The author's declared language federates as AS2 `contentMap` (issue
@@ -991,7 +1011,9 @@ defmodule VutuvWeb.Fediverse.Docs do
       |> Phoenix.HTML.safe_to_string()
 
     (mention_html(remote) <>
-       body_html <> PostComponents.review_content_html(post) <> hashtag_line(hashtags))
+       body_html <>
+       PostComponents.review_content_html(post) <>
+       PostComponents.photo_license_content_html(post) <> hashtag_line(hashtags))
     |> absolutize()
     |> VutuvWeb.Markdown.compact_html()
   end
@@ -1149,6 +1171,7 @@ defmodule VutuvWeb.Fediverse.Docs do
         }
         |> put_name(image.alt)
         |> put_size(image.width, image.height)
+        |> put_license(post.license)
       end) ++ video_attachments(post) ++ cover_attachments(post)
 
     case attachments do
@@ -1197,6 +1220,15 @@ defmodule VutuvWeb.Fediverse.Docs do
     do: Map.merge(attachment, %{"width" => width, "height" => height})
 
   defp put_size(attachment, _width, _height), do: attachment
+
+  # The photo's license for Pixelfed (`PhotoLicense.pixelfed/1`); Mastodon
+  # ignores the key and gets the content line instead.
+  defp put_license(attachment, license) do
+    case PhotoLicense.pixelfed(license) do
+      nil -> attachment
+      title -> Map.put(attachment, "license", title)
+    end
+  end
 
   defp cover_attachments(%Post{review: %PostReview{} = review}) do
     if PostReview.cover_ready?(review) do

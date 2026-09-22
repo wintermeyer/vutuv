@@ -133,9 +133,15 @@ defmodule VutuvWeb.Feeds do
       |> VutuvWeb.Markdown.render_post(Posts.released_images(post))
       |> Phoenix.HTML.safe_to_string()
 
-    # A review sidecar rides inside the item content (same as the federated
-    # Note): RSS readers know nothing of review cards.
-    (body_html <> PostComponents.review_content_html(post))
+    # A review sidecar and the photos' license ride inside the item content
+    # (same as the federated Note): RSS readers know nothing of review cards.
+    trailer =
+      PostComponents.in_post_language(post, fn ->
+        PostComponents.review_content_html(post) <>
+          PostComponents.photo_license_content_html(post)
+      end)
+
+    (body_html <> trailer)
     |> absolutize_urls()
   end
 

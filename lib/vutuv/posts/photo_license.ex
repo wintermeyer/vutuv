@@ -25,30 +25,34 @@ defmodule Vutuv.Posts.PhotoLicense do
   # Ordered as the composer's select shows them: the safe default first, then
   # loosening grants.
   @licenses [
-    %{value: "arr", short: nil, url: nil, spdx: nil},
+    %{value: "arr", short: nil, url: nil, spdx: nil, pixelfed: nil},
     %{
       value: "cc-by-4.0",
       short: "CC BY 4.0",
       url: "https://creativecommons.org/licenses/by/4.0/",
-      spdx: "CC-BY-4.0"
+      spdx: "CC-BY-4.0",
+      pixelfed: "CC BY"
     },
     %{
       value: "cc-by-sa-4.0",
       short: "CC BY-SA 4.0",
       url: "https://creativecommons.org/licenses/by-sa/4.0/",
-      spdx: "CC-BY-SA-4.0"
+      spdx: "CC-BY-SA-4.0",
+      pixelfed: "CC BY-SA"
     },
     %{
       value: "cc-by-nc-4.0",
       short: "CC BY-NC 4.0",
       url: "https://creativecommons.org/licenses/by-nc/4.0/",
-      spdx: "CC-BY-NC-4.0"
+      spdx: "CC-BY-NC-4.0",
+      pixelfed: "CC BY-NC"
     },
     %{
       value: "cc0-1.0",
       short: "CC0 1.0",
       url: "https://creativecommons.org/publicdomain/zero/1.0/",
-      spdx: "CC0-1.0"
+      spdx: "CC0-1.0",
+      pixelfed: "Public Domain (CC0)"
     }
   ]
 
@@ -107,6 +111,14 @@ defmodule Vutuv.Posts.PhotoLicense do
   license rather than a translated sentence.
   """
   def spdx(value), do: find(value).spdx
+
+  @doc """
+  The title Pixelfed stores a remote photo's license under, or `nil` for
+  all-rights-reserved. Pixelfed reads a `license` key on each attachment and
+  matches it against its own titles (`License::nameToId`), so a URL or an
+  SPDX id there is silently dropped.
+  """
+  def pixelfed(value), do: find(value).pixelfed
 
   @doc """
   Whether this license grants reuse at all. Drives the one-line explainer

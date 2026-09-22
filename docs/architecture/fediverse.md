@@ -633,8 +633,14 @@ every activity of a member it finds no key for, silently.
   public post enqueues `Create(Note)`, editing `Update`, deleting
   `Delete(Tombstone)` through the one revocation chokepoint (`revoke_post/1`, see
   the revocation section); an edit that closes the audience revokes
-  too. A reply always carries `inReplyTo` and names the parent's author in `cc`
-  and as a `Mention` only when that author federates (issue #1739). A public
+  too. The `Update`'s Note always carries `updated`, stamped when the Update is
+  built: Mastodon changes its copy only when that stamp is newer than the one
+  it holds, and a picture released after delivery moves no `updated_at`.
+  Without it every edit made here reached its inbox and changed nothing
+  there. A fetched Note
+  carries it once `Posts.edited?/1` says the post was edited. A reply always
+  carries `inReplyTo` and names the parent's author in `cc` and as a
+  `Mention` only when that author federates (issue #1739). A public
   reply to a public post here also goes to the servers following the parent's
   author, member or page (`Fediverse.recipients/2`), as Mastodon does for an
   answer under a local post: without it an answer by somebody nobody there
@@ -647,6 +653,15 @@ every activity of a member it finds no key for, silently.
   The Note carries the member-rendered HTML with absolutized links, and image
   attachments via the public post-image proxy URLs. A public post's permalink
   answers an AP Accept with the Note (remote servers dereference ids).
+  A photo post's **license** rides twice, because ActivityPub has no property
+  for it and Mastodon reads none: a closing `Photos: CC BY 4.0 …` line in the
+  content, linked to the deed (`PostComponents.photo_license_content_html/1`,
+  the permalink's rule, so nothing for all rights reserved), and a `license`
+  key on each photo attachment in Pixelfed's title form
+  (`PhotoLicense.pixelfed/1`), the one server software known to read it
+  there. The RSS items carry the same line. These added words and the review
+  line are written in the post's `language`, not the process locale
+  (`PostComponents.in_post_language/2`).
 - **The pinned post** (issue #1110): the post a member pins to their profile
   is published as the ActivityPub **`featured` collection**, which is how
   Mastodon and friends show a pin at the top of the profile *they* render. The
