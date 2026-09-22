@@ -122,6 +122,42 @@ defmodule VutuvWeb.FeedPhotoZoomTest do
     end
   end
 
+  describe "a phone screenshot beside the text" do
+    # 589×1280, the shape of the post that prompted this: a phone screenshot
+    # at column width was a 3:4 block taller than the rest of the card.
+    test "floats as a small thumbnail and the magnifier shows it whole", %{conn: conn} do
+      user = author()
+      photo_post(user, [{589, 1280}])
+
+      html = profile_html(conn, user)
+
+      assert [gallery] = elements(html, "[data-lightbox-gallery]")
+      assert attribute(gallery, "class") =~ "float-right"
+      assert attribute(gallery, "class") =~ "w-28"
+      # The frame is feed_photo_fit/1's crop, anchored at the top, where a
+      # screenshot carries its heading.
+      assert [thumb] = elements(html, "[data-lightbox-gallery] img[data-photo-fit=thumb]")
+      assert attribute(thumb, "style") =~ "aspect-ratio: 3 / 4"
+      assert attribute(thumb, "class") =~ "object-top"
+      assert [] = elements(html, "img[data-photo-fit=crop]")
+
+      assert [corner] = elements(html, "[data-lightbox-photo][role=button]")
+      assert attribute(corner, "data-photo-src") =~ "/xl."
+    end
+
+    test "without text there is nothing to float beside, so it keeps the crop",
+         %{conn: conn} do
+      user = author()
+      image = insert(:post_image, user: user, width: 589, height: 1280)
+      {:ok, _post} = Posts.create_post(user, %{body: "", image_ids: [image.id]})
+
+      html = profile_html(conn, user)
+
+      assert [] = elements(html, "[data-lightbox-gallery].float-right")
+      assert [_] = elements(html, "img[data-photo-fit=crop]")
+    end
+  end
+
   describe "the bento mosaic" do
     test "one corner opens the set, and every tile describes its own photo", %{conn: conn} do
       user = author()
