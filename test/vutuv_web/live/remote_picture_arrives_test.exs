@@ -25,9 +25,12 @@ defmodule VutuvWeb.RemotePictureArrivesTest do
 
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.Media
+  alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Posts.Screenshots
+  alias Vutuv.RemoteMedia
   alias Vutuv.Screenshot
+  alias VutuvWeb.PostComponents
 
   setup do
     tmp =
@@ -57,8 +60,8 @@ defmodule VutuvWeb.RemotePictureArrivesTest do
 
   # A real, decodable JPEG — the store runs libvips over it, and the mosaic is
   # derived from those very pixels, so a fake binary would test nothing.
-  defp jpeg_bytes do
-    {:ok, image} = Image.new(64, 64, color: [40, 90, 160])
+  defp jpeg_bytes(width \\ 64, height \\ 64) do
+    {:ok, image} = Image.new(width, height, color: [40, 90, 160])
     {:ok, bytes} = Image.write(image, :memory, suffix: ".jpg")
     bytes
   end
@@ -118,6 +121,37 @@ defmodule VutuvWeb.RemotePictureArrivesTest do
     # the wait is — the picture has not been released, only stood in for.
     assert has_element?(view, "[data-remote-images-checking]")
     assert Repo.reload!(image).moderation == "pending"
+  end
+
+  # And nothing on the card moves when the verdict lands. The mosaic used to
+  # fill the column while a portrait was released as a narrow centred frame, and
+  # the picture's fresh `<img>` had no height until its bytes arrived.
+  test "the mosaic stands in the box the released picture takes" do
+    id = Vutuv.UUIDv7.generate()
+    {:ok, stored} = RemoteMedia.store_post_image(jpeg_bytes(300, 400), id)
+
+    waiting = %RemoteImage{
+      id: id,
+      file: stored.file,
+      width: stored.width,
+      height: stored.height,
+      moderation: "pending",
+      inserted_at: NaiveDateTime.utc_now()
+    }
+
+    mosaic = picture_box(waiting, "[data-remote-image-pixelated]")
+
+    assert {_class, "aspect-ratio: 300 / 400;"} = mosaic
+    assert picture_box(%{waiting | moderation: "approved"}, "") == mosaic
+  end
+
+  defp picture_box(image, marker) do
+    [box] =
+      (&PostComponents.remote_post_images/1)
+      |> render_component(images: [image])
+      |> elements("[data-remote-picture-box]" <> marker)
+
+    {attribute(box, "class"), attribute(box, "style")}
   end
 
   test "a link capture reaches the post's own page with no reload", %{conn: conn, tmp: tmp} do

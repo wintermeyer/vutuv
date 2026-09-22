@@ -26,6 +26,7 @@ defmodule VutuvWeb.RemotePostImagesTest do
   use ExUnit.Case, async: true
 
   import Phoenix.LiveViewTest
+  import VutuvWeb.HTMLHelpers
 
   alias Vutuv.Fediverse.RemoteImage
   alias VutuvWeb.PostComponents
@@ -81,6 +82,38 @@ defmodule VutuvWeb.RemotePostImagesTest do
     refute html =~ "grid-cols-2"
     # And that one is really being checked, so the line counts it.
     assert html =~ ~s(data-remote-images-checking="1")
+  end
+
+  # The same box as the mosaic and the released picture, wherever the picture's
+  # size is already known: a wait past the mosaic's window, and the author's
+  # cover, whose reveal would otherwise swap a full-width band for a portrait.
+  describe "the picture's own shape" do
+    defp sized(attrs),
+      do:
+        struct(
+          %RemoteImage{
+            id: Vutuv.UUIDv7.generate(),
+            file: "img-abc.avif",
+            width: 300,
+            height: 400,
+            inserted_at: ~N[2026-01-01 00:00:00]
+          },
+          attrs
+        )
+
+    test "holds the grey tile once the mosaic's window has run out" do
+      [box] = elements(render_tile([sized(moderation: "pending")]), "[data-remote-picture-box]")
+
+      assert attribute(box, "style") == "aspect-ratio: 300 / 400;"
+      assert LazyHTML.query(box, "[data-remote-image-pending]") |> Enum.count() == 1
+    end
+
+    test "holds the author's cover and the picture behind it alike" do
+      html = render_tile([sized(moderation: "approved", sensitive: true)])
+
+      assert [_cover, _picture] = boxes = elements(html, "[data-remote-picture-box]")
+      assert Enum.all?(boxes, &(attribute(&1, "style") == "aspect-ratio: 300 / 400;"))
+    end
   end
 
   test "an author's covered picture still opens behind a click" do

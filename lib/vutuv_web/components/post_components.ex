@@ -2898,27 +2898,28 @@ defmodule VutuvWeb.PostComponents do
             instead, which is over in a second and is never what the reader is
             waiting for. --%>
             <% pixelated_url = RemoteMedia.post_image_pixelated_url(image) %>
-            <div :if={pixelated_url} class="relative" data-remote-image-pixelated>
+            <.media_box :if={pixelated_url} image={image} data-remote-image-pixelated>
               <img
                 src={pixelated_url}
                 alt=""
                 loading="lazy"
-                class="block max-h-96 w-full rounded-lg object-cover"
+                class="block h-full max-h-96 w-full rounded-lg object-cover"
               />
               <.waiting_clip_marks :if={RemoteImage.video?(image)} image={image} />
               <.checking_badge />
-            </div>
-            <div
-              :if={!pixelated_url}
-              data-remote-image-pending
-              class="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-            >
-              <.hourglass />
-              <span>{waiting_label(image)}</span>
-              <span :if={RemoteImage.video?(image)} data-remote-clip-waiting class="tabular-nums">
-                {clip_facts_line(image)}
+            </.media_box>
+            <.media_box :if={!pixelated_url} image={image}>
+              <span
+                data-remote-image-pending
+                class="flex h-full min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+              >
+                <.hourglass />
+                <span>{waiting_label(image)}</span>
+                <span :if={RemoteImage.video?(image)} data-remote-clip-waiting class="tabular-nums">
+                  {clip_facts_line(image)}
+                </span>
               </span>
-            </div>
+            </.media_box>
           <% :sensitive -> %>
             <%!-- `<details>` rather than a JS toggle: the cover has to hold with
             no JavaScript at all, because "this is covered for a reason" is not a
@@ -2945,18 +2946,20 @@ defmodule VutuvWeb.PostComponents do
               its place is the way back — like the content-warning lid above, a
               cover you cannot put back is not a cover. --%>
               <summary class="block cursor-pointer list-none">
-                <span class="relative block group-open:hidden">
-                  <img
-                    src={picture.lite || picture.src}
-                    alt=""
-                    loading="lazy"
-                    class="block max-h-96 w-full scale-105 object-cover blur-xl"
-                  />
-                  <span class="absolute inset-0 flex items-center justify-center p-3 text-center text-xs font-semibold text-white">
-                    <span class="rounded-full bg-slate-900/70 px-3 py-2">
-                      {gettext("Sensitive. Show the picture.")}
+                <span class="block group-open:hidden">
+                  <.media_box image={image}>
+                    <img
+                      src={picture.lite || picture.src}
+                      alt=""
+                      loading="lazy"
+                      class="block h-full max-h-96 w-full scale-105 object-cover blur-xl"
+                    />
+                    <span class="absolute inset-0 flex items-center justify-center p-3 text-center text-xs font-semibold text-white">
+                      <span class="rounded-full bg-slate-900/70 px-3 py-2">
+                        {gettext("Sensitive. Show the picture.")}
+                      </span>
                     </span>
-                  </span>
+                  </.media_box>
                 </span>
                 <span class="hidden min-h-10 items-center gap-1 text-xs font-medium text-brand-600 group-open:flex dark:text-brand-400">
                   <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
@@ -3013,7 +3016,7 @@ defmodule VutuvWeb.PostComponents do
   defp remote_media(assigns) do
     ~H"""
     <.remote_video :if={RemoteImage.video?(@image)} image={@image} picture={@picture} />
-    <.remote_image :if={not RemoteImage.video?(@image)} picture={@picture} alt={@image.alt} />
+    <.remote_image :if={not RemoteImage.video?(@image)} image={@image} picture={@picture} />
     """
   end
 
@@ -3030,7 +3033,7 @@ defmodule VutuvWeb.PostComponents do
     assigns =
       assigns
       |> assign(:poster, clip_poster(assigns.image, assigns.picture))
-      |> assign(:aspect, clip_aspect(assigns.image))
+      |> assign(:aspect, media_aspect(assigns.image))
 
     ~H"""
     <figure data-remote-video={@image.id} data-video-figure class="relative">
@@ -3196,18 +3199,19 @@ defmodule VutuvWeb.PostComponents do
 
   defp clip_shape(%RemoteImage{}), do: nil
 
-  # The clip's own shape, never the cover's: `width`/`height` on the row are the
-  # Mastodon thumbnail's (360×640 where the clip is 1080×1920), so they are the
-  # last resort and 16:9 the one after that.
-  defp clip_aspect(%RemoteImage{video_width: w, video_height: h})
+  # The shape an attachment's box takes on the card. A picture's is its stored
+  # size. A clip's is its own, never the cover's: `width`/`height` on its row are
+  # the Mastodon thumbnail's (360×640 where the clip is 1080×1920), so they are
+  # the last resort and 16:9 the one after that.
+  defp media_aspect(%RemoteImage{video_width: w, video_height: h})
        when is_integer(w) and is_integer(h) and w > 0 and h > 0,
        do: "aspect-ratio: #{w} / #{h};"
 
-  defp clip_aspect(%RemoteImage{width: w, height: h})
+  defp media_aspect(%RemoteImage{width: w, height: h})
        when is_integer(w) and is_integer(h) and w > 0 and h > 0,
        do: "aspect-ratio: #{w} / #{h};"
 
-  defp clip_aspect(%RemoteImage{}), do: nil
+  defp media_aspect(%RemoteImage{}), do: nil
 
   attr(:class, :string, default: "h-5 w-5")
 
@@ -3219,19 +3223,48 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
+  attr(:image, RemoteImage, required: true)
   attr(:picture, :map, required: true, doc: "`Vutuv.RemoteMedia.picture/1` of the image")
-  attr(:alt, :string, default: nil)
 
   # The picture itself — the same rendering whether it stood open or the reader
   # just uncovered a sensitive one, so it is written once.
   defp remote_image(assigns) do
     ~H"""
-    <.picture
-      picture={@picture}
-      alt={@alt || ""}
-      loading="lazy"
-      class="block max-h-96 w-full object-contain"
-    />
+    <.media_box image={@image}>
+      <.picture
+        picture={@picture}
+        wrap_class="h-full"
+        alt={@image.alt || ""}
+        loading="lazy"
+        class="block h-full max-h-96 w-full rounded-lg object-contain"
+      />
+    </.media_box>
+    """
+  end
+
+  attr(:image, RemoteImage, required: true)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  # The one box a picture from another network stands in, whatever state it is
+  # in: the mosaic while the scan looks at it, the grey tile once the mosaic's
+  # window has run out, the author's blurred cover and the picture itself. Its
+  # shape is the picture's own (`media_aspect/1`), capped and centred, and it is
+  # known before a byte arrives, so a state change moves nothing on the card:
+  # the mosaic used to fill the column while a portrait was released as a
+  # narrow frame, and the fresh `<img>` had no height until it loaded. A clip's
+  # player (`remote_video/1`) draws the same geometry on its black ground. A
+  # `<span>`, because the cover stands inside a `<summary>`.
+  defp media_box(assigns) do
+    ~H"""
+    <span
+      class="relative mx-auto block max-h-96 overflow-hidden"
+      style={media_aspect(@image)}
+      data-remote-picture-box
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </span>
     """
   end
 
