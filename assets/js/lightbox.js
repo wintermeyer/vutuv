@@ -12,6 +12,10 @@
 // and the licence: the ones the page already rendered. With JavaScript off the
 // same links are plain hrefs to the full-size image, which is what they were
 // before the lightbox existed.
+//
+// One entry is a document rather than a picture: the profile's CV card names
+// its thumbnail frame in `data-photo-frame`, and the overlay draws a copy of
+// that frame fitted like a photo, a tap toggling 1:1 the same way.
 
 import { keyActivates, onReady, once } from "./util"
 
@@ -67,6 +71,7 @@ function build() {
     <figure class="lightbox__stage">
       <div class="lightbox__frame">
         <img class="lightbox__image" data-lb-image alt="" />
+        <div class="lightbox__page" data-lb-page hidden></div>
       </div>
       <figcaption class="lightbox__meta">
         <div class="lightbox__text">
@@ -91,7 +96,7 @@ function build() {
     if (e.target.closest("[data-lb-next]")) return step(1)
     // A tap on the picture toggles fitted and 1:1 (`.lightbox.is-zoomed`). A
     // scroll-drag never reaches here: the browser fires no click after a drag.
-    if (e.target.closest("[data-lb-image]")) return toggleZoom()
+    if (e.target.closest("[data-lb-image], [data-lb-page]")) return toggleZoom()
     // A click on the backdrop (not on the picture or its caption block) closes,
     // which is what every viewer expects of a full-screen overlay.
     if (!e.target.closest(".lightbox__stage")) close()
@@ -127,14 +132,37 @@ function build() {
 // `.lightbox--zoomable`: the fit had to scale the picture down, so 1:1 shows
 // more. Measured on the fitted picture only — zoomed, it is its own size.
 function measureFit() {
+  if (overlay.classList.contains("lightbox--page")) return layoutPage()
   const image = q("[data-lb-image]")
   overlay.classList.toggle("lightbox--zoomable", image.naturalWidth > image.clientWidth + 1)
 }
 
+// A page has no natural size the browser could fit, so the fit is worked out
+// here: the page's own size (its frame's inline one) scaled into the room the
+// frame box is given (`.lightbox--page`), and 1:1 when zoomed.
+function layoutPage() {
+  const box = q("[data-lb-page]")
+  const page = box.firstElementChild
+  const width = parseFloat(page.style.width)
+  const height = parseFloat(page.style.height)
+  let scale = 1
+
+  if (!overlay.classList.contains("is-zoomed")) {
+    const room = q(".lightbox__frame")
+    scale = Math.min(1, room.clientWidth / width, room.clientHeight / height)
+    overlay.classList.toggle("lightbox--zoomable", scale < 1)
+  }
+
+  box.style.width = `${width * scale}px`
+  box.style.height = `${height * scale}px`
+  page.style.transform = `scale(${scale})`
+}
+
 function toggleZoom() {
-  if (overlay.classList.contains("is-zoomed")) return overlay.classList.remove("is-zoomed")
-  if (!overlay.classList.contains("lightbox--zoomable")) return
-  overlay.classList.add("is-zoomed")
+  const zoomed = overlay.classList.contains("is-zoomed")
+  if (!zoomed && !overlay.classList.contains("lightbox--zoomable")) return
+  overlay.classList.toggle("is-zoomed", !zoomed)
+  if (overlay.classList.contains("lightbox--page")) layoutPage()
   // The stage starts at its top-left corner, where a capture's address bar and
   // headline are.
   q(".lightbox__stage").scrollTo(0, 0)
@@ -146,10 +174,29 @@ function show(index) {
   current = index
 
   const image = q("[data-lb-image]")
+  const box = q("[data-lb-page]")
   // Every photo starts fitted; the zoom is the reader's answer to one picture,
   // not a mode the overlay stays in.
   overlay.classList.remove("is-zoomed", "lightbox--zoomable")
-  image.src = photo.dataset.photoSrc || photo.href
+
+  const source = photo.dataset.photoFrame && document.getElementById(photo.dataset.photoFrame)
+  overlay.classList.toggle("lightbox--page", !!source)
+  image.hidden = !!source
+  box.hidden = !source
+  if (source) {
+    // A copy of the thumbnail's frame, sandbox and size included, so the
+    // server's markup stays the one place they are spelled; made again only
+    // when the page changed.
+    if (box.firstElementChild?.srcdoc !== source.srcdoc) {
+      const page = source.cloneNode(false)
+      page.removeAttribute("id")
+      page.removeAttribute("aria-hidden")
+      box.replaceChildren(page)
+    }
+    image.removeAttribute("src")
+  } else {
+    image.src = photo.dataset.photoSrc || photo.href
+  }
   image.alt = photo.dataset.photoAlt || ""
 
   text(q("[data-lb-caption]"), photo.dataset.photoCaption)
@@ -189,9 +236,12 @@ function show(index) {
 
   // Warm the neighbours so stepping through a set does not flash.
   ;[index - 1, index + 1].forEach((i) => {
-    const neighbour = photos[i]
-    if (neighbour) new Image().src = neighbour.dataset.photoSrc || neighbour.href
+    const src = photos[i] && (photos[i].dataset.photoSrc || photos[i].href)
+    if (src) new Image().src = src
   })
+
+  // Last, because the fit reads the caption block's height.
+  if (source) layoutPage()
 }
 
 // An empty value hides the line entirely — a stray blank row under a photo
@@ -208,7 +258,7 @@ function open(gallery, index) {
   // not the same set as what OPENS it: the bento mosaic's tiles describe their
   // photos and are not controls (the tile's own tap opens the post), and the
   // magnifier over them is a control that describes nothing.
-  photos = [...gallery.querySelectorAll("[data-photo-src]")]
+  photos = [...gallery.querySelectorAll("[data-photo-src], [data-photo-frame]")]
   lastFocus = document.activeElement
   overlay.hidden = false
   // The page behind must not scroll while the overlay owns the screen.

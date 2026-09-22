@@ -2983,12 +2983,28 @@ html.lightbox-open { overflow: hidden; }
   align-self: stretch;
   min-height: 0;
 }
+.lightbox__image,
+.lightbox__page {
+  border-radius: 0.5rem;
+}
 .lightbox__image {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 0.5rem;
 }
+/* A page instead of a picture (the profile's CV card). A frame has no natural
+   size a `max-*` could fit, so lightbox.js scales it into the frame box, which
+   here takes the stage's whole room: the full width, and no `max-content` cap,
+   which would only measure the page it is about to size. The frame takes no
+   pointer events, so a tap lands on the box and toggles the zoom like a photo's. */
+.lightbox__page {
+  flex: none;
+  overflow: hidden;
+  background: #fff;
+}
+.lightbox__page iframe { pointer-events: none; }
+.lightbox--page .lightbox__stage { width: 100%; }
+.lightbox--page .lightbox__frame { max-height: none; }
 /* Zoomed (a tap on the picture, lightbox.js): the stage becomes the scroller
    and the picture takes its natural size, so a phone can read a link capture
    the fit had scaled to the width of the card it came from. `--zoomable` is
@@ -2996,7 +3012,8 @@ html.lightbox-open { overflow: hidden; }
    makes the tap worth a zoom-in cursor. `align-items: flex-start` is
    load-bearing: a centred flex item wider than its box overflows on BOTH
    sides, and the left half can never be scrolled into view. */
-.lightbox--zoomable .lightbox__image { cursor: zoom-in; }
+.lightbox--zoomable :is(.lightbox__image, .lightbox__page) { cursor: zoom-in; }
+.lightbox.is-zoomed :is(.lightbox__image, .lightbox__page) { cursor: zoom-out; }
 .lightbox.is-zoomed .lightbox__stage {
   overflow: auto;
   align-items: flex-start;
@@ -3010,7 +3027,6 @@ html.lightbox-open { overflow: hidden; }
 .lightbox.is-zoomed .lightbox__image {
   max-width: none;
   max-height: none;
-  cursor: zoom-out;
 }
 /* Zoomed, the frame is the picture's own size and therefore larger than the
    stage, so every pixel of negative free space lands on the caption block — and
