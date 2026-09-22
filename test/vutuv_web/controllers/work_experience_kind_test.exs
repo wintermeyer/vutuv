@@ -192,8 +192,12 @@ defmodule VutuvWeb.WorkExperienceKindTest do
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      refute html =~ "Professional Experience"
-      refute html =~ "Volunteering"
+      # The card, not the page: the CV card's thumbnail is the print document,
+      # which heads its sections whatever the profile card does.
+      card = text_of(html, "#profile-experience")
+      assert card =~ "Engineer"
+      refute card =~ "Professional Experience"
+      refute card =~ "Volunteering"
     end
   end
 

@@ -1667,7 +1667,7 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  # The small format chip shared by <.other_formats_card> and <.cv_card>.
+  # The small format chip of <.other_formats_card>.
   defp format_chip_class do
     "inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-800/30 dark:hover:text-brand-200"
   end
@@ -1929,34 +1929,68 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The profile rail's **CV / Lebenslauf card** (issue #841): this profile as
-  a formatted CV for a job application, offered to **every** viewer. One
-  affordance only — an "Open CV" button to the builder (`/:slug/cv`), where
-  any viewer picks what to include, anonymizes, prints or downloads (the
-  format chips live there, not here). The CV (`VutuvWeb.CV`) carries only
-  data the viewer can already see, so a private email never leaves the
-  owner's own download.
+  The profile rail's **CV / Lebenslauf card** (issue #841), offered to
+  **every** viewer: a thumbnail of the CV's first page
+  (`VutuvWeb.CV.first_page_document/2`) beside a quiet text link to the
+  builder (`/:slug/cv`), where any viewer picks what to include, anonymizes,
+  prints or downloads.
+
+  The page is the print document in a sandboxed `srcdoc` frame, which keeps
+  its stylesheet away from the app's, with scripts off. Its sizes are inline
+  styles, not utilities: a deploy patches this card into tabs still holding
+  the previous stylesheet, and an unscaled 760 px frame would push the rail
+  sideways. On a mouse the `CVLoupe` hook magnifies the page under the pointer.
   """
+  attr(:id, :string, required: true)
   attr(:user, Vutuv.Accounts.User, required: true)
+  attr(:page, :string, required: true, doc: "the CV's first page as an HTML document")
   attr(:rest, :global)
 
   def cv_card(assigns) do
     ~H"""
-    <.card {@rest}>
+    <.card id={@id} {@rest}>
       <%!-- Not plain "CV": the German label would double the Experience
       card's "Lebenslauf" heading on the same page. --%>
       <.section_title class="mb-4">{gettext("CV download")}</.section_title>
-      <p class="mb-3 text-xs text-slate-600 dark:text-slate-400">
-        {gettext(
-          "This profile as a formatted CV for job applications. Open it to pick what to include, anonymize it, print or download."
-        )}
-      </p>
-      <.link
-        href={~p"/#{@user}/cv"}
-        class="block w-full rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-brand-700"
-      >
-        {gettext("Open CV")}
-      </.link>
+      <div class="flex items-start gap-4">
+        <div
+          id={"#{@id}-page"}
+          phx-hook="CVLoupe"
+          class="relative shrink-0 overflow-hidden rounded bg-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
+          style="width: 88px; height: 124px"
+        >
+          <%!-- The print sheet is 760 px wide, and an A4 page at that width
+          1075 px tall; 88 / 760 draws it at 0.1158. --%>
+          <iframe
+            srcdoc={@page}
+            sandbox="allow-same-origin"
+            title={gettext("CV preview")}
+            tabindex="-1"
+            aria-hidden="true"
+            style="width: 760px; height: 1075px; border: 0; transform: scale(0.1158); transform-origin: 0 0; pointer-events: none"
+          >
+          </iframe>
+          <%!-- The frame is not a link and may not sit inside one, so the
+          click goes to this overlay. The text link below is the one a
+          keyboard and a screen reader get. --%>
+          <.link href={~p"/#{@user}/cv"} tabindex="-1" aria-hidden="true" class="absolute inset-0">
+          </.link>
+        </div>
+        <div class="flex min-w-0 flex-col gap-2 pt-0.5">
+          <p class="mb-0 text-xs text-slate-600 dark:text-slate-400">
+            {gettext(
+              "This profile as a CV for job applications: pick what to include, anonymize, print or download."
+            )}
+          </p>
+          <p class="mb-0 text-xs text-slate-600 dark:text-slate-400">PDF · Word · ODT · LaTeX · JSON</p>
+          <.link
+            href={~p"/#{@user}/cv"}
+            class="inline-flex min-h-10 items-center gap-1 self-start text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Open CV")}<span aria-hidden="true">›</span>
+          </.link>
+        </div>
+      </div>
     </.card>
     """
   end

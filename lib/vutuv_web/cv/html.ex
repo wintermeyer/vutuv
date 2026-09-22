@@ -64,7 +64,7 @@ defmodule VutuvWeb.CV.Html do
   end
 
   defp header(cv) do
-    photo = if cv.photo, do: ~s(<img class="photo" src="#{cv.photo}" alt=""/>), else: ""
+    photo = if cv.photo, do: ~s(<img class="photo" src="#{esc(cv.photo)}" alt=""/>), else: ""
     name = if cv.name, do: ~s(<h1>#{esc(cv.name)}</h1>), else: ""
 
     headline =
@@ -156,7 +156,7 @@ defmodule VutuvWeb.CV.Html do
     """
     <section>
     <h2>#{esc(gettext("Tags"))}</h2>
-    <p class="skills">#{Enum.map_join(skills, " &middot; ", fn skill -> esc(skill.name) end)}</p>
+    <p class="items">#{Enum.map_join(skills, " &middot; ", fn skill -> esc(skill.name) end)}</p>
     </section>
     """
   end
@@ -169,7 +169,7 @@ defmodule VutuvWeb.CV.Html do
     """
     <section>
     <h2>#{esc(gettext("Certificates & licenses"))}</h2>
-    <p class="skills">#{items}</p>
+    <p class="items">#{items}</p>
     </section>
     """
   end
@@ -185,7 +185,7 @@ defmodule VutuvWeb.CV.Html do
     """
     <section>
     <h2>#{esc(gettext("Languages"))}</h2>
-    <p class="skills">#{items}</p>
+    <p class="items">#{items}</p>
     </section>
     """
   end
@@ -264,7 +264,7 @@ defmodule VutuvWeb.CV.Html do
     .desc pre { background: #f1f5f9; padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
     .desc pre code { background: none; padding: 0; }
     .desc blockquote { border-left: 3px solid #e2e8f0; padding: 0 0 0 10px; color: #475569; }
-    .skills { margin: 0; }
+    .items { margin: 0; }
     .links { margin: 0; padding-left: 18px; }
     .links li { margin: 0 0 4px; overflow-wrap: anywhere; }
     .links a { color: #1d4ed8; }

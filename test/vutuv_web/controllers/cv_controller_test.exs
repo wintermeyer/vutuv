@@ -9,6 +9,8 @@ defmodule VutuvWeb.CVControllerTest do
   use VutuvWeb.ConnCase
 
   alias Ecto.Changeset
+  alias Vutuv.Avatar
+  alias Vutuv.ImageHelpers
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
 
@@ -125,11 +127,101 @@ defmodule VutuvWeb.CVControllerTest do
 
       body = conn |> get(~p"/#{owner}") |> html_response(200)
 
-      # The card offers only the "Open CV" button; the download formats live
-      # in the builder, not on the profile.
+      # The card offers only the way into the builder; the download formats
+      # live there, not on the profile.
       assert body =~ ~s(href="/#{owner.username}/cv")
       refute body =~ ~s(href="/#{owner.username}/cv/download/docx")
     end
+
+    test "draws the CV's first page as the card's thumbnail", %{conn: conn} do
+      owner = seed_profile(insert(:activated_user, first_name: "Erika", last_name: "Beispiel"))
+
+      body = conn |> get(~p"/#{owner}") |> html_response(200)
+
+      # The print document itself rather than a picture of it, so there is
+      # nothing to regenerate when the profile changes.
+      [frame] = elements(body, "#profile-cv-card iframe")
+      page = attribute(frame, "srcdoc")
+      assert page =~ "Erika Beispiel"
+      assert page =~ "Senior Developer, ACME GmbH"
+      refute page =~ "print dialog"
+      # Member-written markup that may not run anything.
+      assert attribute(frame, "sandbox") == "allow-same-origin"
+    end
+
+    test "the card speaks German to a German browser", %{conn: conn} do
+      owner = seed_profile(insert(:activated_user))
+
+      body =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/#{owner}")
+        |> html_response(200)
+
+      assert text_of(body, "#profile-cv-card") =~
+               "Dieses Profil als Lebenslauf für Bewerbungen: auswählen, anonymisieren, drucken oder herunterladen."
+
+      [frame] = elements(body, "#profile-cv-card iframe")
+      assert attribute(frame, "title") == "Lebenslauf-Vorschau"
+      # The page is built in a task beside the profile's other loads, and a
+      # task does not inherit the request's language.
+      assert attribute(frame, "srcdoc") =~ "Berufserfahrung"
+    end
+
+    test "the thumbnail shows each viewer the CV they would download", %{conn: conn} do
+      {conn, owner} = login_with_profile(conn)
+
+      # The registration address is private: the owner's own CV carries it,
+      # a guest's does not.
+      assert conn |> get(~p"/#{owner}") |> html_response(200) |> cv_thumbnail() =~
+               "cv-owner@example.com"
+
+      refute build_conn() |> get(~p"/#{owner}") |> html_response(200) |> cv_thumbnail() =~
+               "cv-owner@example.com"
+    end
+
+    test "the thumbnail carries about one page, not the whole history", %{conn: conn} do
+      owner = insert(:activated_user)
+
+      for i <- 1..12 do
+        insert(:work_experience,
+          user: owner,
+          kind: "employment",
+          title: "Role #{String.pad_leading(Integer.to_string(i), 2, "0")}",
+          organization: "Firma",
+          description: String.duplicate("word ", 400),
+          start_year: 2025 - i,
+          end_year: 2026 - i
+        )
+      end
+
+      # The print lists links after every section, so a full page leaves it out.
+      insert(:url, user: owner, value: "https://tail.example.org/")
+
+      page = conn |> get(~p"/#{owner}") |> html_response(200) |> cv_thumbnail()
+
+      assert page =~ "Role 01"
+      refute page =~ "Role 12"
+      refute page =~ "tail.example.org"
+    end
+
+    test "the thumbnail links the served avatar instead of inlining it", %{conn: conn} do
+      owner =
+        :activated_user
+        |> insert(avatar: "me.png", avatar_fingerprint: "abc123def456")
+        |> ImageHelpers.with_image_rows()
+
+      page = conn |> get(~p"/#{owner}") |> html_response(200) |> cv_thumbnail()
+
+      assert page =~ ~s(class="photo" src="#{Avatar.url(owner, :thumb)}")
+      refute page =~ "data:image"
+    end
+  end
+
+  # The document the profile card's thumbnail frame draws.
+  defp cv_thumbnail(body) do
+    [frame] = elements(body, "#profile-cv-card iframe")
+    attribute(frame, "srcdoc")
   end
 
   describe "the print-ready view" do

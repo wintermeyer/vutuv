@@ -38,6 +38,7 @@ defmodule VutuvWeb.CV do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Avatar
   alias Vutuv.Countries
   alias Vutuv.Languages
   alias Vutuv.Phone
@@ -52,6 +53,7 @@ defmodule VutuvWeb.CV do
   alias Vutuv.Repo
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs.Markdown
+  alias VutuvWeb.CV.Html
   alias VutuvWeb.EducationHTML
   alias VutuvWeb.LanguageHTML
   alias VutuvWeb.UserHelpers
@@ -96,8 +98,9 @@ defmodule VutuvWeb.CV do
 
     * `:viewer` — the user whose eyes the CV is built through (default nil,
       the anonymous public view). Only the email is viewer-sensitive.
-    * `:photo` — also derive the avatar as a JPEG data URI (used by the
-      HTML/print rendering only, so the text formats skip the image work).
+    * `:photo` — `true` also derives the avatar as a JPEG data URI (used by
+      the HTML/print rendering only, so the text formats skip the image
+      work); `:url` takes the served avatar's URL instead.
   """
   def build(user, opts \\ []) do
     user = preload(user)
@@ -123,6 +126,50 @@ defmodule VutuvWeb.CV do
       educations: Enum.map(user.educations, &education_raw/1)
     }
   end
+
+  # Roughly the description text the print view's first A4 page holds: a
+  # 680 px measure at 14px is about 95 characters a line, and the page about
+  # 45 lines. An estimate, deliberately generous: an overshoot is cut by the
+  # thumbnail's frame, a shortfall would leave page 1 emptier than the print.
+  @first_page_chars 4_000
+  # A role line with its spacing, in the same currency.
+  @entry_chars 150
+
+  @doc """
+  The print document (`VutuvWeb.CV.Html`) of the CV's first page as `viewer`
+  sees it: the profile card's thumbnail (`VutuvWeb.UI.cv_card/1`), rendered on
+  every profile view rather than stored as a picture. It carries only what
+  fits on that page, and links the served avatar instead of inlining it.
+  """
+  def first_page_document(user, viewer) do
+    user
+    |> build(viewer: viewer, photo: :url)
+    |> first_page()
+    |> Html.render()
+  end
+
+  defp first_page(cv) do
+    {sections, left} =
+      Enum.map_reduce(cv.sections, @first_page_chars, fn section, left ->
+        {entries, left} = take_entries(section.entries, left, [])
+        {%{section | entries: entries}, left}
+      end)
+
+    cv = %{cv | sections: Enum.reject(sections, &(&1.entries == []))}
+
+    # The lists the print puts after the sections are below a full page too.
+    if left > 0,
+      do: cv,
+      else: %{cv | skills: [], qualifications: [], languages: [], links: [], social_media: []}
+  end
+
+  defp take_entries([entry | rest], left, kept) when left > 0 do
+    description = entry.description && String.slice(entry.description, 0, left)
+    cost = @entry_chars + String.length(entry.description || "")
+    take_entries(rest, left - cost, [%{entry | description: description} | kept])
+  end
+
+  defp take_entries(_entries, left, kept), do: {Enum.reverse(kept), left}
 
   @doc """
   Trim a built CV to the viewer's selection: drop every identity field,
@@ -448,14 +495,22 @@ defmodule VutuvWeb.CV do
     |> Enum.filter(& &1)
   end
 
-  # Only a real derived JPEG makes it into the CV — the silhouette
-  # placeholder Avatar.binary/2 falls back to has no place on a Lebenslauf.
+  # Only a real picture makes it into the CV — the silhouette placeholder
+  # Avatar.binary/2 falls back to has no place on a Lebenslauf, and
+  # Avatar.url/2 answers nil where there is none.
   defp photo(user, opts) do
-    if Keyword.get(opts, :photo, false) do
-      case Vutuv.Avatar.binary(user, :medium) do
-        "data:image/jpeg" <> _rest = data_uri -> data_uri
-        _placeholder -> nil
-      end
+    case Keyword.get(opts, :photo, false) do
+      :url ->
+        Avatar.url(user, :thumb)
+
+      true ->
+        case Avatar.binary(user, :medium) do
+          "data:image/jpeg" <> _rest = data_uri -> data_uri
+          _placeholder -> nil
+        end
+
+      false ->
+        nil
     end
   end
 

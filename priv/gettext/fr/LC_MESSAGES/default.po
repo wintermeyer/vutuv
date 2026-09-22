@@ -8640,10 +8640,15 @@ msgstr "Lien du profil"
 msgid "The CV is public, on your profile: a visitor's download contains only what they can see there anyway, and private email addresses appear only in your own."
 msgstr "Le CV est public, sur votre profil : le téléchargement d'un visiteur ne contient que ce qu'il peut y voir de toute façon, et les adresses e-mail privées n'apparaissent que dans le vôtre."
 
-#: lib/vutuv_web/components/ui.ex:1950
+#: lib/vutuv_web/components/ui.ex:1970
 #, elixir-autogen, elixir-format
-msgid "This profile as a formatted CV for job applications. Open it to pick what to include, anonymize it, print or download."
-msgstr "Ce profil sous forme de CV mis en page pour des candidatures. Ouvrez-le pour choisir ce qui doit figurer, l'anonymiser, l'imprimer ou le télécharger."
+msgid "CV preview"
+msgstr "Aperçu du CV"
+
+#: lib/vutuv_web/components/ui.ex:1987
+#, elixir-autogen, elixir-format
+msgid "This profile as a CV for job applications: pick what to include, anonymize, print or download."
+msgstr "Ce profil sous forme de CV pour des candidatures : choisir le contenu, anonymiser, imprimer ou télécharger."
 
 #: lib/vutuv_web/templates/export/index.html.heex:17
 #, elixir-autogen, elixir-format
