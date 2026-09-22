@@ -51,6 +51,8 @@ defmodule Vutuv.Posts.PostImage do
   @versions ~w(thumb lite feed large xl)
 
   @max_caption_length 1_000
+  # The `alt` column is varchar(255), which Postgres counts in codepoints.
+  @max_alt_length 255
 
   schema "post_images" do
     belongs_to(:post, Vutuv.Posts.Post)
@@ -99,12 +101,13 @@ defmodule Vutuv.Posts.PostImage do
 
   def versions, do: @versions
   def max_caption_length, do: @max_caption_length
+  def max_alt_length, do: @max_alt_length
 
   def alt_changeset(image, params) do
     image
     |> cast(params, [:alt])
     |> update_change(:alt, &String.trim/1)
-    |> validate_length(:alt, max: 255)
+    |> validate_length(:alt, max: @max_alt_length, count: :codepoints)
   end
 
   @doc """
@@ -127,7 +130,7 @@ defmodule Vutuv.Posts.PostImage do
     ])
     |> update_change(:alt, &String.trim/1)
     |> update_change(:caption, &String.trim/1)
-    |> validate_length(:alt, max: 255)
+    |> validate_length(:alt, max: @max_alt_length, count: :codepoints)
     |> validate_length(:caption, max: @max_caption_length)
     |> reset_exact_when_download_off()
   end

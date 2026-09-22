@@ -860,6 +860,21 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp merge_photo_texts(socket, _other), do: socket
 
+  # The first photo whose texts the save would refuse, checked before anything
+  # is written: `save_photo_settings/2` runs after the post is on its way, and
+  # a refusal there used to publish the post with the texts silently dropped.
+  defp refused_photo_settings(images, photos) do
+    Enum.find_value(images, fn image ->
+      with {:ok, settings} <- Map.fetch(photos, image.id),
+           %{valid?: false} = changeset <-
+             PostImage.settings_changeset(image, stringify(settings)) do
+        {image, changeset}
+      else
+        _ -> nil
+      end
+    end)
+  end
+
   # Written on submit, not on every keystroke: an abandoned composer should not
   # leave settings on rows it never attached to a post.
   defp save_photo_settings(images, photos) do
@@ -1281,8 +1296,21 @@ defmodule VutuvWeb.PostLive.Composer do
     # The submitted texts are the truth (a keystroke may not have round-tripped
     # through `validate` yet), so merge them before writing.
     socket = merge_photo_texts(socket, payload["photo"])
-    save_photo_settings(socket.assigns.images, socket.assigns.photos)
 
+    case refused_photo_settings(socket.assigns.images, socket.assigns.photos) do
+      nil ->
+        save_photo_settings(socket.assigns.images, socket.assigns.photos)
+        save(socket, params)
+
+      {image, changeset} ->
+        {:noreply,
+         socket
+         |> assign(:open_photo, image.id)
+         |> assign(:error, changeset_message(changeset))}
+    end
+  end
+
+  defp save(socket, params) do
     # The audience comes from the submitted form (not from assigns): the
     # submit is the truth, and it must not depend on a phx-change having
     # fired first. Only the person denials are event-driven state.
@@ -3055,6 +3083,7 @@ defmodule VutuvWeb.PostLive.Composer do
         phx-value-id={@image.id}
         phx-target={@myself}
         aria-label={gettext("Photo options")}
+        aria-describedby={@alt_missing? && "photo-alt-missing-#{@image.id}"}
         title={gettext("Photo options")}
         class="block h-full w-full cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-brand-500"
       >
@@ -3071,43 +3100,48 @@ defmodule VutuvWeb.PostLive.Composer do
           draggable="false"
           class={["h-full w-full", (@bento? && !@fill? && "object-contain") || "object-cover"]}
         />
+
+        <%!-- Inside the button, so a tap on a badge opens the panel too;
+        spans, since a button holds phrasing content only. --%>
+        <span class="absolute left-1 top-1 flex flex-col items-start gap-1">
+          <%!-- The hero marker. A number on every tile would be noise; what the
+          author needs to know is which photo leads — and with a single photo
+          there is nothing to lead, so it stays away. --%>
+          <span
+            :if={@index == 0 and @count > 1}
+            data-cover-badge
+            class="rounded bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+          >
+            {gettext("Cover")}
+          </span>
+
+          <%!-- Says a crop is in force — the tile already shows the cropped
+          frame, but a small mark answers "why is my picture suddenly square"
+          at a glance and points at the button that undoes it. --%>
+          <span
+            :if={PostImage.cropped?(@image)}
+            title={gettext("Cropped")}
+            data-photo-cropped={@image.id}
+            class="flex items-center rounded bg-slate-900/70 px-1.5 py-0.5 text-white"
+          >
+            <.crop_icon class="h-3 w-3" />
+          </span>
+
+          <%!-- The alt-text nudge: amber while a photo has no description,
+          and the tap that leads to writing one. The button's aria-label hides
+          this text from a screen reader, so the button points at it. --%>
+          <span
+            :if={@alt_missing?}
+            id={"photo-alt-missing-#{@image.id}"}
+            title={gettext("No image description yet")}
+            class="rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
+            data-photo-alt-missing={@image.id}
+          >
+            <span aria-hidden="true">ALT</span>
+            <span class="sr-only">{gettext("No image description yet")}</span>
+          </span>
+        </span>
       </button>
-
-      <div class="pointer-events-none absolute left-1 top-1 flex flex-col items-start gap-1">
-        <%!-- The hero marker. A number on every tile would be noise; what the
-        author needs to know is which photo leads — and with a single photo
-        there is nothing to lead, so it stays away. --%>
-        <span
-          :if={@index == 0 and @count > 1}
-          data-cover-badge
-          class="rounded bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
-        >
-          {gettext("Cover")}
-        </span>
-
-        <%!-- Says a crop is in force — the tile already shows the cropped
-        frame, but a small mark answers "why is my picture suddenly square"
-        at a glance and points at the button that undoes it. --%>
-        <span
-          :if={PostImage.cropped?(@image)}
-          title={gettext("Cropped")}
-          data-photo-cropped={@image.id}
-          class="flex items-center rounded bg-slate-900/70 px-1.5 py-0.5 text-white"
-        >
-          <.crop_icon class="h-3 w-3" />
-        </span>
-
-        <%!-- The alt-text nudge: amber while a photo has no description, so
-        the gap is visible without blocking anything. --%>
-        <span
-          :if={@alt_missing?}
-          title={gettext("No image description yet")}
-          class="pointer-events-auto rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
-          data-photo-alt-missing={@image.id}
-        >
-          ALT
-        </span>
-      </div>
 
       <button
         type="button"
@@ -3485,6 +3519,7 @@ defmodule VutuvWeb.PostLive.Composer do
             type="text"
             name={"photo[#{@image.id}][caption]"}
             value={@settings.caption}
+            maxlength={PostImage.max_caption_length()}
             phx-debounce="300"
             placeholder={gettext("Caption (optional)")}
             class={input_class()}
@@ -3495,6 +3530,7 @@ defmodule VutuvWeb.PostLive.Composer do
             type="text"
             name={"photo[#{@image.id}][alt]"}
             value={@settings.alt}
+            maxlength={PostImage.max_alt_length()}
             phx-debounce="300"
             placeholder={gettext("Describe the photo for people who can't see it")}
             class={input_class()}
