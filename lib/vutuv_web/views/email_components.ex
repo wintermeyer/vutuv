@@ -3,7 +3,7 @@ defmodule VutuvWeb.EmailComponents do
   The shared HTML-email framework: one `email_layout/1` chrome plus a small set
   of inline-styled building blocks (`email_p`, `email_pin`, `email_button`,
   `email_panel`/`email_row`, `email_markdown`, `email_quote`, `email_list`,
-  `email_divider`, `email_muted`, `email_signature`). Every HTML email body
+  `email_table`, `email_divider`, `email_muted`, `email_signature`). Every HTML email body
   (`lib/vutuv_web/templates/email_body/`) composes these, so the look and feel
   is defined in exactly one place.
 
@@ -108,6 +108,7 @@ defmodule VutuvWeb.EmailComponents do
             .email-msg a { color: #93c5fd !important; }
             .email-msg blockquote { border-color: #334155 !important; color: #94a3b8 !important; }
             .email-divider td { border-color: #1e293b !important; }
+            .email-table td { border-color: #1e293b !important; }
             .email-footer, .email-footer a { color: #94a3b8 !important; }
           }
         </style>
@@ -399,6 +400,38 @@ defmodule VutuvWeb.EmailComponents do
     """
   end
 
+  @doc """
+  A data table with a header row, for a notice that lists records (the
+  sign-up trap's weekly report is the first). Each row is `%{cells, note}`:
+  one cell per column, in order, and an optional `note` printed beneath them
+  across the full width in small type, for values too long to share a column
+  (a user agent, the rest of a form).
+  """
+  attr(:columns, :list, required: true)
+  attr(:rows, :list, required: true)
+
+  def email_table(assigns) do
+    ~H"""
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel email-table" style="margin:0 0 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+      <tr>
+        <th :for={column <- @columns} align="left" class="email-muted" style={table_head_style()}>
+          {column}
+        </th>
+      </tr>
+      <%= for row <- @rows do %>
+        <tr>
+          <td :for={cell <- row.cells} class="email-text" style={table_cell_style()}>{cell}</td>
+        </tr>
+        <tr :if={row.note}>
+          <td colspan={length(@columns)} class="email-muted" style={table_note_style()}>
+            {row.note}
+          </td>
+        </tr>
+      <% end %>
+    </table>
+    """
+  end
+
   @doc "A hairline divider."
   def email_divider(assigns) do
     ~H"""
@@ -521,6 +554,17 @@ defmodule VutuvWeb.EmailComponents do
 
   defp row_value_style,
     do: "padding:6px 0;font-family:#{@font};font-size:14px;color:#334155;word-break:break-word;"
+
+  defp table_head_style,
+    do: "padding:10px 8px 6px;font-family:#{@font};font-size:12px;font-weight:600;color:#64748b;"
+
+  defp table_cell_style,
+    do:
+      "padding:8px 8px 2px;border-top:1px solid #e2e8f0;font-family:#{@font};font-size:13px;color:#334155;vertical-align:top;word-break:break-word;"
+
+  defp table_note_style,
+    do:
+      "padding:0 8px 8px;font-family:#{@font};font-size:12px;line-height:1.5;color:#64748b;word-break:break-word;"
 
   # No `white-space: pre-wrap` — the rendered Markdown is block HTML that
   # manages its own line breaks and spacing.

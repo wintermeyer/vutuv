@@ -50,6 +50,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
+  alias Vutuv.SignupTrap
   alias Vutuv.Social.Block
   alias Vutuv.Uploads.Crop
 
@@ -61,6 +62,15 @@ defmodule Vutuv.Accounts do
       |> registration_username()
       |> user_changeset(conn, user_params, assocs)
 
+    # A scripted sign-up (`Vutuv.SignupTrap`) is recorded and answered as
+    # `{:trapped, email}` before anything is written; the caller shows it the
+    # PIN screen through `pretend_registration/2`.
+    with :ok <- SignupTrap.trap(conn, changeset, user_params) do
+      insert_registration(changeset, user_params)
+    end
+  end
+
+  defp insert_registration(changeset, user_params) do
     # The member's registry row (issue #941) is written in the same transaction
     # as the insert, so the shared handle namespace stays airtight: an
     # auto-generated handle already avoids every taken handle
@@ -410,7 +420,18 @@ defmodule Vutuv.Accounts do
     advance_to_pin_screen(conn, email, notify, :registration)
   end
 
-  # The shared, enumeration-safe step 1 behind both flows above: look the
+  @doc """
+  Step 1 of a registration `Vutuv.SignupTrap` caught: the same PIN screen and
+  pin cookie a real sign-up gets, and no mail, not even the "somebody tried to
+  register" notice to a member whose address the form named. No account was
+  created, so a new address has nothing behind it that "send the PIN again"
+  could mail either.
+  """
+  def pretend_registration(conn, email) when is_binary(email) do
+    {:ok, put_pin_cookie(reset_login_session(conn), String.downcase(email), :registration)}
+  end
+
+  # The shared, enumeration-safe step 1 behind the flows above: look the
   # address up, hand a found account to `notify` (a login PIN, or the
   # registration-attempt notice), and advance to the PIN screen the same way
   # whether or not it was found — the response never depends on existence.

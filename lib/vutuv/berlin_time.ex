@@ -59,8 +59,13 @@ defmodule Vutuv.BerlinTime do
     max(NaiveDateTime.diff(target, now, :millisecond), 0)
   end
 
-  # The Berlin-local 00:MM instant of `date`, as a UTC NaiveDateTime.
-  defp trigger_instant(date, minute_offset) do
+  @doc """
+  The instant `date` reads 00:00 plus `minute_offset` minutes on a Berlin wall
+  clock, as a UTC `NaiveDateTime`. Counted from local midnight, so it is the
+  wall-clock minute on every day whose clock change (always 02:00 or 03:00 on
+  a Sunday) does not fall before it.
+  """
+  def trigger_instant(date, minute_offset) do
     NaiveDateTime.add(local_midnight_utc(date), minute_offset * 60, :second)
   end
 

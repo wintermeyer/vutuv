@@ -1,0 +1,25 @@
+Abgefangene Registrierungen
+===========================
+
+<%= @report.total %> in der Woche bis <%= @report.week_end %> Uhr.
+
+Für diese Registrierungen wurde kein Konto angelegt und keine E-Mail
+verschickt. Die Einträge werden <%= @report.retention_days %> Tage nach ihrem Eingang gelöscht.
+<%= for section <- @report.sections do %>
+<%= section.title %>:
+<%= for row <- section.rows do %>  - <%= row.label %>: <%= row.count %>
+<% end %><% end %>
+Einträge
+========
+<%= for row <- @report.rows do %>
+<%= row.time %>  <%= row.name %>
+  E-Mail:          <%= row.email %>
+  Tags:            <%= row.tags %>
+  IP-Adresse:      <%= row.ip %>
+  Browser:         <%= row.user_agent %>
+  Sprache:         <%= row.language %>
+  Regel:           <%= row.rule %>
+  Weitere Angaben: <%= row.extra %>
+<% end %><%= if @report.more do %>
+<%= @report.more %>
+<% end %>

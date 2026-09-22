@@ -1,0 +1,20 @@
+<.email_layout preheader={"vutuv: #{@report.total}"} locale={@locale}>
+  <.email_heading>Abgefangene Registrierungen</.email_heading>
+  <.email_p>
+    {@report.total} in der Woche bis {@report.week_end} Uhr. Für diese
+    Registrierungen wurde kein Konto angelegt und keine E-Mail verschickt. Die
+    Einträge werden {@report.retention_days} Tage nach ihrem Eingang gelöscht.
+  </.email_p>
+
+  <%= for section <- @report.sections do %>
+    <.email_p><strong>{section.title}</strong></.email_p>
+    <.email_panel>
+      <.email_row :for={row <- section.rows} label={row.label}>{row.count}</.email_row>
+    </.email_panel>
+  <% end %>
+
+  <.email_divider />
+  <.email_p><strong>Einträge</strong></.email_p>
+  <.email_table columns={["Zeit", "Name", "E-Mail", "Tags", "IP-Adresse"]} rows={@report.rows} />
+  <.email_muted :if={@report.more}>{@report.more}</.email_muted>
+</.email_layout>
