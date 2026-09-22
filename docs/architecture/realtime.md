@@ -511,9 +511,14 @@ Most of what the bell counts is worth knowing and not worth a trip: two people
 liked a post, somebody followed you. Reading that on /notifications costs a page
 load there and a page load back, so the number sat there being ignored. Resting
 the pointer on the bell drops a small panel under it instead — one round kind
-badge, who did what, how long ago, six of them at most and a "+N more" footer
-into the page — and **looking away marks them read**. The gesture says "I have
-seen this" as plainly as opening the page does, so it carries the same weight.
+badge, who did what, one line of the post it is about, how long ago, six of
+them at most and a "+N more" footer into the page — and **looking away marks
+them read**. The line is `NotificationLine.quote_line/3`, the rule the
+notifications page folds its reply lines with: a reaction quotes the post it
+reacted to, a reply or mention the words that were written, all from one
+visibility-scoped `Posts.visible_posts_by_ids/2` for the panel. The gesture says
+"I have seen this" as plainly as opening the page does, so it carries the same
+weight.
 Opening one of the rows says it about that one event; both gestures are below.
 
 The panel is `ShellLive`'s; only the gesture is the client's, because a hover is

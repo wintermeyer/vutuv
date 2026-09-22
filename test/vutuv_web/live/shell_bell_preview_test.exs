@@ -59,6 +59,52 @@ defmodule VutuvWeb.ShellBellPreviewTest do
     assert has_element?(view, @bell_badge, "1")
   end
 
+  describe "the post a row is about" do
+    test "a like quotes the liked post", %{conn: conn} do
+      user = insert(:user)
+      post = insert(:post, user: user, body: "**Heute** habe ich den Bremer Hafen gezeichnet")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, view, _html} = shell(conn, user)
+      render_hook(view, "bell:preview", %{})
+
+      # Flattened: the Markdown markers never reach a line with no markup.
+      assert has_element?(
+               view,
+               "[data-bell-preview-teaser]",
+               "Heute habe ich den Bremer Hafen gezeichnet"
+             )
+
+      refute render(view) =~ "**Heute**"
+    end
+
+    test "a reply quotes what was written, not the post it answers", %{conn: conn} do
+      user = insert(:user)
+      parent = insert(:post, user: user, body: "My own post")
+      reply = insert(:post, body: "Great drawing, where was that?")
+      insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
+
+      {:ok, view, _html} = shell(conn, user)
+      render_hook(view, "bell:preview", %{})
+
+      assert has_element?(view, "[data-bell-preview-teaser]", "Great drawing, where was that?")
+      refute has_element?(view, "[data-bell-preview-teaser]", "My own post")
+    end
+
+    test "a row with no post to quote has no teaser line", %{conn: conn} do
+      user = insert(:user)
+      follower_event(user, ~N[2024-03-01 12:00:00])
+      # A photograph and no words: nothing to quote, and no empty line either.
+      :ok = Vutuv.Posts.like_post(insert(:user), insert(:post, user: user, body: ""))
+
+      {:ok, view, _html} = shell(conn, user)
+      render_hook(view, "bell:preview", %{})
+
+      assert row_count(view) == 2
+      refute has_element?(view, "[data-bell-preview-teaser]")
+    end
+  end
+
   test "opening one row takes that event off the badge and leaves the rest", %{conn: conn} do
     # Clicking a row takes the member off this page, so the close event the
     # pointer would have sent never arrives — the row has to say for itself

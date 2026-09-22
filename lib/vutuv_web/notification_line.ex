@@ -43,6 +43,8 @@ defmodule VutuvWeb.NotificationLine do
 
   import VutuvWeb.UI, only: [compact_count: 1]
 
+  alias Vutuv.Fediverse.Note
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
   # The event text for the ungrouped kinds, rendered from the kind (not
@@ -370,6 +372,46 @@ defmodule VutuvWeb.NotificationLine do
     case notification[:actor_name] do
       name when is_binary(name) and name != "" -> {name, text}
       _actorless -> {text, nil}
+    end
+  end
+
+  @doc """
+  What a notification quotes: `{:post, id}`, `{:note, text}` or `nil`.
+
+  A reaction quotes the post it reacted to. A reply, a thread answer and a
+  remote reply quote the words that were written, since those are the news and
+  the post they answer is the reader's own, so a remote reply with no text of
+  its own quotes nothing rather than the reader's post. Pure, so a caller can
+  collect the `{:post, id}` ids of a whole list and load them in one query.
+  """
+  def quote_source(%{kind: kind} = n) when kind in ~w(reply thread),
+    do: post_source(n[:reply_post_id])
+
+  def quote_source(%{kind: "fediverse_reply"} = n) do
+    if is_binary(n[:note_text]), do: {:note, n.note_text}
+  end
+
+  def quote_source(%{kind: kind} = n) when kind in ~w(like mention fediverse_reaction),
+    do: post_source(n[:post_id])
+
+  def quote_source(_n), do: nil
+
+  defp post_source(id) when is_binary(id), do: {:post, id}
+  defp post_source(_none), do: nil
+
+  @doc """
+  The one line `quote_source/1` names, through the app's shared teaser
+  (`PostTeaser.plain_line/2`, which takes `opts`), or `""`. `posts` is the
+  visibility-scoped `%{id => %Post{}}` map, so a post the reader may not see
+  quotes nothing.
+  """
+  def quote_line(notification, posts, opts \\ []) do
+    case quote_source(notification) do
+      {:post, id} when is_map_key(posts, id) -> PostTeaser.plain_line(posts[id], opts)
+      # As the `%Note{}` it came from: `Vutuv.RemoteHtml.to_text/3` made it plain
+      # text at the inbox, and `PostTeaser` knows not to run that through Markdown.
+      {:note, text} -> PostTeaser.plain_line(%Note{content_text: text}, opts)
+      _nothing -> ""
     end
   end
 

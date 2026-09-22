@@ -905,7 +905,8 @@ defmodule VutuvWeb.ShellLive do
     # Nothing unread by the time the query ran (the member read it in another
     # tab, or engaged with the post out in the feed): no panel, and no marker
     # either — closing a panel that never opened must not move anything.
-    {:noreply, assign(socket, :bell_preview, if(preview.items != [], do: preview))}
+    preview = if preview.items != [], do: with_teasers(preview, socket.assigns.current_user)
+    {:noreply, assign(socket, :bell_preview, preview)}
   end
 
   def handle_event("bell:preview_close", _params, %{assigns: %{bell_preview: nil}} = socket),
@@ -1777,10 +1778,11 @@ defmodule VutuvWeb.ShellLive do
   attr(:user_param, :string, required: true)
 
   # What the bell's number stands for, in the smallest form that still answers
-  # it: one round kind badge, who did what, and how long ago. No teasers and no
-  # unfolding — a second notifications page hanging off the bar would move the
-  # trip rather than save it. Every row is still a link, so the one item that IS
-  # worth opening stays one click away.
+  # it: one round kind badge, who did what, one line of the post it is about,
+  # and how long ago. The line is cut to one row and never unfolds — a second
+  # notifications page hanging off the bar would move the trip rather than save
+  # it. Every row is still a link, so the one item that IS worth opening stays
+  # one click away.
   #
   # The gap under the bell is `pt-2` on the positioned wrapper rather than a
   # margin on the card: padding belongs to the hover area, a margin does not,
@@ -1828,6 +1830,13 @@ defmodule VutuvWeb.ShellLive do
                   <span class={row.body && "font-semibold"}>{row.title}</span>
                   {row.body}
                 </span>
+                <span
+                  :if={row.teaser != ""}
+                  data-bell-preview-teaser
+                  class="mt-0.5 block truncate text-sm text-slate-600 dark:text-slate-400"
+                >
+                  {row.teaser}
+                </span>
                 <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                   {relative_time(row.at)}
                 </span>
@@ -1868,10 +1877,24 @@ defmodule VutuvWeb.ShellLive do
       kind: item.kind,
       title: title,
       body: body,
+      teaser: item.teaser,
       at: item[:at],
       href: NotificationLine.notification_url(item, viewer),
       dismiss: Activity.dismiss_ref(item)
     }
+  end
+
+  # Each row's one line of the post it is about (`NotificationLine.quote_line/3`
+  # decides which), from one visibility-scoped query for the whole panel. Cut
+  # at 80 characters: the row shows about half of that before `truncate` ends it.
+  defp with_teasers(%{items: items} = preview, viewer) do
+    ids = for item <- items, {:post, id} <- [NotificationLine.quote_source(item)], do: id
+    posts = Posts.visible_posts_by_ids(viewer, ids)
+
+    teased =
+      Enum.map(items, &Map.put(&1, :teaser, NotificationLine.quote_line(&1, posts, length: 80)))
+
+    %{preview | items: teased}
   end
 
   attr(:href, :string, required: true)

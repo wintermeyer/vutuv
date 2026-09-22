@@ -71,7 +71,8 @@ defmodule VutuvWeb.NotificationLive.Index do
       kind_glyph: 1,
       kind_label: 1,
       notification_target: 2,
-      notification_text: 1
+      notification_text: 1,
+      quote_line: 2
     ]
 
   # Like the feed and messages: not a page for anonymous visitors —
@@ -81,7 +82,6 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Fediverse
-  alias Vutuv.Fediverse.Note
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -1786,34 +1786,23 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The folded line's words, through the app's one teaser rule for both: a
-  # member's reply as the post it is, a remote note as the `%Note{}` its text
-  # came from (`Vutuv.RemoteHtml.to_text/3` reduced it to plain text at the
-  # inbox, and `PostTeaser` knows not to run that through Markdown).
-  defp put_teaser(%{kind: kind, reply_post_id: id} = entry, posts)
-       when kind in ~w(reply thread) and is_binary(id) do
-    case Map.get(posts, id) do
-      %Post{} = post ->
-        Map.put(entry, :reply_teaser, blank_to_nil(PostTeaser.plain_line(post)))
+  # The folded line's words, which `quote_line/2` picks for this page and the
+  # bell's preview alike. Only a reply line folds a teaser: a like or a mention
+  # sits under a card head that already names its post.
+  defp put_teaser(%{kind: kind} = entry, posts) when kind in ~w(reply thread),
+    do: put_line(entry, :reply_teaser, posts)
 
-      _ ->
-        entry
-    end
-  end
-
-  defp put_teaser(%{kind: "fediverse_reply", note_text: text} = entry, _posts)
-       when is_binary(text),
-       do:
-         Map.put(
-           entry,
-           :note_teaser,
-           blank_to_nil(PostTeaser.plain_line(%Note{content_text: text}))
-         )
+  defp put_teaser(%{kind: "fediverse_reply"} = entry, posts),
+    do: put_line(entry, :note_teaser, posts)
 
   defp put_teaser(entry, _posts), do: entry
 
-  defp blank_to_nil(""), do: nil
-  defp blank_to_nil(text), do: text
+  defp put_line(entry, key, posts) do
+    case quote_line(entry, posts) do
+      "" -> entry
+      line -> Map.put(entry, key, line)
+    end
+  end
 
   # The one-line form is the app's shared post teaser, so this page skips a
   # quote post's `RE: <url>` opener and an image-only first line exactly as the
