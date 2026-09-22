@@ -13,7 +13,7 @@
 // Cross-page navigation is a plain location change so it works identically on
 // classic controller pages and LiveView pages.
 
-import { onReady } from "./util"
+import { closeCardMenus, onReady } from "./util"
 
 const DESKTOP = window.matchMedia("(hover: hover) and (pointer: fine)")
 
@@ -140,12 +140,12 @@ function overlay() {
   return document.getElementById("shortcuts-overlay")
 }
 
-// A designed confirm dialog (e.g. the profile editor's "Remove date of birth")
-// marks itself [data-block-shortcuts] and shows by dropping its `hidden` class.
-// While one is open it is modal, so every shortcut but Escape must stay inert
-// behind it — otherwise "n"/"g …" would act on the page under the dialog.
+// A modal is open: a native <dialog> (e.g. the profile editor's "Remove date of
+// birth") or an overlay that marks itself [data-block-shortcuts] and shows by
+// dropping its `hidden` class. Every shortcut but Escape must stay inert behind
+// it — otherwise "n"/"g …" would act on the page under the dialog.
 function blockingModalOpen() {
-  return !!document.querySelector("[data-block-shortcuts]:not(.hidden)")
+  return !!document.querySelector("dialog[open], [data-block-shortcuts]:not(.hidden)")
 }
 
 function overlayOpen() {
@@ -159,9 +159,7 @@ let lastFocused = null
 
 function openOverlay() {
   // Close any open dropdown first so the menu doesn't sit under the modal.
-  document
-    .querySelectorAll("details[data-menu][open]")
-    .forEach((m) => m.removeAttribute("open"))
+  closeCardMenus()
   const o = overlay()
   if (!o) return
   lastFocused = document.activeElement

@@ -93,7 +93,6 @@ function build(root, field) {
   entry.type = "text"
   entry.className = "tag-input__entry"
   entry.setAttribute("autocomplete", "off")
-  entry.setAttribute("data-tag-input-entry", "")
 
   // The label and any error message point at the field's id, so the id moves to
   // the box the member actually types in; a `for` aimed at a hidden input would
@@ -114,7 +113,6 @@ function build(root, field) {
   const notice = document.createElement("p")
   notice.className = "tag-input__notice"
   notice.setAttribute("role", "status")
-  notice.setAttribute("data-tag-limit-notice", "")
   notice.hidden = true
 
   field.type = "hidden"
@@ -138,7 +136,6 @@ function build(root, field) {
       const remove = document.createElement("button")
       remove.type = "button"
       remove.className = "tag-input__remove"
-      remove.setAttribute("data-tag-remove", "")
       remove.setAttribute("aria-label", removeLabel.replace("%{name}", tag))
       remove.textContent = "×"
       // Removing must not go through a blur first: the blur handler re-renders

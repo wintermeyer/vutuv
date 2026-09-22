@@ -17,7 +17,7 @@
 // its thumbnail frame in `data-photo-frame`, and the overlay draws a copy of
 // that frame fitted like a photo, a tap toggling 1:1 the same way.
 
-import { keyActivates, onReady, once } from "./util"
+import { keyActivates, plainClick } from "./util"
 
 let overlay = null
 let photos = []
@@ -292,34 +292,28 @@ function openFrom(control, event) {
   open(gallery, Number(control.dataset.lightboxPhoto) || 0)
 }
 
-onReady(() => {
-  // `onReady` re-runs after every LiveView navigation, so these two *document*
-  // listeners have to be guarded or they stack up: after k patches a single
-  // ArrowLeft stepped k photos at once, and every copy stayed for the life of
-  // the tab. This is the pairing `onReady`'s own doc asks for.
-  if (!once(document.documentElement, "lightbox")) return
+// Delegated at module level, so each listener exists once for the life of the
+// tab whatever LiveView navigates.
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("[data-lightbox-photo]")
+  if (!link) return
+  // Let a modified click do what the browser would: open the full image in a
+  // new tab. The href is a real URL precisely so that still works.
+  if (e.button !== 0 || !plainClick(e)) return
+  openFrom(link, e)
+})
 
-  document.addEventListener("click", (e) => {
-    const link = e.target.closest("[data-lightbox-photo]")
-    if (!link) return
-    // Let a modified click do what the browser would: open the full image in a
-    // new tab. The href is a real URL precisely so that still works.
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-    openFrom(link, e)
-  })
+document.addEventListener("keydown", (e) => {
+  // Opening it: the magnifier corners are `role="button"` spans (they stand
+  // over pictures that are themselves links), so the keyboard reaches them
+  // only through `keyActivates` — see util.js. This sits ahead of the keys
+  // below because the overlay is shut when a corner is pressed.
+  if (keyActivates(e, "[data-lightbox-photo][role=button]")) return openFrom(e.target, e)
 
-  document.addEventListener("keydown", (e) => {
-    // Opening it: the magnifier corners are `role="button"` spans (they stand
-    // over pictures that are themselves links), so the keyboard reaches them
-    // only through `keyActivates` — see util.js. This sits ahead of the keys
-    // below because the overlay is shut when a corner is pressed.
-    if (keyActivates(e, "[data-lightbox-photo][role=button]")) return openFrom(e.target, e)
-
-    if (!overlay || overlay.hidden) return
-    if (e.key === "Escape") close()
-    else if (e.key === "ArrowLeft") step(-1)
-    else if (e.key === "ArrowRight") step(1)
-    else return
-    e.preventDefault()
-  })
+  if (!overlay || overlay.hidden) return
+  if (e.key === "Escape") close()
+  else if (e.key === "ArrowLeft") step(-1)
+  else if (e.key === "ArrowRight") step(1)
+  else return
+  e.preventDefault()
 })

@@ -60,13 +60,25 @@ export const markActiveRow = (rows, index, anchorEl) => {
 // Returns the detach function. A caller that dies while the page lives — the
 // messages page tears an editor down per closed conversation — must hold it
 // and call it, or it leaks a handler on `window` per editor.
+//
+// Coalesced to one call per frame: every placement measures the caret and the
+// panel, and a scroll can fire several events between two paints.
 export const followsCaret = (onMove) => {
-  const handler = () => onMove()
+  let frame = null
+  const handler = () => {
+    if (frame == null) {
+      frame = requestAnimationFrame(() => {
+        frame = null
+        onMove()
+      })
+    }
+  }
 
   window.addEventListener("scroll", handler, { passive: true, capture: true })
   window.addEventListener("resize", handler)
 
   return () => {
+    if (frame != null) cancelAnimationFrame(frame)
     window.removeEventListener("scroll", handler, { capture: true })
     window.removeEventListener("resize", handler)
   }

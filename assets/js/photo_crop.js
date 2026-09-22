@@ -21,10 +21,7 @@
 // change nothing. Labels arrive translated via data-* attributes, like the
 // lightbox's.
 
-import { buildStage, createCropStage, cropString, el } from "./crop_stage"
-import { bindEscape, buttonPrimary, buttonSecondary } from "./util"
-
-const MAX_ZOOM = 4
+import { MAX_ZOOM, buildCropDialog, createCropStage, cropString, el } from "./crop_stage"
 
 // The popular shapes, landscape and portrait alike. "3:2" is the classic
 // camera frame, "16:9" the screen, "4:5" the portrait feed standard.
@@ -54,7 +51,8 @@ export function openPhotoCropper(button, labels, onSave) {
 
 function openDialog(bitmap, stored, labels, onSave) {
   const aspect = initialAspect(bitmap, stored)
-  const ui = buildDialog(labels, stored != null, aspect)
+  // The dismissal reads `st` only once the dialog is up, by which time it is set.
+  const ui = buildDialog(labels, stored != null, aspect, () => st.destroy())
   document.body.appendChild(ui.overlay)
 
   // st owns the stage geometry — layout, cover-fit zoom floor, offsets and
@@ -187,10 +185,6 @@ function openDialog(bitmap, stored, labels, onSave) {
       st.destroy()
     })
   }
-  ui.overlay.addEventListener("click", (e) => {
-    if (e.target === ui.overlay) st.destroy()
-  })
-  bindEscape(ui.overlay, st.destroy)
 }
 
 // The chip preselected when the dialog opens: the stored crop's shape, else
@@ -219,18 +213,11 @@ function parseCrop(value) {
   return { x, y, w, h }
 }
 
-// Builds the dialog DOM. Tailwind scans assets/js, so these utility classes
-// are part of the build (app.css `@source "../js"`).
-function buildDialog(labels, resettable, activeAspect) {
-  const overlay = el("div", "fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4")
-  overlay.setAttribute("data-photo-crop-overlay", "")
-  const dialog = el(
-    "div",
-    "max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-xl dark:bg-slate-900"
-  )
-  const title = el("h2", "text-base font-semibold text-slate-900 dark:text-white", labels.title)
-  const hint = el("p", "mt-1 text-xs text-slate-600 dark:text-slate-400", labels.hint)
-
+// The shared dialog shell plus this dialog's own parts: the ratio chip row
+// above the stage and, for a photo already cropped, the reset button. Tailwind
+// scans assets/js, so these utility classes are part of the build (app.css
+// `@source "../js"`).
+function buildDialog(labels, resettable, activeAspect, onDismiss) {
   const chipRow = el("div", "-mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1 pb-1")
   const chips = RATIOS.map((ratio) => {
     const active = Math.abs(ratio.value - activeAspect) < 0.001
@@ -247,17 +234,6 @@ function buildDialog(labels, resettable, activeAspect) {
     return chip
   })
 
-  const { stage, canvas } = buildStage()
-
-  const zoom = el("input", "mt-3 block w-full accent-brand-600")
-  zoom.type = "range"
-  zoom.min = "1"
-  zoom.max = String(MAX_ZOOM)
-  zoom.step = "0.01"
-  zoom.value = "1"
-  zoom.setAttribute("aria-label", labels.zoom)
-
-  const actions = el("div", "mt-4 flex flex-wrap items-center justify-end gap-3")
   let reset = null
   if (resettable) {
     reset = el(
@@ -266,25 +242,11 @@ function buildDialog(labels, resettable, activeAspect) {
       labels.reset
     )
     reset.type = "button"
-    actions.appendChild(reset)
   }
-  const cancel = el(
-    "button",
-    buttonSecondary,
-    labels.cancel
-  )
-  cancel.type = "button"
-  const save = el(
-    "button",
-    buttonPrimary,
-    labels.save
-  )
-  save.type = "button"
-  actions.append(cancel, save)
 
-  dialog.append(title, hint, chipRow, stage, zoom, actions)
-  overlay.appendChild(dialog)
-  return { overlay, dialog, stage, canvas, zoom, chips, save, cancel, reset }
+  const ui = buildCropDialog(labels, onDismiss, { extras: [chipRow], lead: reset })
+  ui.overlay.setAttribute("data-photo-crop-overlay", "")
+  return { ...ui, chips, reset }
 }
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))

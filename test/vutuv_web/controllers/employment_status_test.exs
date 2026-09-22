@@ -204,8 +204,9 @@ defmodule VutuvWeb.EmploymentStatusTest do
       # Panel holds availability visibility + the salary group.
       assert html =~ ~s(name="user[employment_status_visibility]")
       assert html =~ ~s(name="user[desired_salary_min]")
-      # No status yet, so the whole panel ships hidden (no clutter).
-      assert html =~ ~r/data-jobsearch-details[^>]*class="[^"]*hidden/
+      # No status yet: the blank option is selected, which is what the
+      # `:has()` rule in app.css hides the whole panel on (no clutter).
+      assert blank_status_selected?(html)
     end
 
     test "the job-search details panel is revealed once a status is set", %{
@@ -218,7 +219,7 @@ defmodule VutuvWeb.EmploymentStatusTest do
 
       assert html =~ ~s(name="user[employment_status_visibility]")
       assert html =~ ~s(name="user[desired_salary_min]")
-      refute html =~ ~r/data-jobsearch-details[^>]*class="[^"]*hidden/
+      refute blank_status_selected?(html)
     end
 
     test "saving 'looking' persists the status", %{conn: conn, user: user} do
@@ -343,5 +344,13 @@ defmodule VutuvWeb.EmploymentStatusTest do
       md = conn |> get("/#{user.username}.md") |> response(200)
       refute md =~ "Salary expectation"
     end
+  end
+
+  # No status but the blank "Not open to work" one is selected (a browser picks
+  # that first option when none is marked), which is what the `:has()` rule in
+  # app.css hides the job-search details panel on.
+  defp blank_status_selected?(html) do
+    elements(html, ~s{select[name="user[employment_status]"] option[selected]:not([value=""])}) ==
+      []
   end
 end

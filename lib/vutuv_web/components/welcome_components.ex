@@ -173,7 +173,6 @@ defmodule VutuvWeb.WelcomeComponents do
       <%!-- The job group is a second changeset in the same <form>: its inputs are
       built from their own form struct, so they post under user[...]. --%>
       <% uf = to_form(@user_changeset, as: :user) %>
-      <% status_set? = Form.input_value(uf, :employment_status) not in [nil, ""] %>
       <.form_error changeset={
         if @address_changeset.action, do: @address_changeset, else: @user_changeset
       } />
@@ -236,9 +235,9 @@ defmodule VutuvWeb.WelcomeComponents do
       </section>
 
       <%!-- Group 2: the job search. The salary + workplace panel is revealed only
-      once a status is picked (the EmploymentVisibility enhancement in app.js,
-      the same one the Basics form uses); with JS off the server-rendered state
-      stands, so a member who is not looking never sees the extra fields. --%>
+      once a status is picked (a `:has()` rule in app.css, the same one the
+      Basics form uses), so a member who is not looking never sees the extra
+      fields. --%>
       <section :if={@step == :job} class="space-y-4" data-employment-status-field>
         <h3 class="text-base font-bold text-slate-900 dark:text-white">
           {gettext("Are you looking for a job?")}
@@ -250,7 +249,7 @@ defmodule VutuvWeb.WelcomeComponents do
           <%= error_tag uf, :employment_status %>
         </div>
 
-        <div data-jobsearch-details class={["space-y-5", !status_set? && "hidden"]}>
+        <div data-jobsearch-details class="space-y-5">
           <%!-- Who may see the availability. On the Basics form this sits behind
           a longer explanation; here the three options speak for themselves and
           the default ("Signed-in members only") is already selected. --%>

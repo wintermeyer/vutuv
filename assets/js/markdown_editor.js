@@ -62,7 +62,7 @@ import { ACTIVE_CLASS, followsCaret, markActiveRow, stepIndex, suggestKey } from
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
 import { inputRules, InputRule } from "@milkdown/kit/prose/inputrules"
 import { emojiForShortcode, SHORTCODE_AT_CARET } from "./emoji_data.js"
-import { request } from "./util.js"
+import { getJSON } from "./util.js"
 // No emoji picker import: the panel went with the toolbar button it hung off
 // (issue #1886). `emojiForShortcode` above stays — typing `:tada:` still
 // becomes 🎉, which costs no pixels and no control.
@@ -1166,7 +1166,7 @@ export const MarkdownEditor = {
     // type it again), which would otherwise redraw the list and throw away the
     // row somebody had arrowed down to.
     const seq = ++this.mentionSeq
-    const items = await this.fetchJson(this.root.dataset.mentionUrl, { q: term })
+    const items = await getJSON(this.root.dataset.mentionUrl, { q: term })
     if (this.destroyed_ || seq !== this.mentionSeq) return
     if (!items || !this.mentionRun || this.mentionRun.term !== term) return
 
@@ -1325,7 +1325,7 @@ export const MarkdownEditor = {
     })
     if (pending.size === 0) return
 
-    const answer = await this.fetchJson(this.root.dataset.mentionCheckUrl, {
+    const answer = await getJSON(this.root.dataset.mentionCheckUrl, {
       handles: [...pending].join(","),
     })
     if (!answer || this.destroyed_) return
@@ -1367,23 +1367,6 @@ export const MarkdownEditor = {
   // enhancement, so a dropped connection (or a session that expired into a
   // login redirect) means no suggestions, not a broken editor.
   //
-  // Through `util.js`' `request/2` rather than a bare `fetch`, which is where
-  // this app's fetch conventions already live — including the one that bites
-  // here: **no** `accept: application/json`, because these routes ride the
-  // ordinary browser pipeline, where an explicit JSON Accept is read as a
-  // request for an agent document rather than for the member's own page.
-  async fetchJson(url, params) {
-    if (!url) return null
-
-    try {
-      const response = await request(`${url}?${new URLSearchParams(params)}`)
-      if (!response.ok) return null
-      return await response.json()
-    } catch (_error) {
-      return null
-    }
-  },
-
   // --- inline images (post composer only) ---
 
   // Server → hook events. `mde-image-uploaded` fires for every finished upload

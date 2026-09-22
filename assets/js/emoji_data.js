@@ -17,19 +17,20 @@
 //     aliases so muscle memory from another app lands (`:thumbsup:` = `:+1:`).
 //     These drive the type-through, so they must be names other apps really
 //     use; do not invent convenient ones here.
-//   * `english` / `german` — extra search words, kept against a future search
-//     over this table; nothing reads them today (see the note above
-//     `emojiForShortcode`).
+//   * `english` / `german` — extra search words. Nothing reads them since the
+//     picker and its search went (issue #1886); they are kept because they cost
+//     nothing at runtime and are the whole of the work if a search over this
+//     table is ever wanted again.
 //
 // The set is deliberately curated rather than the full ~1,900 of Unicode: this
-// is a professional network, and the whole file is bundled into app.js (no
-// fetch, so an intranet installation needs nothing). Adding an emoji is one
+// is a professional network, and the whole file ships inside the editor bundle
+// (no fetch, so an intranet installation needs nothing). Adding an emoji is one
 // line.
 //
 // **The groups are no longer tabs anybody sees** (issue #1886 removed the
 // picker): they are scaffolding for the shortcode lookup, so adding a group
 // needs no label anywhere and nothing fails the build over one.
-export const EMOJI_GROUPS = {
+const EMOJI_GROUPS = {
   smileys: [
     ["😀", "grinning", "happy smile face", "lachen freude gesicht froh"],
     ["😃", "smiley", "happy joy open mouth", "lachen freude froh"],
@@ -492,27 +493,14 @@ export const EMOJI_GROUPS = {
   ],
 }
 
-// Every emoji in one flat list, in group order: [char, codes, group, haystack].
-// The haystack is what search matches against — the shortcodes plus BOTH
-// languages' keywords, so a German and an English member find the same emoji
-// whichever language the interface is in.
-export const EMOJI_LIST = Object.entries(EMOJI_GROUPS).flatMap(([group, entries]) =>
-  entries.map(([char, codes, en, de]) => ({
-    char,
-    codes: codes.split(" ").filter(Boolean),
-    group,
-    haystack: `${codes} ${en} ${de}`.toLowerCase(),
-  }))
-)
-
 // shortcode (and alias) -> character, for the type-through. First writer wins, so
 // a duplicate alias further down the file can never shadow an earlier canonical
 // name.
 const BY_CODE = new Map()
 
-for (const entry of EMOJI_LIST) {
-  for (const code of entry.codes) {
-    if (!BY_CODE.has(code)) BY_CODE.set(code, entry.char)
+for (const [char, codes] of Object.values(EMOJI_GROUPS).flat()) {
+  for (const code of codes.split(" ").filter(Boolean)) {
+    if (!BY_CODE.has(code)) BY_CODE.set(code, char)
   }
 }
 
@@ -522,13 +510,3 @@ export const emojiForShortcode = (code) => BY_CODE.get(code.toLowerCase()) || nu
 // ever fires on the colon the member just typed, and deliberately strict about
 // the charset (`a-z0-9_+-`), so prose like "Achtung: 10:30" cannot match.
 export const SHORTCODE_AT_CARET = /:([a-z0-9_+-]{1,32}):$/i
-
-// Search: every whitespace-separated token must appear in the entry's haystack,
-// so "grün herz" finds 💚 and "green heart" does too. An empty query returns the
-// group unfiltered.
-//
-// (`searchEmoji` and its word-start ranking lived here until issue #1886.
-// Its only caller was the emoji picker panel, which went with the toolbar
-// button that opened it. The `english`/`german` keyword columns below are
-// what it searched, and they are kept: they cost nothing at runtime and are
-// the whole of the work if a search over this table is ever wanted again.)
