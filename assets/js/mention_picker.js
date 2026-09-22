@@ -248,7 +248,7 @@ export const acceptMention = () => {
   return true
 }
 
-export const closeMentions = () => {
+const closeMentions = () => {
   if (!panel || panel.el.hidden) return
   panel.el.hidden = true
   panel.list.replaceChildren()

@@ -452,12 +452,17 @@ defmodule VutuvWeb.SettingsControllerTest do
       %{conn: conn, user: user}
     end
 
-    test "the page carries the acknowledgement field and both dialogs", %{conn: conn} do
+    test "both dialogs carry the acknowledgement as a submitter of the form", %{conn: conn} do
       html = conn |> get(~p"/settings/fediverse") |> html_response(200)
 
-      assert html =~ ~s(data-fediverse-ack)
-      assert html =~ ~s(id="fediverse-consent-on")
-      assert html =~ ~s(id="fediverse-consent-off")
+      for id <- ["fediverse-consent-on", "fediverse-consent-off"] do
+        assert [_confirm] =
+                 elements(
+                   html,
+                   ~s(dialog##{id} button[type="submit"][form="fediverse-form"][name="fediverse_ack"][value="1"])
+                 )
+      end
+
       assert html =~ "out of our hands"
     end
 

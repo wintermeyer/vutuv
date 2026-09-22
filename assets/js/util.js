@@ -281,13 +281,13 @@ export function flashText(label, text, ms = 1500, after = null) {
   flashes.set(label, { was, timer })
 }
 
-// The kit's button recipe, for the two dialogs JavaScript builds itself (the
-// avatar crop modal and the post-photo crop modal). `VutuvWeb.UI.button_class/1`
-// is the owner on the server side and cannot reach here, so this is the one
-// deliberate copy — kept in one place rather than four, and kept honest by
-// `button_recipe_test.exs`, which scans this directory too. Both dialogs used
-// to spell it themselves and had missed the 40px height, so a crop dialog's
-// Cancel/Save stood 4px shorter than every button around it.
+// The kit's button recipe, for the one dialog JavaScript builds itself (the
+// crop dialog shell in crop_stage.js, which both croppers open).
+// `VutuvWeb.UI.button_class/1` is the owner on the server side and cannot
+// reach here, so this is the one deliberate copy, kept honest by
+// `button_recipe_test.exs`, which scans this directory too. The two croppers
+// used to spell it themselves and had missed the 40px height, so a crop
+// dialog's Cancel/Save stood 4px shorter than every button around it.
 const BUTTON_BASE =
   "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
 

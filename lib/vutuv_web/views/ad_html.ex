@@ -221,22 +221,11 @@ defmodule VutuvWeb.AdHTML do
     not a `data-confirm` one-liner: the price of the act is the thing that has
     to be read, and a native confirm cannot say it in more than a sentence. --%>
     <div :if={@withdrawable?} class="mt-3">
-      <button
-        type="button"
-        data-modal-open={"withdraw-#{@ad.id}"}
-        class={[button_class("danger-ghost")]}
-      >
+      <.button variant="danger-ghost" data-modal-open={"withdraw-#{@ad.id}"}>
         {gettext("Take this ad off the site")}
-      </button>
+      </.button>
     </div>
-    <%!-- `m-auto` is load-bearing: a native dialog centres itself with
-    `margin: auto`, and Tailwind's preflight zeroes every margin, which parks
-    the modal in the top-left corner. --%>
-    <dialog
-      :if={@withdrawable?}
-      id={"withdraw-#{@ad.id}"}
-      class="m-auto w-[min(30rem,calc(100vw-2rem))] rounded-2xl bg-white p-6 text-slate-900 shadow-lg backdrop:bg-slate-900/50 dark:bg-slate-900 dark:text-slate-100"
-    >
+    <.modal_dialog :if={@withdrawable?} id={"withdraw-#{@ad.id}"}>
       <h2 class="text-lg font-bold">{gettext("Take this ad off the site?")}</h2>
       <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
         {gettext("It stops showing today. There is no money back: the booking was approved and the invoice stands.")}
@@ -245,16 +234,16 @@ defmodule VutuvWeb.AdHTML do
         {gettext("Days that have already run stay as they are.")}
       </p>
       <div class="mt-5 flex flex-wrap items-center justify-end gap-3">
-        <button type="button" data-modal-close class={[button_class("secondary")]}>
+        <.button variant="secondary" data-modal-close>
           {gettext("Keep it running")}
-        </button>
+        </.button>
         <.form for={%{}} id={"withdraw-form-#{@ad.id}"} action={~p"/system/ads/#{@ad}/withdraw"} method="post">
           <.button type="submit" variant="danger">
             {gettext("Take it off, no money back")}
           </.button>
         </.form>
       </div>
-    </dialog>
+    </.modal_dialog>
     """
   end
 

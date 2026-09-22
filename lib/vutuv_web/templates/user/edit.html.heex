@@ -6,7 +6,7 @@ md+ the sidebar lists them, on phones the "More profile sections" card below
 the form does, so this page is never a dead end (the "Edit profile" button
 lands here). --%>
 <.settings_shell user={@user} active={:basics} title={gettext("Basics & photos")}>
-  <.form :let={f} for={@changeset} id="profile-form" action={~p"/settings/profile"} multipart class="space-y-6">
+  <.form :let={f} for={@changeset} action={~p"/settings/profile"} multipart class="space-y-6">
     <.form_error changeset={@changeset} />
 
     <.card>
@@ -423,8 +423,7 @@ lands here). --%>
             (Safari on macOS), so a member could set a birthday but never remove
             it (issue #901). This is a real clear_birthdate submit (works with JS
             off — the controller nils the date). With JS `data-modal-open` opens
-            the confirmation dialog below instead, whose Remove button is the
-            same submit. Shown only while a birthday is set. --%>
+            the confirmation dialog below instead. Shown only while a birthday is set. --%>
             <.button
               :if={@user.birthdate}
               type="submit"
@@ -446,6 +445,30 @@ lands here). --%>
               </svg>
               {gettext("Remove date of birth")}
             </.button>
+            <%!-- "Are you sure?" dialog for removing the date of birth, opened by
+            the trigger's `data-modal-open`. It sits inside the edit form, so
+            its Remove button is that form's clear_birthdate submit and the
+            controller nils the date even though the date input still carries
+            its old value. JS off never sees it: the trigger is a plain submit
+            then. --%>
+            <.modal_dialog :if={@user.birthdate} id="birthday-remove-modal" aria-labelledby="birthday-remove-title">
+              <h2 id="birthday-remove-title" class="text-lg font-bold text-slate-900 dark:text-white">
+                {gettext("Remove your date of birth?")}
+              </h2>
+              <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
+                )}
+              </p>
+              <div class="mt-6 flex justify-end gap-3">
+                <.button variant="secondary" data-modal-close>
+                  {gettext("Cancel")}
+                </.button>
+                <.button type="submit" variant="danger" name="clear_birthdate" value="1" formnovalidate autofocus>
+                  {gettext("Remove date of birth")}
+                </.button>
+              </div>
+            </.modal_dialog>
           </div>
 
           <%!-- How much of the birthday the public profile (and its agent
@@ -489,44 +512,6 @@ lands here). --%>
     action={~p"/settings/profile/gravatar"}
   >
   </.form>
-
-  <%!-- "Are you sure?" dialog for removing the date of birth, opened by the
-  trigger's `data-modal-open`. Its Remove button submits the edit form's
-  clear_birthdate from here through `form=`, so the controller nils the date
-  even though the date input still carries its old value. JS off never sees
-  it: the trigger is a plain submit then. `m-auto` is load-bearing, see the
-  ad withdraw dialog in ad_html.ex. --%>
-  <dialog
-    :if={@user.birthdate}
-    id="birthday-remove-modal"
-    aria-labelledby="birthday-remove-title"
-    class="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm dark:bg-slate-900 dark:ring-slate-800"
-  >
-    <h2 id="birthday-remove-title" class="text-lg font-bold text-slate-900 dark:text-white">
-      {gettext("Remove your date of birth?")}
-    </h2>
-    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
-      )}
-    </p>
-    <div class="mt-6 flex justify-end gap-3">
-      <.button variant="secondary" data-modal-close>
-        {gettext("Cancel")}
-      </.button>
-      <.button
-        type="submit"
-        variant="danger"
-        form="profile-form"
-        name="clear_birthdate"
-        value="1"
-        formnovalidate
-        autofocus
-      >
-        {gettext("Remove date of birth")}
-      </.button>
-    </div>
-  </dialog>
 
   <%!-- On phones the sidebar is hidden, so list the sibling profile sections
   here — a member who tapped "Edit profile" to add a job must not hit a dead

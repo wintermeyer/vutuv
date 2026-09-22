@@ -2782,6 +2782,10 @@ function countingBoxes(group) {
   ]
 }
 
+function chosenCount(group) {
+  return countingBoxes(group).filter((b) => b.checked).length
+}
+
 function showSelectNotice(group, show) {
   const notice = group.querySelector("[data-select-notice]")
   if (notice) notice.hidden = !show
@@ -2795,7 +2799,7 @@ function showSelectNotice(group, show) {
 function syncFreeCount(group, limit) {
   const el = group.querySelector("[data-select-free]")
   if (!el) return
-  const chosen = countingBoxes(group).filter((b) => b.checked).length
+  const chosen = chosenCount(group)
   const template = el.dataset.labelSelected
   if (template) {
     el.textContent = template
@@ -2823,7 +2827,7 @@ function wireSelectAll(btn) {
     // never reach its deselect state on a group it can never fill.
     const filled =
       limit !== null &&
-      countingBoxes(group).filter((b) => b.checked).length >= limit
+      chosenCount(group) >= limit
     btn.dataset.state = allChecked || filled ? "all" : "some"
     btn.textContent =
       btn.dataset.state === "all"
@@ -2862,7 +2866,7 @@ function wireSelectAll(btn) {
       limit !== null &&
       box.checked &&
       !box.hasAttribute("data-duplicate") &&
-      countingBoxes(group).filter((b) => b.checked).length > limit
+      chosenCount(group) > limit
     ) {
       box.checked = false
       showSelectNotice(group, true)
@@ -2913,8 +2917,8 @@ onReady(setupDeleteGate)
 // permanent profile link). Progressive enhancement: with JS off the target is
 // select-all so it can be copied by hand; this just makes it one click. The
 // button copies the textContent of the element named by data-copy-target (an
-// id) and, for ~1.5s, swaps its label from data-label-copy to data-label-copied
-// so no translated text is hardcoded here. The copy itself (and the fallback
+// id) and, for ~1.5s, swaps its label for data-label-copied so no translated
+// text is hardcoded here. The copy itself (and the fallback
 // for a browser or an installation without a secure context) is `copyText/1` in
 // util.js, shared with the mention card.
 function wireCopyButton(btn) {
@@ -3110,18 +3114,13 @@ function wireCharCounter(wrap) {
   const input = wrap.querySelector("[data-char-count-input]")
   const readout = wrap.querySelector("[data-char-count-readout]")
   const output = wrap.querySelector("[data-char-count]")
-  const ok = wrap.querySelector("[data-char-ok]")
-  const over = wrap.querySelector("[data-char-over]")
   const max = readout && parseInt(readout.dataset.max, 10)
   if (!input || !readout || !output || !max) return
 
   const update = () => {
     const used = [...input.value].length
-    const isOver = used > max
     output.textContent = used
-    readout.dataset.over = isOver ? "true" : "false"
-    if (ok) ok.classList.toggle("hidden", isOver)
-    if (over) over.classList.toggle("hidden", !isOver)
+    readout.dataset.over = String(used > max)
   }
 
   input.addEventListener("input", update)
@@ -3291,7 +3290,6 @@ function setupUploadDrops() {
 }
 onReady(setupUploadDrops)
 
-// The profile editor's "Remove date of birth" control (see user/edit.html.heex).
 // The one-time welcome questions (see welcome_components.ex), floating over the
 // profile a brand-new member's registration PIN landed them on. The ✕ and the
 // "Skip for now" button are ordinary submits carrying `skip`, so the window
@@ -3299,8 +3297,8 @@ onReady(setupUploadDrops)
 // to answer, Esc and a click on the backdrop, and routes both through that same
 // submit. Closing IS the answer -- the server stamps welcome_completed_at and
 // never asks again -- so there is no client-side "hide" that would leave the
-// two sides disagreeing. (The keyboard-shortcuts handler leaves Esc to a
-// [data-block-shortcuts] dialog, which this is.)
+// two sides disagreeing. (The keyboard-shortcuts handler leaves Esc to any
+// open dialog, and [data-block-shortcuts] is how this one says it is open.)
 function setupWelcomeModal() {
   const modal = document.getElementById("welcome-modal")
   const skip = document.getElementById("welcome-skip")

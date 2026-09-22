@@ -29,7 +29,7 @@ export function el(tag, className, text) {
 // visual cue, not a separate region). layout() sizes the stage in pixels —
 // it fits a viewport-height budget, so it is not always full width; mx-auto
 // keeps it centered.
-export function buildStage() {
+function buildStage() {
   const stage = el(
     "div",
     "relative mx-auto mt-3 touch-none select-none overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"

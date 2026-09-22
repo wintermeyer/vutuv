@@ -1112,8 +1112,8 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "the Remove-date-of-birth control opens a confirm dialog before clearing", %{conn: conn} do
     # The remove control is a real submit (no-JS fallback) that opens a native
-    # <dialog> via `data-modal-open`; the dialog's Remove button is the same
-    # clear_birthdate submit, reaching the edit form through `form=`.
+    # <dialog> via `data-modal-open`; the dialog sits inside the edit form, so
+    # its Remove button is the same clear_birthdate submit.
     {conn, user} = create_and_login_user(conn)
 
     user |> Ecto.Changeset.change(%{birthdate: ~D[1990-04-15]}) |> Repo.update!()
@@ -1123,13 +1123,13 @@ defmodule VutuvWeb.UserControllerTest do
     assert [_trigger] =
              elements(
                html,
-               ~s(form#profile-form button[name="clear_birthdate"][data-modal-open="birthday-remove-modal"])
+               ~s(form button[name="clear_birthdate"][data-modal-open="birthday-remove-modal"])
              )
 
     assert [_confirm] =
              elements(
                html,
-               ~s(dialog#birthday-remove-modal button[type="submit"][form="profile-form"][name="clear_birthdate"])
+               ~s(form dialog#birthday-remove-modal button[type="submit"][name="clear_birthdate"])
              )
 
     assert [_cancel] = elements(html, "dialog#birthday-remove-modal button[data-modal-close]")
