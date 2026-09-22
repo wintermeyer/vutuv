@@ -22,6 +22,50 @@ defmodule VutuvWeb.PageHTML do
   end
 
   @doc """
+  The founder quote as the hero heading's text, with every short sentence kept
+  on one line.
+
+  On a phone the German quote broke between "vutuv" and "nicht", which read as
+  two fragments. How many words a sentence has depends on the catalog, so the
+  rule reads the translation instead of naming a locale: a sentence of at most
+  two words is wrapped in `whitespace-nowrap`, a longer one is left to the
+  browser. Punctuation is not a word, so the French closing « » » stays glued
+  to "vutuv non." rather than dropping to a line of its own. A sentence without
+  a space has nothing to protect and gets no wrapper, which also keeps a script
+  written without spaces from gluing its whole sentence into one line.
+  """
+  attr(:text, :string, required: true)
+
+  def quote_sentences(assigns) do
+    assigns = assign(assigns, :sentences, sentences(assigns.text))
+
+    # Not a `:for` on the span: it renders the spans back to back, and the
+    # template whitespace between iterations is the only break point left
+    # between two sentences.
+    ~H"""
+    <%= for {sentence, keep_whole?} <- @sentences do %>
+      <%= if keep_whole? do %>
+        <span class="whitespace-nowrap">{sentence}</span>
+      <% else %>
+        {sentence}
+      <% end %>
+    <% end %>
+    """
+  end
+
+  # A new sentence starts after `.`, `!`, `?` or `…` at a space whose next
+  # token holds a letter or a digit, so a lone closing « » » stays with the
+  # sentence it closes.
+  @sentence_break ~r/(?<=[.!?…]) +(?=\S*[\p{L}\p{N}])/u
+
+  defp sentences(text) do
+    for sentence <- String.split(text, @sentence_break, trim: true) do
+      words = sentence |> String.split() |> Enum.count(&(&1 =~ ~r/[\p{L}\p{N}]/u))
+      {sentence, words <= 2 and String.contains?(sentence, " ")}
+    end
+  end
+
+  @doc """
   The three claims under the founder quote, inside the hero panel.
 
   One line each, with nothing behind it: the half-sentence two of them used to

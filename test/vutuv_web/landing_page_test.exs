@@ -31,6 +31,10 @@ defmodule VutuvWeb.LandingPageTest do
 
   defp at(html, marker), do: :binary.match(html, marker) |> elem(0)
 
+  # The heading as a reader sees it: the short sentences sit in spans of their
+  # own, so the markup no longer holds the quote as one string.
+  defp headline(html), do: html |> text_of("h1") |> String.replace(~r/\s+/u, " ")
+
   describe "the landing page" do
     # The one founder quote. It used to be a split test between this and a
     # warmer invitation ("Genervt von LinkedIn? Dann mal herein in die gute
@@ -41,10 +45,32 @@ defmodule VutuvWeb.LandingPageTest do
     test "carries one headline, the same one for everybody", %{conn: conn} do
       html = landing_de(conn)
 
-      assert html =~ "„LinkedIn nervt. vutuv nicht.“"
+      assert headline(html) == "„LinkedIn nervt. vutuv nicht.“"
       refute html =~ "gute Stube"
 
-      assert landing(build_conn()) =~ "LinkedIn is annoying. vutuv is not."
+      assert headline(landing(build_conn())) == "“LinkedIn is annoying. vutuv is not.”"
+    end
+
+    # On a phone the German quote broke between "vutuv" and "nicht". A sentence
+    # of at most two words is kept on one line; a longer one is left to the
+    # browser. Rendered in every locale, because only the catalog knows how
+    # many words each sentence has: French and Italian keep their second
+    # sentence alone, and French glues its closing « » » to it.
+    for {locale, glued} <- [
+          {"de-DE,de", ["„LinkedIn nervt.", "vutuv nicht.“"]},
+          {"en", []},
+          {"fr-FR,fr", ["vutuv non. »"]},
+          {"it-IT,it", ["vutuv no.”"]}
+        ] do
+      test "keeps the headline's short sentences whole (#{locale})", %{conn: conn} do
+        html = conn |> put_req_header("accept-language", unquote(locale)) |> landing()
+
+        kept = html |> elements("h1 .whitespace-nowrap") |> Enum.map(&LazyHTML.text/1)
+        assert kept == unquote(glued)
+
+        heading = headline(html)
+        assert heading =~ ~r/[.!?] \S/u, "the sentences must still be apart: #{heading}"
+      end
     end
 
     # The three claims beside the quote: whoever agrees that LinkedIn is
