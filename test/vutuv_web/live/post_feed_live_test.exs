@@ -1610,14 +1610,29 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "a tall tower is cropped to an ordinary frame instead of a scroll", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       # 1000×6000 = 1:6. Shown whole at column width this runs several screens
-      # down the timeline, so it is the one single-photo case that still crops.
-      post_with_image(user, "A tall infographic", 1000, 6000, "towertok")
+      # down the timeline, so it is the one single-photo case that still crops
+      # when the photo is the whole post.
+      post_with_image(user, "", 1000, 6000, "towertok")
 
       {:ok, _live, html} = live(conn, ~p"/feed")
 
       assert html =~ ~s(data-photo-fit="crop")
       assert html =~ "aspect-ratio: 3 / 4"
       assert html =~ "object-cover"
+    end
+
+    test "a tall tower beside text becomes a thumbnail in the same frame", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # With text the tower illustrates it, so the crop's 3:4 frame floats at
+      # thumbnail size beside the prose instead of standing across the column.
+      post_with_image(user, "A tall infographic", 1000, 6000, "towertxt")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ "post-clamp--wrap"
+      assert html =~ ~s(data-photo-fit="thumb")
+      refute html =~ ~s(data-photo-fit="crop")
+      assert html =~ "aspect-ratio: 3 / 4"
     end
 
     test "a tall portrait is shown whole rather than cut off top and bottom", %{conn: conn} do

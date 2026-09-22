@@ -303,12 +303,12 @@ defmodule VutuvWeb.PostComponents do
       # The clip (issue #1906): preloaded by `post_preloads/0`, absent on a
       # nested parent card's shorter chain — which then simply shows none.
       |> assign(:video, card_video(post))
-      # The authored inline placement owns the media layout: the float-a-square-
-      # image and screenshot-beside-the-text automatics stay off when the body
-      # embeds pictures itself.
+      # The authored inline placement owns the media layout: the float-a-photo
+      # and screenshot-beside-the-text automatics stay off when the body embeds
+      # pictures itself.
       |> assign(
-        :square_layout?,
-        not inline_media? and square_layout?(post, gallery, assigns.mode)
+        :beside_photo,
+        if(not inline_media?, do: beside_photo(post, gallery, assigns.mode))
       )
       |> assign_link_screenshot(post, assigns.mode)
       |> assign_tags_placement(post)
@@ -4940,12 +4940,16 @@ defmodule VutuvWeb.PostComponents do
               </div>
 
               <%= cond do %>
-            <% @square_layout? -> %>
-              <%!-- A single roughly-square image (see @square_ratio_*) FLOATS to
-              the top-right and the body text wraps around it and reclaims the full
-              width below it — no dead column of whitespace beside a short image.
-              At ~1/3 of the column a squarish image renders whole (no crop). See
-              the `.post-clamp--wrap` note in components.css for how the height
+            <% @beside_photo -> %>
+              <%!-- A single photo (see beside_photo/3) FLOATS to the top-right
+              and the body text wraps around it and reclaims the full width below
+              it — no dead column of whitespace beside a short image. At ~1/3 of
+              the column a squarish image renders whole (no crop). A tower is a
+              fixed w-28 thumbnail instead, its top in feed_photo_fit/1's crop
+              frame: about as tall as the desktop's default six lines, so a short
+              post shows it whole (a cut of a few pixels is not worth a "Read
+              more") and a long one fades its lower edge with the text. See the
+              `.post-clamp--wrap` note in components.css for how the height
               clamp respects the float. --%>
               <.preview_body
                 body_id={@body_id}
@@ -4960,15 +4964,28 @@ defmodule VutuvWeb.PostComponents do
                   <%!-- The float is the gallery's, not the anchor's, so the
                   magnifier in its corner sits on the picture — and outside the
                   link, where a control belongs. --%>
-                  <.lightbox_gallery class="hover-reveal-host relative float-right mb-1 ml-4 w-2/5 sm:w-1/3">
+                  <.lightbox_gallery class={[
+                    "hover-reveal-host relative float-right mb-1 ml-4",
+                    if(@beside_photo == :square, do: "w-2/5 sm:w-1/3", else: "w-28")
+                  ]}>
                     <.link href={@permalink} aria-label={gettext("View post")} class="block">
                       <.picture
+                        :if={@beside_photo == :square}
                         picture={PostImage.picture(hd(@gallery))}
                         alt={photo_alt(hd(@gallery))}
                         width={hd(@gallery).width}
                         height={hd(@gallery).height}
                         loading="lazy"
                         class="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+                      />
+                      <.picture
+                        :if={@beside_photo != :square}
+                        picture={PostImage.picture(hd(@gallery))}
+                        alt={photo_alt(hd(@gallery))}
+                        loading="lazy"
+                        style={"aspect-ratio: #{elem(@beside_photo, 1)}"}
+                        class="w-full rounded-lg object-cover object-top ring-1 ring-slate-200 dark:ring-slate-800"
+                        data-photo-fit="thumb"
                       />
                     </.link>
                     <.photo_zoom_corner image={hd(@gallery)} license={@post.license} />
@@ -5852,7 +5869,9 @@ defmodule VutuvWeb.PostComponents do
 
   The one exception is a photo taller than **1:2**: at column width that is not
   a picture you look at but a scroll you get past, so it is cropped to 3:4 and
-  the permalink shows it whole.
+  the permalink shows it whole. That crop is what a photo-only post gets; with
+  text beside it the card floats the photo as a small thumbnail instead
+  (`beside_photo/3`), since there it illustrates the text.
 
   **Width has no such limit, and that asymmetry is the point.** A wide photo
   cropped to 2:1 used to be the mirror rule, on the reasoning that a panorama
@@ -6431,14 +6450,27 @@ defmodule VutuvWeb.PostComponents do
 
   # Whether to float a post's single image beside its body (the text wraps around
   # and below it, `.post-clamp--wrap`) rather than stacking a full-width image
-  # below the text. True only in preview mode, with body text for the float to
-  # wrap, exactly one image, and that image roughly square (see square_image?/1).
-  # Anything else keeps the existing full-width single / multi-image treatment.
-  defp square_layout?(post, gallery, :preview) do
-    post.body != "" and match?([_], gallery) and square_image?(hd(gallery))
+  # below the text, and in which shape. Only in preview mode, with body text for
+  # the float to wrap and exactly one image:
+  #
+  #   * `:square` — roughly square (see square_image?/1), shown whole.
+  #   * `{:tower, aspect}` — taller than the 1:2 that feed_photo_fit/1 crops,
+  #     which is every phone screenshot (~9:19.5). At column width that crop
+  #     stood taller than the whole rest of the card; beside the text it
+  #     becomes a small thumbnail in the same frame (`aspect`), and the
+  #     magnifier shows it whole.
+  #
+  # nil keeps the full-width single / multi-image treatment, and so does a
+  # tower without text: there it is the post, not an illustration of it.
+  defp beside_photo(%{body: body}, [image], :preview) when body != "" do
+    case {square_image?(image), feed_photo_fit(image)} do
+      {true, _fit} -> :square
+      {false, {:crop, aspect}} -> {:tower, aspect}
+      {false, :whole} -> nil
+    end
   end
 
-  defp square_layout?(_post, _gallery, _mode), do: false
+  defp beside_photo(_post, _gallery, _mode), do: nil
 
   # Where this card's tag chips go, asked once for every layout it has.
   #
@@ -6465,7 +6497,7 @@ defmodule VutuvWeb.PostComponents do
       card_assigns,
       :tags_in_body?,
       post.body != "" and
-        (card_assigns.square_layout? or card_assigns.inline_media? or
+        (card_assigns.beside_photo != nil or card_assigns.inline_media? or
            card_assigns.link_screenshot != nil)
     )
   end
