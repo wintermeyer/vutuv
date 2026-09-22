@@ -63,7 +63,6 @@ import { PullToReveal } from "./pull_to_reveal"
 // The daily text ad's card on a profile and in the feed: its two-minute
 // lifetime and the day its ✕ closed (see ad_slot.js).
 import { AdSlot } from "./ad_slot"
-import { CVLoupe } from "./cv_loupe"
 import { AdCalendar } from "./ad_calendar"
 // The booking wizard's half-written ad, kept in the browser so a stray pull at
 // the top of the page cannot reload it away (see ad_draft.js).
@@ -1206,7 +1205,6 @@ const Hooks = {
   NewMarks,
   PullToReveal,
   AdSlot,
-  CVLoupe,
   AdCalendar,
   AdDraft,
   LocalTime: {

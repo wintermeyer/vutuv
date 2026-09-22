@@ -23485,6 +23485,11 @@ msgstr ""
 msgid "“%{note}”"
 msgstr ""
 
+#: lib/vutuv_web/components/ui.ex:1980
+#, elixir-autogen, elixir-format
+msgid "Show the CV larger"
+msgstr ""
+
 #: lib/vutuv_web/components/post_components.ex:5621
 #: lib/vutuv_web/components/press_kit_components.ex:216
 #, elixir-autogen, elixir-format

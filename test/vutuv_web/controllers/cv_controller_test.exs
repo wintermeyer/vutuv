@@ -149,6 +149,18 @@ defmodule VutuvWeb.CVControllerTest do
       assert attribute(frame, "sandbox") == "allow-same-origin"
     end
 
+    test "the thumbnail's magnifier opens the page in the lightbox", %{conn: conn} do
+      owner = seed_profile(insert(:activated_user))
+
+      body = conn |> get(~p"/#{owner}") |> html_response(200)
+
+      # The corner every post thumbnail carries, naming the frame to show
+      # instead of a picture, since the page is a document and not an image.
+      [corner] = elements(body, "#profile-cv-card [data-lightbox-gallery] [data-lightbox-photo]")
+      assert attribute(corner, "data-photo-frame") == "profile-cv-card-frame"
+      assert [_frame] = elements(body, "iframe#profile-cv-card-frame[srcdoc]")
+    end
+
     test "the card speaks German to a German browser", %{conn: conn} do
       owner = seed_profile(insert(:activated_user))
 
@@ -163,6 +175,8 @@ defmodule VutuvWeb.CVControllerTest do
 
       [frame] = elements(body, "#profile-cv-card iframe")
       assert attribute(frame, "title") == "Lebenslauf-Vorschau"
+      [corner] = elements(body, "#profile-cv-card [data-lightbox-photo]")
+      assert attribute(corner, "aria-label") == "Lebenslauf vergrößern"
       # The page is built in a task beside the profile's other loads, and a
       # task does not inherit the request's language.
       assert attribute(frame, "srcdoc") =~ "Berufserfahrung"

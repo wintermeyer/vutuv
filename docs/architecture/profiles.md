@@ -525,8 +525,10 @@ Three things keep it cheap. Entries stop once roughly a page of text is
 reached, and the lists the print puts after them go too, so a long history
 does not ride along below the crop. The photo is the served avatar's URL
 (`build(user, photo: :url)`) rather than the data URI the print view derives
-from the original. And the server renders the page once: the `CVLoupe` hook
-(`assets/js/cv_loupe.js`) clones the frame on the first mouse hover. Measured
+from the original. And the server renders the page once: the magnifier in
+the thumbnail's corner (`VutuvWeb.UI.zoom_corner/1`, as on a post's photo)
+opens the lightbox, which copies the frame it names in `data-photo-frame`
+rather than fetching anything. Measured
 on the dev copy (2026-09-22, 1,307 members with a work history): the document
 is 4.3 KB at the median, 7.7 KB at p95 and 14.5 KB at most, and it builds in
 0.7 ms at the median, 2.6 ms at p95.

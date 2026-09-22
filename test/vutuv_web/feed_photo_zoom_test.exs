@@ -33,7 +33,16 @@ defmodule VutuvWeb.FeedPhotoZoomTest do
     post
   end
 
-  defp profile_html(conn, user), do: html_response(get(conn, ~p"/#{user.username}"), 200)
+  # The Posts card, not the whole profile: the rail's CV card carries a
+  # magnifier of its own.
+  defp profile_html(conn, user) do
+    conn
+    |> get(~p"/#{user.username}")
+    |> html_response(200)
+    |> LazyHTML.from_document()
+    |> LazyHTML.query("#profile-posts")
+    |> LazyHTML.to_html()
+  end
 
   describe "the lone photo on a preview card" do
     test "carries a magnifier beside the link to the post, not inside it", %{conn: conn} do
@@ -195,7 +204,8 @@ defmodule VutuvWeb.FeedPhotoZoomTest do
     test "reads the gallery's photos off what describes one, not off what opens it" do
       js = File.read!(@js)
 
-      assert js =~ ~s|querySelectorAll("[data-photo-src]")|,
+      # `data-photo-frame` describes the one entry that is a page, the CV card's.
+      assert js =~ ~s|querySelectorAll("[data-photo-src], [data-photo-frame]")|,
              "a mosaic tile describes a photo and is not a control; the corner over it is a control and describes none"
     end
 

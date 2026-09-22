@@ -1377,7 +1377,7 @@ defmodule VutuvWeb.UI do
   attr(:photo, :map,
     default: %{},
     doc:
-      "the photo's facts (`VutuvWeb.PostComponents.photo_data/4`), where this corner is the one describing it; empty where the gallery's other elements do"
+      "the photo's facts (`VutuvWeb.PostComponents.photo_data/4`), where this corner is the one describing it; empty where the gallery's other elements do. `frame` names an iframe to show in place of a picture (the CV card's page)"
   )
 
   def zoom_corner(assigns) do
@@ -1389,6 +1389,7 @@ defmodule VutuvWeb.UI do
       title={@label}
       data-lightbox-photo={@index}
       data-photo-src={@photo[:src]}
+      data-photo-frame={@photo[:frame]}
       data-photo-alt={@photo[:alt]}
       data-photo-caption={@photo[:caption]}
       data-photo-camera={@photo[:camera]}
@@ -1939,7 +1940,9 @@ defmodule VutuvWeb.UI do
   its stylesheet away from the app's, with scripts off. Its sizes are inline
   styles, not utilities: a deploy patches this card into tabs still holding
   the previous stylesheet, and an unscaled 760 px frame would push the rail
-  sideways. On a mouse the `CVLoupe` hook magnifies the page under the pointer.
+  sideways. The magnifier in its corner is the one a post's thumbnail wears
+  (`zoom_corner/1`): it opens the page in the lightbox, which draws a frame it
+  names instead of a picture.
   """
   attr(:id, :string, required: true)
   attr(:user, Vutuv.Accounts.User, required: true)
@@ -1953,15 +1956,14 @@ defmodule VutuvWeb.UI do
       card's "Lebenslauf" heading on the same page. --%>
       <.section_title class="mb-4">{gettext("CV download")}</.section_title>
       <div class="flex items-start gap-4">
-        <div
-          id={"#{@id}-page"}
-          phx-hook="CVLoupe"
-          class="relative shrink-0 overflow-hidden rounded bg-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
+        <.lightbox_gallery
+          class="hover-reveal-host relative shrink-0 overflow-hidden rounded bg-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
           style="width: 88px; height: 124px"
         >
           <%!-- The print sheet is 760 px wide, and an A4 page at that width
           1075 px tall; 88 / 760 draws it at 0.1158. --%>
           <iframe
+            id={"#{@id}-frame"}
             srcdoc={@page}
             sandbox="allow-same-origin"
             title={gettext("CV preview")}
@@ -1975,7 +1977,8 @@ defmodule VutuvWeb.UI do
           keyboard and a screen reader get. --%>
           <.link href={~p"/#{@user}/cv"} tabindex="-1" aria-hidden="true" class="absolute inset-0">
           </.link>
-        </div>
+          <.zoom_corner label={gettext("Show the CV larger")} photo={%{frame: "#{@id}-frame"}} />
+        </.lightbox_gallery>
         <div class="flex min-w-0 flex-col gap-2 pt-0.5">
           <p class="mb-0 text-xs text-slate-600 dark:text-slate-400">
             {gettext(
