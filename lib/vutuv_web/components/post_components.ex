@@ -66,6 +66,7 @@ defmodule VutuvWeb.PostComponents do
   alias VutuvWeb.Live.ExternalPostActionsComponent
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Markdown
+  alias VutuvWeb.Plug.Locale
   alias VutuvWeb.PostLive.RemoteActionsComponent
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
@@ -6888,6 +6889,35 @@ defmodule VutuvWeb.PostComponents do
   end
 
   def review_content_html(_post), do: ""
+
+  @doc """
+  The photos' license as one HTML paragraph, the plain-HTML twin of
+  `photo_license_line/1` and by its rule: `""` for all rights reserved or a
+  post without a released photo. Appended beside `review_content_html/1`,
+  because on the other networks this line is the only place the license
+  shows (see docs/architecture/fediverse.md).
+  """
+  def photo_license_content_html(%Post{license: license} = post) do
+    if PhotoLicense.grants_reuse?(license) and Posts.released_images(post) != [] do
+      ~s(<p>#{esc(gettext("Photos:"))} <a href="#{esc(PhotoLicense.url(license))}" rel="license">) <>
+        esc(license_label(license)) <> "</a></p>"
+    else
+      ""
+    end
+  end
+
+  @doc """
+  Runs `fun` in the post's own language, so the words added to a post on its
+  way out (the review and license lines) match its text rather than the
+  locale of whichever request or task renders it: a German Note carried
+  "Film review". A language the site does not serve, or none, keeps the
+  current locale.
+  """
+  def in_post_language(%{language: language}, fun) do
+    if Locale.locale_supported?(language),
+      do: Gettext.with_locale(VutuvWeb.Gettext, language, fun),
+      else: fun.()
+  end
 
   defp esc(value),
     do: value |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()

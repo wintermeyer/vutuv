@@ -28,6 +28,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
+  alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
@@ -722,8 +723,14 @@ defmodule VutuvWeb.Fediverse.Docs do
     }
   end
 
-  @doc "The Note a public post federates as."
-  def note(%Post{} = post, user) do
+  @doc """
+  The Note a public post federates as, its added words (the review and
+  license lines) in the post's own language, the one `contentMap` declares.
+  """
+  def note(%Post{} = post, user),
+    do: PostComponents.in_post_language(post, fn -> build_note(post, user) end)
+
+  defp build_note(post, user) do
     remote = remote_target(post)
     # The answered post, looked up once for both signals it feeds (issue #1739):
     # the `inReplyTo` that says this *is* an answer, and the `cc`/`Mention` that
@@ -991,7 +998,9 @@ defmodule VutuvWeb.Fediverse.Docs do
       |> Phoenix.HTML.safe_to_string()
 
     (mention_html(remote) <>
-       body_html <> PostComponents.review_content_html(post) <> hashtag_line(hashtags))
+       body_html <>
+       PostComponents.review_content_html(post) <>
+       PostComponents.photo_license_content_html(post) <> hashtag_line(hashtags))
     |> absolutize()
     |> VutuvWeb.Markdown.compact_html()
   end
@@ -1149,6 +1158,7 @@ defmodule VutuvWeb.Fediverse.Docs do
         }
         |> put_name(image.alt)
         |> put_size(image.width, image.height)
+        |> put_license(post.license)
       end) ++ video_attachments(post) ++ cover_attachments(post)
 
     case attachments do
@@ -1197,6 +1207,15 @@ defmodule VutuvWeb.Fediverse.Docs do
     do: Map.merge(attachment, %{"width" => width, "height" => height})
 
   defp put_size(attachment, _width, _height), do: attachment
+
+  # The photo's license for Pixelfed (`PhotoLicense.pixelfed/1`); Mastodon
+  # ignores the key and gets the content line instead.
+  defp put_license(attachment, license) do
+    case PhotoLicense.pixelfed(license) do
+      nil -> attachment
+      title -> Map.put(attachment, "license", title)
+    end
+  end
 
   defp cover_attachments(%Post{review: %PostReview{} = review}) do
     if PostReview.cover_ready?(review) do

@@ -67,6 +67,33 @@ defmodule VutuvWeb.FeedControllerTest do
       assert body =~ "ISBN 978-3-16-148410-0"
     end
 
+    test "the review line speaks the post's language, not the reader's", %{author: author} do
+      create_post!(author, %{
+        "body" => "Sehr lesenswert.",
+        "language" => "de",
+        "review" => %{"kind" => "book", "title" => "Refactoring"}
+      })
+
+      body = build_conn() |> get("/feed_author/posts/feed.xml") |> response(200)
+
+      assert body =~ "Buchbesprechung"
+      refute body =~ "Book review"
+    end
+
+    test "a CC photo post names its license in the item content", %{author: author} do
+      image = insert(:post_image, user: author)
+
+      create_post!(author, %{
+        "body" => "Look",
+        "image_ids" => [image.id],
+        "license" => "cc-by-4.0"
+      })
+
+      body = build_conn() |> get("/feed_author/posts/feed.xml") |> response(200)
+
+      assert body =~ ~s(<a href="https://creativecommons.org/licenses/by/4.0/" rel="license">)
+    end
+
     test "links and guids are absolute permalinks", %{author: author} do
       post = create_post!(author, %{"body" => "Linked"})
 
