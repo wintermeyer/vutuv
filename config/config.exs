@@ -668,6 +668,7 @@ config :vutuv, :markdown_cache, true
 # them on per-test and stub HTTP via :mastodon_req_options /
 # :bluesky_req_options).
 config :vutuv, :fetch_mastodon_posts, true
+config :vutuv, :fetch_friendica_posts, true
 config :vutuv, :fetch_bluesky_posts, true
 config :vutuv, :fetch_bookwyrm_posts, true
 

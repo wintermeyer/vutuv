@@ -6440,10 +6440,15 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  # An activity's object is either an embedded document or a bare id URI.
-  defp activity_object_id(%{"id" => id}) when is_binary(id), do: id
-  defp activity_object_id(id) when is_binary(id), do: id
-  defp activity_object_id(_), do: nil
+  @doc """
+  The id of a referenced object, which a server gives either as an embedded
+  document or as a bare id URI (an activity's `object`, a note's
+  `attributedTo`). Public because the social-feed clients read `attributedTo`
+  the same way (`Vutuv.SocialFeed.ActivityPub`).
+  """
+  def activity_object_id(%{"id" => id}) when is_binary(id), do: id
+  def activity_object_id(id) when is_binary(id), do: id
+  def activity_object_id(_), do: nil
 
   ## Inbound replies (issues #1069 and #1071)
 

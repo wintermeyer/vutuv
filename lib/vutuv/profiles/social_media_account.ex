@@ -50,7 +50,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   @required_fields ~w(provider value)a
   @optional_fields ~w()a
 
-  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Pixelfed BookWyrm Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg Gitea Forgejo)
+  @accepted_providers ~w(Facebook Twitter Mastodon Friendica Bluesky Pixelfed BookWyrm Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg Gitea Forgejo)
 
   # The providers whose instance is part of the handle: the value is stored as
   # `user@instance` and the link is built from that pair rather than from a
@@ -58,6 +58,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # instance serves a profile at, so it is one table and `url/1` is one clause.
   @instance_paths %{
     "Mastodon" => "/@",
+    "Friendica" => "/profile/",
     "Pixelfed" => "/",
     "BookWyrm" => "/user/",
     "Gitea" => "/",
@@ -68,7 +69,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # in how strictly the address is validated (@fediverse_format against
   # @self_hosted_format), because a forge address is what the stats client
   # turns into an outbound request.
-  @fediverse_providers ~w(Mastodon Pixelfed BookWyrm)
+  @fediverse_providers ~w(Mastodon Friendica Pixelfed BookWyrm)
 
   # The code forges a member runs themselves (issue #1504), listed in
   # @instance_paths above like the federated brands. Both speak the same
@@ -140,6 +141,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Facebook", ""},
     {"Twitter", "@"},
     {"Mastodon", "@"},
+    {"Friendica", "@"},
     {"Bluesky", ""},
     {"Pixelfed", "@"},
     {"BookWyrm", "@"},
@@ -155,7 +157,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Forgejo", ""}
   ]
 
-  # A federated handle: user@instance.tld (Mastodon, Pixelfed, BookWyrm).
+  # A federated handle: user@instance.tld (Mastodon, Friendica, Pixelfed, BookWyrm).
   @fediverse_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
   # A Bluesky handle: a lowercase domain (name.bsky.social, or a custom
   # domain) — the same shape Vutuv.Bluesky embeds in the AppView query.
@@ -291,8 +293,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
       value ->
         parsed =
           case get_field(changeset, :provider) do
-            "BookWyrm" -> parse_bookwyrm(value)
-            provider when provider in @fediverse_providers -> parse_fediverse(value)
+            provider when provider in @fediverse_providers -> parse_fediverse(value, provider)
             "Bluesky" -> parse_bluesky(value)
             provider when provider in @self_hosted_providers -> parse_self_hosted(value)
             _ -> parse_value(value)
@@ -316,26 +317,48 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # lowercased: a host is case-insensitive but the (provider, value) unique
   # index is not, so keeping the typed casing would let one account be claimed
   # once per spelling. A query or fragment a share sheet appended is not part of
-  # the address, so it goes before anything else looks at the value.
-  defp parse_fediverse(value) do
+  # the address, so it goes before anything else looks at the value. A URL is
+  # read only where its path names the account (account_in_path/2); any other
+  # path is handed on unchanged for validate_value/1 to reject, since its first
+  # word is not a handle (`/profile/herku` was stored as `profile@…`).
+  defp parse_fediverse(value, provider) do
     trimmed = value |> String.trim() |> String.split(["?", "#"], parts: 2) |> hd()
 
-    case Regex.run(~r{^https?://([^/]+)/@?([^/@]+)}, trimmed) do
-      [_, instance, user] -> join_instance(user, instance)
-      nil -> lowercase_instance(String.trim_leading(trimmed, "@"))
+    case Regex.run(~r{^https?://([^/]+)(.*)$}i, trimmed) do
+      [_, instance, path] ->
+        case account_in_path(String.split(path, "/", trim: true), provider) do
+          nil -> trimmed
+          user -> join_instance(user, instance)
+        end
+
+      nil ->
+        lowercase_instance(String.trim_leading(trimmed, "@"))
     end
   end
 
-  # BookWyrm serves a profile at /user/<name>, which the generic parser above
-  # would read as the handle "user". Its address form is the same as Mastodon's.
-  defp parse_bookwyrm(value) do
-    trimmed = value |> String.trim() |> String.split(["?", "#"], parts: 2) |> hd()
+  # The profile-path word of the brands whose profile sits one level down
+  # (BookWyrm's /user/<name>, Friendica's /profile/<name>), read off
+  # @instance_paths so the link and the parser cannot disagree.
+  @profile_words for {provider, path} <- @instance_paths,
+                     provider in @fediverse_providers,
+                     word = String.trim(path, "/"),
+                     word not in ["", "@"],
+                     into: %{},
+                     do: {provider, word}
 
-    case Regex.run(~r{^https?://([^/]+)/user/([^/@]+)}i, trimmed) do
-      [_, instance, user] -> join_instance(user, instance)
-      nil -> parse_fediverse(trimmed)
-    end
-  end
+  # `/@user` (with anything behind it, e.g. a post id), the ActivityPub id
+  # `/users/user`, the brand's own profile path, Friendica's `/~user`, or a
+  # bare `/user` (Pixelfed's only form).
+  defp account_in_path(["@" <> user | _rest], _provider), do: user
+  defp account_in_path(["users", user | _rest], _provider), do: user
+  defp account_in_path(["~" <> user], "Friendica"), do: user
+
+  defp account_in_path([word, user | _rest], provider)
+       when is_map_key(@profile_words, provider),
+       do: if(word == @profile_words[provider], do: user)
+
+  defp account_in_path([user], _provider), do: user
+  defp account_in_path(_segments, _provider), do: nil
 
   defp lowercase_instance(value) do
     case String.split(value, "@", parts: 2) do
@@ -429,6 +452,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp invalid_message("Mastodon"),
     do: "Enter your full Mastodon handle, e.g. @user@instance.social"
+
+  defp invalid_message("Friendica"),
+    do: "Enter your full Friendica handle, e.g. @user@friendica.example"
 
   defp invalid_message("Pixelfed"),
     do: "Enter your full Pixelfed handle, e.g. @user@pixelfed.social"

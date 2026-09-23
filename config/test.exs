@@ -206,6 +206,7 @@ config :vutuv, :refresh_top_posters, false
 # these on per-test and stub HTTP via :mastodon_req_options /
 # :bluesky_req_options.
 config :vutuv, :fetch_mastodon_posts, false
+config :vutuv, :fetch_friendica_posts, false
 config :vutuv, :fetch_bluesky_posts, false
 config :vutuv, :fetch_bookwyrm_posts, false
 config :vutuv, :fetch_code_stats, false

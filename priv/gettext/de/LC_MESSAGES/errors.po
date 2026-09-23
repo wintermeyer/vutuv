@@ -264,22 +264,22 @@ msgstr ""
 "Wir erlauben höchstens %{max} Konten pro Beitrag. Bitte entfernen Sie einige "
 "Erwähnungen."
 
-#: lib/vutuv_web/views/error_helpers.ex:183
+#: lib/vutuv_web/views/error_helpers.ex:186
 #, elixir-autogen, elixir-format
 msgid "Enter your Bluesky handle, e.g. name.bsky.social"
 msgstr "Geben Sie Ihr Bluesky-Handle an, z. B. name.bsky.social"
 
-#: lib/vutuv_web/views/error_helpers.ex:196
+#: lib/vutuv_web/views/error_helpers.ex:199
 #, elixir-autogen, elixir-format
 msgid "Enter your Codeberg username, not a full URL with extra path segments"
 msgstr "Geben Sie Ihren Codeberg-Benutzernamen an, keine vollständige URL mit weiteren Pfadangaben"
 
-#: lib/vutuv_web/views/error_helpers.ex:192
+#: lib/vutuv_web/views/error_helpers.ex:195
 #, elixir-autogen, elixir-format
 msgid "Enter your GitHub username, not a full URL with extra path segments"
 msgstr "Geben Sie Ihren GitHub-Benutzernamen an, keine vollständige URL mit weiteren Pfadangaben"
 
-#: lib/vutuv_web/views/error_helpers.ex:188
+#: lib/vutuv_web/views/error_helpers.ex:191
 #, elixir-autogen, elixir-format
 msgid "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
 msgstr "Geben Sie Ihren GitLab-Benutzernamen an, z. B. gitlab.com/benutzername (keinen ID-Link mit /-/u/)"
@@ -289,32 +289,32 @@ msgstr "Geben Sie Ihren GitLab-Benutzernamen an, z. B. gitlab.com/benutzername (
 msgid "Enter your full Mastodon handle, e.g. @user@instance.social"
 msgstr "Geben Sie Ihr vollständiges Mastodon-Handle an, z. B. @name@instanz.social"
 
-#: lib/vutuv_web/views/error_helpers.ex:184
+#: lib/vutuv_web/views/error_helpers.ex:187
 #, elixir-autogen, elixir-format
 msgid "Enter your username and your instance, e.g. name@git.example.com"
 msgstr "Geben Sie Ihren Benutzernamen und Ihre Instanz an, z. B. name@git.example.com"
 
-#: lib/vutuv_web/views/error_helpers.ex:200
+#: lib/vutuv_web/views/error_helpers.ex:203
 #, elixir-autogen, elixir-format
 msgid "Invalid account name"
 msgstr "Ungültiger Kontoname"
 
-#: lib/vutuv_web/views/error_helpers.ex:201
+#: lib/vutuv_web/views/error_helpers.ex:204
 #, elixir-autogen, elixir-format
 msgid "Someone has already claimed this account"
 msgstr "Dieses Konto hat bereits jemand für sich beansprucht"
 
-#: lib/vutuv_web/views/error_helpers.ex:208
+#: lib/vutuv_web/views/error_helpers.ex:211
 #, elixir-autogen, elixir-format
 msgid "That instance did not answer. Please try again in a moment."
 msgstr "Diese Instanz hat nicht geantwortet. Bitte versuchen Sie es gleich noch einmal."
 
-#: lib/vutuv_web/views/error_helpers.ex:209
+#: lib/vutuv_web/views/error_helpers.ex:212
 #, elixir-autogen, elixir-format
 msgid "Too many checks for now. Please try again later."
 msgstr "Vorerst zu viele Prüfungen. Bitte versuchen Sie es später noch einmal."
 
-#: lib/vutuv_web/views/error_helpers.ex:204
+#: lib/vutuv_web/views/error_helpers.ex:207
 #, elixir-autogen, elixir-format
 msgid "We could not find this account on that instance. Please check the address."
 msgstr "Wir konnten dieses Konto auf dieser Instanz nicht finden. Bitte prüfen Sie die Adresse."
@@ -398,7 +398,22 @@ msgstr "Diese Datei ist größer als %{limit}. Bitte laden Sie eine kleinere hoc
 msgid "First name or last name or nickname must be present"
 msgstr "Bitte geben Sie einen Vor- oder Nachnamen an."
 
-#: lib/vutuv_web/views/error_helpers.ex:211
+#: lib/vutuv_web/views/error_helpers.ex:214
 #, elixir-autogen, elixir-format
 msgid "must be a site without a path, e.g. tagesschau.de"
 msgstr "muss eine Website ohne Pfad sein, z. B. tagesschau.de"
+
+#: lib/vutuv_web/views/error_helpers.ex:185
+#, elixir-autogen, elixir-format
+msgid "Enter your full BookWyrm handle, e.g. @user@bookwyrm.social"
+msgstr "Geben Sie Ihr vollständiges BookWyrm-Handle an, z. B. @name@bookwyrm.social"
+
+#: lib/vutuv_web/views/error_helpers.ex:183
+#, elixir-autogen, elixir-format
+msgid "Enter your full Friendica handle, e.g. @user@friendica.example"
+msgstr "Geben Sie Ihr vollständiges Friendica-Handle an, z. B. @name@friendica.example"
+
+#: lib/vutuv_web/views/error_helpers.ex:184
+#, elixir-autogen, elixir-format
+msgid "Enter your full Pixelfed handle, e.g. @user@pixelfed.social"
+msgstr "Geben Sie Ihr vollständiges Pixelfed-Handle an, z. B. @name@pixelfed.social"

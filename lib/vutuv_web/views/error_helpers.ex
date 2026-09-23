@@ -180,6 +180,9 @@ defmodule VutuvWeb.ErrorHelpers do
       dgettext_noop("errors", "Enter your Signal link, it starts with https://signal.me/#"),
       # Vutuv.Profiles.SocialMediaAccount, the per-provider address shapes.
       dgettext_noop("errors", "Enter your full Mastodon handle, e.g. @user@instance.social"),
+      dgettext_noop("errors", "Enter your full Friendica handle, e.g. @user@friendica.example"),
+      dgettext_noop("errors", "Enter your full Pixelfed handle, e.g. @user@pixelfed.social"),
+      dgettext_noop("errors", "Enter your full BookWyrm handle, e.g. @user@bookwyrm.social"),
       dgettext_noop("errors", "Enter your Bluesky handle, e.g. name.bsky.social"),
       dgettext_noop(
         "errors",

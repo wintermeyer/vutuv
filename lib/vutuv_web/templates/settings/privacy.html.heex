@@ -128,7 +128,7 @@ than its own heading. --%>
     />
 
     <%!-- Social media posts: the inline feed card on the profile
-          (Vutuv.SocialFeed, Mastodon + Bluesky) and the BookWyrm reviews
+          (Vutuv.SocialFeed, Mastodon + Friendica + Bluesky) and the BookWyrm reviews
           card beside it. A positive flag like the
           online dot above: default on, so a listed account shows its latest
           public posts until the member opts out here. The column keeps its
@@ -141,7 +141,7 @@ than its own heading. --%>
       title={gettext("Social media posts")}
       intro={
         gettext(
-          "If you list a Mastodon, Bluesky or BookWyrm account, your profile can show your latest public posts or book reviews from it."
+          "If you list a Mastodon, Friendica, Bluesky or BookWyrm account, your profile can show your latest public posts or book reviews from it."
         )
       }
       label={gettext("Show my latest social media posts on my profile")}

@@ -189,6 +189,30 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       end
     end
 
+    test "reads a post URL and the ActivityPub /users/<name> id as their account" do
+      for value <- [
+            "https://mastodon.social/@Gargron/113000000000000000",
+            "https://mastodon.social/users/Gargron"
+          ] do
+        assert value_for(%{provider: "Mastodon", value: value}) == "Gargron@mastodon.social",
+               "expected #{value} to store Gargron@mastodon.social"
+      end
+    end
+
+    # The parser used to take the first path word as the handle, so another
+    # network's profile URL was stored as "profile@host" without a word.
+    test "refuses a deeper path it cannot read instead of storing its first word" do
+      for {provider, value} <- [
+            {"Mastodon", "https://friendica.opensocial.space/profile/herku"},
+            {"Pixelfed", "https://pixelfed.social/p/dansup/123"}
+          ] do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: provider, value: value})
+
+        refute changeset.valid?, "expected #{value} to be refused for #{provider}"
+      end
+    end
+
     test "reads a bare /user path, which is the only form Pixelfed links" do
       assert value_for(%{provider: "Pixelfed", value: "https://pixelfed.social/dansup"}) ==
                "dansup@pixelfed.social"
@@ -234,6 +258,56 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
 
       assert SocialMediaAccount.url(account) == "https://bookwyrm.de/user/Be_Kinky"
       assert SocialMediaAccount.display(account) == "@Be_Kinky@bookwyrm.de"
+    end
+
+    # Friendica serves a profile at /profile/<name> (and /~<name>), so the
+    # generic parser stored the path word as the handle: "profile@host".
+    test "reads Friendica's /profile/<name> and /~<name> URLs and the address form" do
+      for value <- [
+            "https://friendica.opensocial.space/profile/herku",
+            "https://Friendica.OpenSocial.space/profile/herku/?tab=posts",
+            "https://friendica.opensocial.space/~herku",
+            "@herku@friendica.opensocial.space",
+            "herku@friendica.opensocial.space"
+          ] do
+        assert value_for(%{provider: "Friendica", value: value}) ==
+                 "herku@friendica.opensocial.space",
+               "expected #{value} to store herku@friendica.opensocial.space"
+      end
+    end
+
+    test "links a Friendica account at /profile/<name>, where Friendica serves it" do
+      account = %SocialMediaAccount{provider: "Friendica", value: "herku@friendica.example"}
+
+      assert SocialMediaAccount.url(account) == "https://friendica.example/profile/herku"
+      assert SocialMediaAccount.display(account) == "@herku@friendica.example"
+    end
+
+    test "rejects a Friendica name without its instance, naming the brand" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Friendica", value: "x"})
+
+      refute changeset.valid?
+      assert Enum.any?(errors_on(changeset).value, &(&1 =~ "friendica.example"))
+    end
+
+    # The federated brands' messages were missing from the errors catalog, so a
+    # German member read them in English.
+    test "the federated handle messages are translated into German" do
+      for {provider, german} <- [
+            {"Friendica", "Friendica-Handle"},
+            {"Pixelfed", "Pixelfed-Handle"},
+            {"BookWyrm", "BookWyrm-Handle"}
+          ] do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: provider, value: "x"})
+
+        {message, _opts} = changeset.errors[:value]
+
+        assert Gettext.with_locale(VutuvWeb.Gettext, "de", fn ->
+                 Gettext.dgettext(VutuvWeb.Gettext, "errors", message)
+               end) =~ "Geben Sie Ihr vollständiges #{german} an"
+      end
     end
 
     test "rejects a BookWyrm name without its instance, naming the brand" do
