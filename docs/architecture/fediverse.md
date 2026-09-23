@@ -85,6 +85,9 @@ every activity of a member it finds no key for, silently.
   `Accept: application/activity+json` with the actor document (the `:browser`
   pipeline accepts `activity+json` for exactly this), and the profile HTML
   head advertises `<link rel="alternate" type="application/activity+json">`.
+  `VutuvWeb.Plug.ActivityStreamsAccept` rewrites the spec's JSON-LD spelling
+  (`application/ld+json; profile=…`) to `activity+json` first, so the profile
+  and every Note id answer both.
 - **Inbox** (`POST /:slug/actor/inbox`, `VutuvWeb.FediverseController`):
   verifies the draft-cavage HTTP signature (`Vutuv.Fediverse.HttpSignature`)
   against the key of the actor named in `keyId` — fetched SSRF-guarded and

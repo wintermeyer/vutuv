@@ -15,7 +15,9 @@ defmodule VutuvWeb.Router do
     plug(Plugs.TagHost)
     # activity+json rides along so ActivityPub requests reach the profile and
     # post-permalink controllers (they branch on FediverseController.ap_request?
-    # and fall back to plain HTML for everyone else).
+    # and fall back to plain HTML for everyone else). The JSON-LD spelling of
+    # the same request is rewritten to it first.
+    plug(Plugs.ActivityStreamsAccept)
     plug(:accepts, ["html", "activity+json"])
     plug(:fetch_session)
     plug(:fetch_flash)
