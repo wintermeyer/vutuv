@@ -4,7 +4,16 @@ defmodule VutuvWeb.NotificationLive.Index do
   `Vutuv.Activity.notifications_page/2` from the event tables that already
   exist, so it reaches back to events from before this page existed.
 
-  Presentation (the 2026-09 card layout, replacing the 2026-07 rows):
+  The page opens on the **reply inbox** (`?filter=replies`): one row per
+  reply, thread answer, mention or reply from another network, each saying
+  whether the member has read it, answered it (their answer quoted) or liked
+  it, with an Open / Answered row of chips (`?answer=`) over it. A resting
+  pointer previews the whole post, "Show context" folds the conversation open
+  under the row (`VutuvWeb.NotificationLive.ReplyInbox` loads both on demand,
+  `Vutuv.Activity.ReplyStatus` reads the state).
+
+  Every other chip keeps the cards (the 2026-09 layout, replacing the
+  2026-07 rows):
 
     * Raw events are grouped **by subject** under **the reader's calendar
       days** by `VutuvWeb.NotificationLive.Groups`: everything about one post
@@ -28,7 +37,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       seen — the page draws a "Seen before" rule at that transition. Unread is
       still the pre-visit read marker (tint + coral dot), and the visit still
       advances the marker and clears the shell's bell badge.
-    * The **filter chips** (all / replies / reactions / people / more) count
+    * The **filter chips** (replies / reactions / people / more / all) count
       what is new since the last visit and restrict the feed server-side via
       `notifications_page`'s `kinds:` option; they live in the URL
       (`?filter=`), patched without a reload. A press **paints itself** rather
@@ -72,7 +81,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       kind_label: 1,
       notification_target: 2,
       notification_text: 1,
-      quote_line: 2
+      quote_source: 1
     ]
 
   # Like the feed and messages: not a page for anonymous visitors —
@@ -81,7 +90,9 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
+  alias Vutuv.Activity.ReplyStatus
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Note
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -93,6 +104,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Markdown
   alias VutuvWeb.NotificationLive.Groups
+  alias VutuvWeb.NotificationLive.ReplyInbox
   alias VutuvWeb.PostComponents
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
@@ -105,6 +117,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   # keeps a card with a dozen answers to the height of the busiest real one
   # (three replies and a like line) while a tap still reaches everything.
   @card_lines 4
+
+  # A reply's folded teaser: two lines of its words.
+  @teaser_lines 2
 
   # The filter chips: each maps to the event kinds `notifications_page`'s
   # `kinds:` option keeps. "all" passes nil (every source).
@@ -122,6 +137,11 @@ defmodule VutuvWeb.NotificationLive.Index do
     "other" => ~w(organization_role moderation image_rejected report_outcome report_protection
          handle_change cv_update username reference_check)
   }
+
+  # The page opens on the reply inbox: who wrote to the member and whether
+  # they have dealt with it is what they come for (2026-09). "All" keeps the
+  # cards grouped by post, one chip further along.
+  @default_filter "replies"
 
   @doc false
   def filters, do: @filters
@@ -159,24 +179,33 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:quote_lines, User.notification_post_lines(user))
      |> assign(:expanded, MapSet.new())
      |> assign(:unfolded, MapSet.new())
+     |> assign(:contexts, %{})
      |> assign_rail(connected?(socket))}
   end
 
-  # Both the filter (?filter=replies) and the page (?page=3) live in the URL, so
-  # the chips and the pager are patch links and the back button works; an
-  # unknown filter falls back to "all", an unparseable page to 1. Runs on both
-  # the static and the connected mount, so the page is in the first HTTP paint
-  # (issue #919).
+  # The filter (?filter=reactions), the reply inbox's Open / Answered row
+  # (?answer=open) and the page (?page=3) live in the URL, so the chips and the
+  # pager are patch links and the back button works; an unknown filter falls
+  # back to the reply inbox, an unknown answer to all of them, an unparseable
+  # page to 1. Runs on both the static and the connected mount, so the page is
+  # in the first HTTP paint (issue #919).
   @impl true
   def handle_params(params, _uri, socket) do
-    filter = if Map.has_key?(@filters, params["filter"]), do: params["filter"], else: "all"
+    filter =
+      if Map.has_key?(@filters, params["filter"]), do: params["filter"], else: @default_filter
 
     {:noreply,
      socket
      |> assign(:filter, filter)
+     |> assign(:answer, if(filter == "replies", do: answer_param(params["answer"])))
      |> assign(:page, Pages.page_param(params))
+     |> assign(:preview, nil)
      |> load_page()}
   end
+
+  defp answer_param("open"), do: :open
+  defp answer_param("answered"), do: :answered
+  defp answer_param(_other), do: nil
 
   # The rail's "Follow back" pill (user_row live?): follow with no reload,
   # then recompute the rail so the new followee drops out.
@@ -223,6 +252,68 @@ defmodule VutuvWeb.NotificationLive.Index do
     {:noreply, update(socket, :unfolded, &MapSet.put(&1, id))}
   end
 
+  # The reply inbox's hover preview, pushed by the `ReplyPreview` hook once a
+  # pointer has rested on a row: the whole post, loaded for this one row.
+  # A second row's preview replaces the first; leaving the row closes it.
+  def handle_event("preview", %{"id" => id}, socket) do
+    case find_item(socket, id) do
+      nil ->
+        {:noreply, socket}
+
+      item ->
+        content = ReplyInbox.preview(item, socket.assigns.current_user)
+        {:noreply, assign(socket, :preview, content && %{id: id, content: content})}
+    end
+  end
+
+  def handle_event("preview_close", %{"id" => id}, socket) do
+    case socket.assigns.preview do
+      %{id: ^id} -> {:noreply, assign(socket, :preview, nil)}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  # "Show context": the conversation around one reply, folded open under its
+  # row and closed again by the same button.
+  def handle_event("context", %{"id" => id}, socket) do
+    contexts = socket.assigns.contexts
+
+    cond do
+      Map.has_key?(contexts, id) ->
+        {:noreply, assign(socket, :contexts, Map.delete(contexts, id))}
+
+      item = find_item(socket, id) ->
+        context = ReplyInbox.context(item, socket.assigns.current_user)
+        {:noreply, assign(socket, :contexts, Map.put(contexts, id, context))}
+
+      true ->
+        {:noreply, socket}
+    end
+  end
+
+  # The heart on a reply inbox row: like the reply, or take the like back. The
+  # row's state is then read again rather than assumed, so a like the network
+  # refused (a block, the hourly budget) does not paint a heart.
+  def handle_event("like_reply", %{"id" => id}, socket) do
+    user = socket.assigns.current_user
+
+    case find_item(socket, id) do
+      nil ->
+        {:noreply, socket}
+
+      item ->
+        toggle_like(item, user)
+        [fresh] = ReplyStatus.put(user, [item])
+
+        {:noreply,
+         socket
+         |> update(:items, fn items ->
+           Enum.map(items, &if(&1.id == id, do: %{&1 | liked?: fresh.liked?}, else: &1))
+         end)
+         |> assign_sections()}
+    end
+  end
+
   @impl true
   def handle_info({:new_notification, notification}, socket) do
     # The user is watching the event arrive, so it is already read: advance
@@ -244,8 +335,9 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     cond do
       # Not part of what this chip shows: it belongs to neither the list nor
-      # the chip's total.
-      filtered_out?(item, socket.assigns.filter) ->
+      # the chip's total. A reply that just arrived cannot be answered yet, so
+      # it is not part of the inbox's Answered list either.
+      filtered_out?(item, socket.assigns.filter) or socket.assigns.answer == :answered ->
         {:noreply, socket}
 
       # An older page is a fixed window into the past: merging a brand-new
@@ -256,7 +348,14 @@ defmodule VutuvWeb.NotificationLive.Index do
         {:noreply, update(socket, :total, &(&1 + 1))}
 
       true ->
-        {[item], posts} = with_post_previews([item], socket.assigns.current_user)
+        viewer = socket.assigns.current_user
+
+        # A reply that just arrived is neither answered nor liked yet.
+        {[item], posts} =
+          item
+          |> Map.merge(%{answer: nil, liked?: false})
+          |> List.wrap()
+          |> with_post_previews(viewer)
 
         {:noreply,
          socket
@@ -267,6 +366,7 @@ defmodule VutuvWeb.NotificationLive.Index do
          # first event about a *new* post builds one here.
          |> update(:post_cards, &Map.merge(&1, post_cards([item], posts, &1)))
          |> update(:total, &(&1 + 1))
+         |> update(:answer_counts, &count_new_reply(&1, item))
          |> assign_sections()}
     end
   end
@@ -278,6 +378,13 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
+
+  # A reply arriving live is an open one, so the inbox's Open and All counts
+  # grow with it; nothing counts on the other chips.
+  defp count_new_reply(%{} = counts, _item),
+    do: %{counts | open: counts.open + 1, all: counts.all + 1}
+
+  defp count_new_reply(nil, _item), do: nil
 
   # One numbered page of the feed under the active filter, plus the filtered
   # total the pager windows over. Both are one query per source / one query in
@@ -292,7 +399,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # lives in mount, not here, so the handoff leaves it at exactly once.
   defp load_page(socket) do
     viewer_id = socket.assigns.current_user.id
-    subject = {:notifications, socket.assigns.filter, socket.assigns.page}
+    subject = {:notifications, socket.assigns.filter, socket.assigns.answer, socket.assigns.page}
 
     if connected?(socket) do
       case MountHandoff.take(viewer_id, subject) do
@@ -313,15 +420,22 @@ defmodule VutuvWeb.NotificationLive.Index do
   # that correction on the connected side.
   defp page_payload(socket) do
     user = socket.assigns.current_user
-    kinds = @filters[socket.assigns.filter]
+    %{filter: filter, answer: answer} = socket.assigns
+    kinds = @filters[filter]
 
     # The total comes first: a ?page= past the end falls back to page 1 (the
     # same fallback Vutuv.Pages gives every browse page), so the rows shown and
     # the page the pager marks current can never disagree.
-    total = Activity.notifications_count(user.id, kinds)
+    total = Activity.notifications_count(user.id, kinds, answer)
     page = Pages.effective_page(%{"page" => socket.assigns.page}, total, @page_size)
 
-    feed = Activity.notifications_page(user.id, limit: @page_size, kinds: kinds, page: page)
+    feed =
+      Activity.notifications_page(user.id,
+        limit: @page_size,
+        kinds: kinds,
+        page: page,
+        answer: answer
+      )
 
     # Rows the reader already dealt with out in the feed stay listed — the page
     # is the log of what happened — they just stop rendering as new, so the
@@ -329,15 +443,75 @@ defmodule VutuvWeb.NotificationLive.Index do
     {items, posts} =
       feed.entries
       |> then(&Activity.with_seen_flags(user.id, &1, socket.assigns.dismissed))
+      |> put_reply_status(filter, user)
       |> with_post_previews(user)
 
-    %{page: page, total: total, items: items, post_cards: post_cards(items, posts)}
+    %{
+      page: page,
+      total: total,
+      items: items,
+      post_cards: post_cards(items, posts),
+      answer_counts: answer_counts(filter, user.id, kinds, answer, total)
+    }
+  end
+
+  # What the member did about each reply (answered it? liked it?), which only
+  # the reply inbox shows.
+  defp put_reply_status(entries, "replies", user), do: ReplyStatus.put(user, entries)
+  defp put_reply_status(entries, _filter, _user), do: entries
+
+  # The Open / Answered / All counts over the inbox's second row. Every reply
+  # is exactly one of open or answered, so one query more than the page's own
+  # total answers all three.
+  defp answer_counts("replies", user_id, kinds, answer, total) do
+    all = if answer, do: Activity.notifications_count(user_id, kinds, nil), else: total
+
+    open =
+      case answer do
+        :open -> total
+        :answered -> all - total
+        nil -> Activity.notifications_count(user_id, kinds, :open)
+      end
+
+    %{open: open, answered: all - open, all: all}
+  end
+
+  defp answer_counts(_filter, _user_id, _kinds, _answer, _total), do: nil
+
+  defp find_item(socket, id), do: Enum.find(socket.assigns.items, &(&1.id == id))
+
+  defp toggle_like(%{kind: "fediverse_reply", liked?: liked?} = item, user) do
+    case Fediverse.get_note(item[:note_id]) do
+      nil -> :noop
+      note when liked? -> Fediverse.unlike_note(user, note)
+      note -> Fediverse.like_note(user, note)
+    end
+  end
+
+  defp toggle_like(%{liked?: liked?} = item, user) do
+    id = ReplyStatus.subject(item, :post)
+
+    case Map.get(Posts.visible_posts_by_ids(user, [id]), id) do
+      nil -> :noop
+      post when liked? -> Posts.unlike_post(user, post)
+      post -> Posts.like_post(user, post)
+    end
   end
 
   defp apply_page(socket, payload) do
     socket
     |> assign(payload)
     |> assign_sections()
+  end
+
+  # The reply inbox lists one row per reply; every other chip the cards.
+  defp assign_sections(%{assigns: %{filter: "replies"}} = socket) do
+    inbox = Groups.inbox_sections(socket.assigns.items, socket.assigns.read_marker)
+
+    socket
+    |> assign(:inbox, inbox)
+    |> assign(:sections, [])
+    |> assign(:empty?, inbox == [])
   end
 
   defp assign_sections(socket) do
@@ -347,6 +521,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> Enum.map(&Map.put(&1, :rows, with_seen_rule(&1.groups)))
 
     socket
+    |> assign(:inbox, [])
     |> assign(:sections, sections)
     |> assign(:empty?, sections == [])
   end
@@ -482,10 +657,52 @@ defmodule VutuvWeb.NotificationLive.Index do
             </.link>
           </div>
 
+          <%!-- The reply inbox's second row: of the replies, the ones still
+          waiting for an answer, the answered ones, or all of them. --%>
+          <nav
+            :if={@answer_counts}
+            id="answer-filter"
+            aria-label={gettext("Replies")}
+            class="mt-3 flex flex-wrap gap-2"
+          >
+            <.link
+              :for={{value, label, count} <- answer_options(@answer_counts)}
+              patch={answer_path(value)}
+              data-answer-filter={value || "all"}
+              aria-current={@answer == value && "page"}
+              class={filter_chip_class(@answer == value)}
+            >
+              {label} · {compact_count(count)}
+            </.link>
+          </nav>
+
           <%!-- Everything a chip replaces lives in one `data-filter-list`, so the
           shared paint can dim it while the answer is on its way. The chips stay
           outside it: the reader has to keep seeing which one they pressed. --%>
           <div data-filter-list>
+            <section :for={section <- @inbox} data-day-section>
+              <h2
+                class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                data-day-heading
+              >
+                {day_label(section.day, @today)}
+              </h2>
+              <%!-- No `overflow-hidden` here: a row's hover preview hangs out
+              over the rows below it. --%>
+              <ul class="mt-2 divide-y divide-slate-100 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-slate-900 dark:ring-slate-800">
+                <.inbox_row
+                  :for={row <- section.rows}
+                  row={row}
+                  current_user={@current_user}
+                  quote_lines={@quote_lines}
+                  parent={parent_card(row, @post_cards)}
+                  expanded={MapSet.member?(@expanded, row.id)}
+                  context={Map.get(@contexts, row.id, :closed)}
+                  preview={@preview}
+                />
+              </ul>
+            </section>
+
             <section :for={section <- @sections} data-day-section>
               <h2
                 class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
@@ -529,7 +746,7 @@ defmodule VutuvWeb.NotificationLive.Index do
               total={@total}
               per_page={page_size()}
               path={~p"/notifications"}
-              query={pager_query(@filter)}
+              query={pager_query(@filter, @answer)}
             />
           </div>
         </div>
@@ -561,8 +778,9 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   # The pager carries the active chip onto every page link, so paging inside a
   # filter stays inside it.
-  defp pager_query("all"), do: %{}
-  defp pager_query(filter), do: %{"filter" => filter}
+  defp pager_query("replies", nil), do: %{}
+  defp pager_query("replies", answer), do: %{"answer" => Atom.to_string(answer)}
+  defp pager_query(filter, _answer), do: %{"filter" => filter}
 
   # ── One card ──
 
@@ -948,63 +1166,13 @@ defmodule VutuvWeb.NotificationLive.Index do
             {line_text(@line)}
           </p>
 
-          <%!-- Folded: the reply's words, two lines of them, as the button that
-          opens the rest. A private reply from another network (issue #1071)
-          says so right here, since the member has to know that before they
-          answer, not after they unfold it. --%>
-          <button
-            :if={@teaser && !@expanded}
-            type="button"
-            phx-click="toggle_line"
-            phx-value-id={@line.id}
-            data-line-toggle
-            aria-expanded="false"
-            class="mt-0.5 block w-full text-left text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            <span :if={remote_private?(@n)} data-remote-private aria-hidden="true">🔒</span>
-            <span data-reply-teaser class="line-clamp-2 whitespace-pre-line">{@teaser}</span>
-          </button>
-
-          <%!-- Unfolded: the quote formatted like a feed post (or the remote
-          reply's plain text), the Reply link to where an answer is written,
-          and the way back. --%>
-          <div :if={@expanded} class="mt-1.5 space-y-1.5">
-            <.quoted_post
-              :if={local_reply?(@line) and @n[:reply_preview]}
-              id={"quote-#{@line.id}"}
-              data-reply-preview="true"
-              href={Posts.path(@n.reply_preview.post)}
-              html={@n.reply_preview.html}
-              quote_lines={@quote_lines}
-            />
-            <.remote_reply
-              :if={@line.verb == :remote_reply and @n[:note_text]}
-              id={"quote-remote-#{@line.id}"}
-              n={@n}
-              current_user={@current_user}
-              quote_lines={@quote_lines}
-            />
-            <div class="flex flex-wrap items-center gap-x-4">
-              <.link
-                href={reply_target(@line, @current_user)}
-                data-reply-link
-                class="inline-flex min-h-10 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-              >
-                {gettext("Reply")} ›
-              </.link>
-              <button
-                type="button"
-                phx-click="toggle_line"
-                phx-value-id={@line.id}
-                data-line-toggle
-                aria-expanded="true"
-                class="inline-flex min-h-10 items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-              >
-                {gettext("Less")}
-              </button>
-            </div>
-          </div>
-
+          <.reply_words
+            line={@line}
+            teaser={@teaser}
+            expanded={@expanded}
+            current_user={@current_user}
+            quote_lines={@quote_lines}
+          />
           <%!-- The day's first thread line says why it is here and links to the
           switch that stops it (issue #1025), once per day so it stays a hint and
           not a banner. It shows only when thread events reach this reader, which
@@ -1026,6 +1194,387 @@ defmodule VutuvWeb.NotificationLive.Index do
         <.row_meta at={@line.at} unread?={@line.unread?} />
       </div>
     </li>
+    """
+  end
+
+  # ── One row of the reply inbox ──
+
+  # One reply, one row: who wrote, where (the member's post it answers), two
+  # lines of the words, and what the member already did about it: the status
+  # (new, read, answered), their answer, their like. A pointer resting on the
+  # row shows the whole post (`ReplyPreview` hook, `reply_preview/1`); "Show
+  # context" folds the conversation open under it.
+  attr(:row, :map, required: true)
+  attr(:current_user, :any, required: true)
+  attr(:quote_lines, :integer, required: true)
+  attr(:parent, :any, default: nil)
+  attr(:expanded, :boolean, required: true)
+  attr(:context, :any, required: true, doc: ":closed, nil (nothing to show) or the context")
+  attr(:preview, :any, required: true)
+
+  defp inbox_row(assigns) do
+    item = assigns.row.item
+
+    assigns =
+      assigns
+      |> assign(:item, item)
+      |> assign(:kind, line_kind(assigns.row))
+      |> assign(:status, reply_status(assigns.row))
+      |> assign(:teaser, item[:teaser])
+      |> assign(:context_open?, assigns.context != :closed)
+      |> assign(:preview_open?, preview_for?(assigns.preview, assigns.row.id))
+
+    ~H"""
+    <li
+      id={"inbox-#{@row.id}"}
+      data-inbox-row
+      data-notification-event
+      data-event-kind={@kind}
+      data-status={@status}
+      data-unread={@row.unread? && "true"}
+      phx-hook="ReplyPreview"
+      data-preview-id={@row.id}
+      class={[
+        "relative flex gap-3 px-4 py-3 first:rounded-t-2xl last:rounded-b-2xl sm:px-5",
+        @status == "new" && "bg-brand-50/60 dark:bg-brand-800/25"
+      ]}
+    >
+      <.row_visual group={@row} />
+      <div class="min-w-0 flex-1">
+        <div class="flex items-baseline gap-2">
+          <p class="mb-0 min-w-0 flex-1 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+            <span class="sr-only">{kind_label(@kind)}:</span>
+            <.actor_links group={@row} current_user={@current_user} named={1} />
+            {line_text(@row)}
+          </p>
+          <.row_time at={@row.at} />
+        </div>
+
+        <p
+          :if={@parent}
+          data-inbox-parent
+          class="mb-0 truncate text-xs text-slate-500 dark:text-slate-400"
+        >
+          <.link
+            href={Posts.path(@parent.post)}
+            class="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            {parent_label(@parent)}
+          </.link>
+        </p>
+
+        <.reply_words
+          line={@row}
+          teaser={@teaser}
+          expanded={@expanded}
+          current_user={@current_user}
+          quote_lines={@quote_lines}
+        />
+
+        <.link
+          :if={@item[:answer]}
+          href={Posts.path(@item.answer)}
+          data-my-answer
+          class="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-emerald-800 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-200"
+        >
+          <span aria-hidden="true">↩︎</span>
+          <span class="truncate">
+            <span class="font-semibold">{gettext("Your reply:")}</span>
+            {answer_teaser(@item.answer)}
+          </span>
+        </.link>
+
+        <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span data-status-pill class={status_pill_class(@status)}>{status_label(@status)}</span>
+          <button
+            type="button"
+            phx-click="like_reply"
+            phx-value-id={@row.id}
+            data-like-reply
+            aria-pressed={to_string(@item[:liked?] == true)}
+            class={[
+              "inline-flex min-h-9 items-center gap-1 text-sm font-medium",
+              like_class(@item[:liked?] == true)
+            ]}
+          >
+            <span aria-hidden="true">{if @item[:liked?], do: "♥", else: "♡"}</span>
+            {if @item[:liked?], do: gettext("You like this"), else: gettext("Like")}
+          </button>
+          <button
+            type="button"
+            phx-click="context"
+            phx-value-id={@row.id}
+            data-context-toggle
+            aria-expanded={to_string(@context_open?)}
+            class="inline-flex min-h-9 items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+          >
+            {if @context_open?, do: gettext("Hide context"), else: gettext("Show context")}
+          </button>
+          <.link
+            :if={@status != "answered"}
+            href={inbox_reply_target(@row, @current_user)}
+            data-inbox-reply
+            class="ml-auto inline-flex min-h-9 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Reply")} ›
+          </.link>
+        </div>
+
+        <.reply_context
+          :if={@context_open?}
+          id={"context-#{@row.id}"}
+          context={@context}
+          href={inbox_reply_target(@row, @current_user)}
+        />
+      </div>
+
+      <.reply_preview :if={@preview_open?} id={"preview-#{@row.id}"} content={@preview.content} />
+    </li>
+    """
+  end
+
+  # The whole post, over the rows below, while a pointer rests on its row.
+  # Mouse only: the hook never asks for it on a touch screen, where a tap on
+  # the teaser unfolds the words in place instead. Not `role="tooltip"`, which
+  # must not hold links; a plain region that the row's own controls repeat.
+  attr(:id, :string, required: true)
+  attr(:content, :map, required: true)
+
+  defp reply_preview(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      data-preview
+      class="absolute left-4 right-4 top-full z-30 -mt-2 max-h-96 overflow-y-auto rounded-2xl bg-white p-4 shadow-xl ring-1 ring-slate-300 sm:left-16 dark:bg-slate-900 dark:ring-slate-700"
+    >
+      <div
+        :if={@content[:html]}
+        class="markdown markdown--post text-sm text-slate-800 dark:text-slate-100"
+      >
+        {@content.html}
+      </div>
+      <p
+        :if={@content[:text]}
+        class="mb-0 whitespace-pre-line text-sm text-slate-800 dark:text-slate-100"
+      >{@content.text}</p>
+      <div
+        :if={@content[:images] not in [nil, []]}
+        data-preview-images
+        class="mt-3 flex flex-wrap gap-2"
+      >
+        <span :for={{image, index} <- Enum.with_index(@content.images)} class="relative block">
+          <img
+            src={ReplyInbox.image_url(image)}
+            alt={PostComponents.photo_alt(image)}
+            loading="lazy"
+            class="h-24 w-24 rounded-lg object-cover"
+          />
+          <span
+            :if={@content.more_images > 0 and index == length(@content.images) - 1}
+            class="absolute bottom-1 right-1 rounded-md bg-slate-900/70 px-1 text-xs font-semibold text-white"
+          >
+            +{compact_count(@content.more_images)}
+          </span>
+        </span>
+      </div>
+    </div>
+    """
+  end
+
+  # The conversation around a reply, oldest first: the member's own posts
+  # tinted, the reply the row is about marked, and the way to the whole
+  # thread under it.
+  attr(:id, :string, required: true)
+  attr(:context, :any, required: true)
+  attr(:href, :string, default: nil)
+
+  defp reply_context(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      data-context
+      class="mt-2 rounded-xl p-2 ring-1 ring-slate-200 dark:ring-slate-800"
+    >
+      <p :if={!@context} class="mb-0 p-2 text-sm italic text-slate-500 dark:text-slate-400">
+        {gettext("The post is no longer available.")}
+      </p>
+      <ol :if={@context} class="space-y-1">
+        <li
+          :for={entry <- @context.entries}
+          data-context-entry
+          data-context-current={entry.current? && "true"}
+          data-context-mine={entry.mine? && "true"}
+          class={["rounded-lg border-l-2 px-3 py-2 text-sm", context_entry_class(entry)]}
+        >
+          <div class="flex items-baseline gap-2">
+            <span class="font-semibold text-slate-900 dark:text-white">
+              {if entry.mine?, do: pgettext("reply inbox", "You"), else: entry.name}
+            </span>
+            <span
+              :if={entry.current?}
+              class="text-xs font-semibold text-amber-800 dark:text-amber-300"
+            >
+              {gettext("This reply")}
+            </span>
+            <.row_time :if={entry.at} at={entry.at} />
+          </div>
+          <.link
+            :if={entry.path}
+            href={entry.path}
+            class={[
+              "block whitespace-pre-line text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white",
+              !entry.current? && "line-clamp-2"
+            ]}
+          >{entry.text}</.link>
+          <p
+            :if={!entry.path}
+            class="mb-0 whitespace-pre-line text-slate-700 dark:text-slate-300"
+          >{entry.text}</p>
+        </li>
+      </ol>
+      <.link
+        :if={@context && @href}
+        href={@href}
+        class="mt-1 inline-flex min-h-9 items-center px-2 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {conversation_link_label(@context)} ›
+      </.link>
+    </div>
+    """
+  end
+
+  defp preview_for?(%{id: id}, row_id), do: id == row_id
+  defp preview_for?(_preview, _row_id), do: false
+
+  defp like_class(true), do: "text-rose-700 dark:text-rose-300"
+
+  defp like_class(false),
+    do: "text-slate-600 hover:text-rose-700 dark:text-slate-400 dark:hover:text-rose-300"
+
+  defp context_entry_class(%{current?: true}),
+    do: "border-amber-400 bg-amber-50 dark:bg-amber-900/20"
+
+  defp context_entry_class(%{mine?: true}),
+    do: "border-brand-400 bg-brand-50 dark:bg-brand-800/25"
+
+  defp context_entry_class(_entry), do: "border-slate-200 dark:border-slate-700"
+
+  defp conversation_link_label(%{more?: true}), do: gettext("Open the whole conversation")
+  defp conversation_link_label(_context), do: gettext("Open the conversation")
+
+  # new: arrived since the last visit and nothing done about it yet; answered:
+  # the member wrote a post under it; read: everything else.
+  defp reply_status(%{item: %{answer: %Post{}}}), do: "answered"
+  defp reply_status(%{unread?: true}), do: "new"
+  defp reply_status(_row), do: "read"
+
+  defp status_label("new"), do: pgettext("reply status", "New")
+  defp status_label("read"), do: pgettext("reply status", "Read")
+  defp status_label("answered"), do: pgettext("reply status", "Answered")
+
+  defp status_pill_class(status),
+    do: [
+      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+      status_pill_colors(status)
+    ]
+
+  defp status_pill_colors("new"),
+    do: "bg-orange-50 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200"
+
+  defp status_pill_colors("read"),
+    do: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+
+  defp status_pill_colors("answered"),
+    do: "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200"
+
+  # The member's post a row's reply is about, from the page's post cards. A
+  # mention has none: the post that named the member is the words themselves.
+  defp parent_card(%{item: %{kind: "mention"}}, _post_cards), do: nil
+
+  defp parent_card(%{item: item}, post_cards),
+    do: Map.get(post_cards, Groups.post_id_of(item))
+
+  defp parent_label(%{text: ""}), do: gettext("on your post without text")
+  defp parent_label(%{text: text}), do: gettext("on “%{post}”", post: text)
+
+  defp answer_teaser(post), do: PostTeaser.plain_line(post, length: 160)
+
+  # Where a row's Reply goes: under the reply itself, so the answer lands in
+  # the right place in the thread.
+  defp inbox_reply_target(%{item: %{subject_path: path}}, _viewer) when is_binary(path),
+    do: path
+
+  defp inbox_reply_target(row, viewer), do: reply_target(row, viewer)
+
+  # A reply's words on a line or an inbox row. Folded: two lines of them, as
+  # the button that opens the rest. Unfolded: the quote formatted like a feed
+  # post (or the remote reply's plain text), the Reply link to where an answer
+  # is written, and the way back. On a phone this tap is the only way to the
+  # whole text, since nothing there can hover.
+  attr(:line, :map, required: true)
+  attr(:teaser, :string, default: nil)
+  attr(:expanded, :boolean, required: true)
+  attr(:current_user, :any, required: true)
+  attr(:quote_lines, :integer, required: true)
+
+  defp reply_words(assigns) do
+    ~H"""
+    <%!-- Folded: the reply's words, two lines of them, as the button that
+    opens the rest. A private reply from another network (issue #1071)
+    says so right here, since the member has to know that before they
+    answer, not after they unfold it. --%>
+    <button
+      :if={@teaser && !@expanded}
+      type="button"
+      phx-click="toggle_line"
+      phx-value-id={@line.id}
+      data-line-toggle
+      aria-expanded="false"
+      class="mt-0.5 block w-full text-left text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+    >
+      <span :if={remote_private?(@line.item)} data-remote-private aria-hidden="true">🔒</span>
+      <span data-reply-teaser class="line-clamp-2 whitespace-pre-line">{@teaser}</span>
+    </button>
+
+    <%!-- Unfolded: the quote formatted like a feed post (or the remote
+    reply's plain text), the Reply link to where an answer is written,
+    and the way back. --%>
+    <div :if={@expanded} class="mt-1.5 space-y-1.5">
+      <.quoted_post
+        :if={quotes_local_post?(@line) and @line.item[:reply_preview]}
+        id={"quote-#{@line.id}"}
+        data-reply-preview="true"
+        href={Posts.path(@line.item.reply_preview.post)}
+        html={@line.item.reply_preview.html}
+        quote_lines={@quote_lines}
+      />
+      <.remote_reply
+        :if={@line.verb == :remote_reply and @line.item[:note_text]}
+        id={"quote-remote-#{@line.id}"}
+        n={@line.item}
+        current_user={@current_user}
+        quote_lines={@quote_lines}
+      />
+      <div class="flex flex-wrap items-center gap-x-4">
+        <.link
+          href={reply_target(@line, @current_user)}
+          data-reply-link
+          class="inline-flex min-h-10 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Reply")} ›
+        </.link>
+        <button
+          type="button"
+          phx-click="toggle_line"
+          phx-value-id={@line.id}
+          data-line-toggle
+          aria-expanded="true"
+          class="inline-flex min-h-10 items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          {gettext("Less")}
+        </button>
+      </div>
+    </div>
     """
   end
 
@@ -1327,16 +1876,27 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp filter_options do
     [
-      {"all", gettext("All")},
       {"replies", gettext("Replies")},
       {"reactions", gettext("Reactions")},
       {"people", gettext("People")},
-      {"other", gettext("More")}
+      {"other", gettext("More")},
+      {"all", gettext("All")}
     ]
   end
 
-  defp filter_path("all"), do: ~p"/notifications"
+  defp filter_path(@default_filter), do: ~p"/notifications"
   defp filter_path(value), do: ~p"/notifications?filter=#{value}"
+
+  defp answer_options(counts) do
+    [
+      {:open, pgettext("reply status", "Open"), counts.open},
+      {:answered, pgettext("reply status", "Answered"), counts.answered},
+      {nil, gettext("All replies"), counts.all}
+    ]
+  end
+
+  defp answer_path(nil), do: ~p"/notifications"
+  defp answer_path(answer), do: ~p"/notifications?answer=#{answer}"
 
   # The active chip reads as a raised white pill, the rest as quiet muted text
   # - the segmented-control treatment of the post-type filter tabs.
@@ -1449,7 +2009,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp line_kind(%{verb: verb}) when verb in @named_verbs, do: Atom.to_string(verb)
   defp line_kind(%{kind: kind}), do: kind
 
-  defp local_reply?(%{verb: verb}), do: verb in @local_reply_verbs
+  # Whether an unfolded line quotes a post written here: a reply, a thread
+  # answer, or (on the reply inbox, where there is no card head to be it) the
+  # post that named the member.
+  defp quotes_local_post?(%{verb: verb}), do: verb in [:mention | @local_reply_verbs]
 
   # A like or re-share line names three before folding; the people lines and
   # the single rows keep the page's default of two.
@@ -1478,10 +2041,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   # The reply's words on the folded line: the local reply's teaser, or the
   # remote note's text folded to one line. Nothing for a like, a share or a
   # reply the reader may not see.
-  defp line_teaser(%{verb: verb, item: item}) when verb in @local_reply_verbs,
-    do: item[:reply_teaser]
+  defp line_teaser(%{verb: verb, item: item}) when verb in [:remote_reply | @local_reply_verbs],
+    do: item[:teaser]
 
-  defp line_teaser(%{verb: :remote_reply, item: item}), do: item[:note_teaser]
   defp line_teaser(_line), do: nil
 
   # Where a line's Reply link leads: the reply itself, so the answer is written
@@ -1634,8 +2196,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   # every post-bound kind carries the post the card is about (`:post_id`, or a
   # thread's `:root_post_id`); a handle change lists rewritten posts. Look every
   # referenced post up in one batched, visibility-scoped query and attach what
-  # the folded lines show: the reply's one-line teaser (`:reply_teaser`) and a
-  # remote note's text teased the same way (`:note_teaser`). The formatted
+  # the folded lines show: the two-line `:teaser` of a reply, a mention or a
+  # remote note, and the permalink a Reply opens (`:subject_path`). The formatted
   # quote waits for the unfold (`with_reply_preview/3`). A post the viewer may
   # not see is absent from `posts`, so such an entry passes through unchanged
   # and its line shows the sentence alone.
@@ -1655,6 +2217,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       Enum.map(entries, fn entry ->
         entry
         |> put_teaser(posts)
+        |> put_subject_path(posts)
         |> put_change_previews(posts, lines)
       end)
 
@@ -1666,18 +2229,31 @@ defmodule VutuvWeb.NotificationLive.Index do
   # opened. A line that already carries its quote keeps it.
   defp with_reply_preview(%{reply_preview: %{}} = item, _viewer, _lines), do: item
 
-  defp with_reply_preview(%{reply_post_id: id} = item, viewer, lines) when is_binary(id),
-    do:
-      put_preview(
-        item,
-        :reply_preview,
-        id,
-        Posts.visible_posts_by_ids(viewer, [id]),
-        lines,
-        :html
-      )
+  defp with_reply_preview(item, viewer, lines) do
+    case ReplyStatus.subject(item, :post) do
+      id when is_binary(id) ->
+        put_preview(
+          item,
+          :reply_preview,
+          id,
+          Posts.visible_posts_by_ids(viewer, [id]),
+          lines,
+          :html
+        )
 
-  defp with_reply_preview(item, _viewer, _lines), do: item
+      nil ->
+        item
+    end
+  end
+
+  # The permalink of the post a reply inbox row would answer, when the member
+  # may see it: the Reply link opens the thread right there.
+  defp put_subject_path(entry, posts) do
+    case Map.get(posts, ReplyStatus.subject(entry, :post) || :none) do
+      %Post{} = post -> Map.put(entry, :subject_path, Posts.path(post))
+      nil -> entry
+    end
+  end
 
   # ── The head of a post card ──
 
@@ -1786,21 +2362,29 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The folded line's words, which `quote_line/2` picks for this page and the
-  # bell's preview alike. Only a reply line folds a teaser: a like or a mention
-  # sits under a card head that already names its post.
-  defp put_teaser(%{kind: kind} = entry, posts) when kind in ~w(reply thread),
-    do: put_line(entry, :reply_teaser, posts)
-
-  defp put_teaser(%{kind: "fediverse_reply"} = entry, posts),
-    do: put_line(entry, :note_teaser, posts)
+  # The folded line's words, from the post `quote_source/1` picks for this
+  # page and the bell's preview alike. A card line folds a reply's teaser (a
+  # like or a mention sits under a card head that already names its post);
+  # the reply inbox also shows a mention's, since there it has no card head.
+  defp put_teaser(%{kind: kind} = entry, posts)
+       when kind in ~w(reply thread mention fediverse_reply) do
+    case teaser_lines(entry, posts) do
+      "" -> entry
+      text -> Map.put(entry, :teaser, text)
+    end
+  end
 
   defp put_teaser(entry, _posts), do: entry
 
-  defp put_line(entry, key, posts) do
-    case quote_line(entry, posts) do
-      "" -> entry
-      line -> Map.put(entry, key, line)
+  # The opening of the words, blank lines dropped, so the row's two clamped
+  # lines are two lines of text rather than a line and a gap.
+  defp teaser_lines(entry, posts) do
+    opts = [length: char_budget(@teaser_lines)]
+
+    case quote_source(entry) do
+      {:post, id} when is_map_key(posts, id) -> PostTeaser.opening_lines(posts[id], opts)
+      {:note, text} -> PostTeaser.opening_lines(%Note{content_text: text}, opts)
+      _nothing -> ""
     end
   end
 

@@ -152,6 +152,30 @@ defmodule VutuvWeb.PostTeaser do
   def plain_line(post, opts), do: teaser(post, &fold/1, opts)
 
   @doc """
+  `opening/2` with its blank lines dropped: the text of the reply inbox's
+  two-line teaser on /notifications, where an empty line between two
+  paragraphs would spend one of the only two lines on nothing. A remote body
+  (a `%Vutuv.Fediverse.Note{}` or `%Vutuv.Fediverse.RemotePost{}`) is plain
+  text already and is only cut, never run through the Markdown pipeline, for
+  the reason `plain_line/2` gives.
+  """
+  def opening_lines(post, opts \\ [])
+
+  def opening_lines(%Post{} = post, opts), do: post |> opening(opts) |> drop_blank_lines()
+
+  def opening_lines(post, opts) do
+    case Posts.text(post) do
+      text when is_binary(text) ->
+        text |> String.slice(0, Keyword.get(opts, :length, @length)) |> drop_blank_lines()
+
+      _no_text ->
+        ""
+    end
+  end
+
+  defp drop_blank_lines(text), do: text |> lines() |> Enum.join("\n")
+
+  @doc """
   The opening of the **whole** body as plain text, paragraph breaks kept, at
   most `:length` characters (200 by default) — for the surfaces that show
   more than one line of a post: the link-preview description under a title

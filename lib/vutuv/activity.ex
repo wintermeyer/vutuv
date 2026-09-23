@@ -57,6 +57,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostMention
+  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReply
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.References.Check
@@ -1036,14 +1037,21 @@ defmodule Vutuv.Activity do
   only the matching source queries run, so a filtered page paginates exactly
   like the full feed. Backs the filter tabs on /notifications; omitting it
   keeps the whole feed (the API and the shell badge pass no kinds).
+
+  `answer:` (`:open` or `:answered`) keeps, of the kinds that carry somebody's
+  words, only what the member has not answered yet or already has: the reply
+  inbox's Open / Answered row. The other kinds ignore it.
   """
   def notifications_page(user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_limit)
     kinds = Keyword.get(opts, :kinds)
     page = Keyword.get(opts, :page)
+    answer = Keyword.get(opts, :answer)
 
     sources =
-      for spec <- kind_specs(user_id), kinds == nil or spec.kind in kinds, do: spec.items
+      for spec <- kind_specs(user_id, nil, false, answer),
+          kinds == nil or spec.kind in kinds,
+          do: spec.items
 
     if page,
       do: Vutuv.FeedPage.paginate_offset(sources, limit, (max(page, 1) - 1) * limit),
@@ -1164,7 +1172,12 @@ defmodule Vutuv.Activity do
   """
   def kinds, do: Vutuv.UUIDv7.generate() |> kind_specs() |> Enum.map(& &1.kind)
 
-  defp kind_specs(user_id, read_at \\ nil, unread? \\ false) do
+  #
+  # `answer` narrows the four kinds that carry somebody's words (reply, thread,
+  # mention, fediverse_reply) to what the member has answered (`:answered`) or
+  # not yet (`:open`): the reply inbox's second filter row, see
+  # `answered_scope/4`. Every other kind ignores it.
+  defp kind_specs(user_id, read_at \\ nil, unread? \\ false, answer \\ nil) do
     [
       %{
         kind: "follower",
@@ -1196,32 +1209,32 @@ defmodule Vutuv.Activity do
         kind: "reply",
         email_pref: nil,
         max_arms: [reply_max(user_id)],
-        items: &reply_items(user_id, &1, &2),
-        counts: [count_replies(user_id, read_at, unread?)],
+        items: &reply_items(user_id, &1, &2, answer),
+        counts: [count_replies(user_id, read_at, unread?, answer)],
         dismiss: [{"reply", :id}]
       },
       %{
         kind: "thread",
         email_pref: nil,
         max_arms: [thread_max(user_id)],
-        items: &thread_items(user_id, &1, &2),
-        counts: [count_thread_replies(user_id, read_at, unread?)],
+        items: &thread_items(user_id, &1, &2, answer),
+        counts: [count_thread_replies(user_id, read_at, unread?, answer)],
         dismiss: [{"thread", :id}]
       },
       %{
         kind: "mention",
         email_pref: nil,
         max_arms: [mention_max(user_id)],
-        items: &mention_items(user_id, &1, &2),
-        counts: [count_mentions(user_id, read_at, unread?)],
+        items: &mention_items(user_id, &1, &2, answer),
+        counts: [count_mentions(user_id, read_at, unread?, answer)],
         dismiss: [{"mention", :id}]
       },
       %{
         kind: "fediverse_reply",
         email_pref: nil,
         max_arms: [fediverse_reply_max(user_id)],
-        items: &fediverse_reply_items(user_id, &1, &2),
-        counts: [count_fediverse_replies(user_id, read_at)],
+        items: &fediverse_reply_items(user_id, &1, &2, answer),
+        counts: [count_fediverse_replies(user_id, read_at, answer)],
         dismiss: [{"fediverse_reply", :id}]
       },
       %{
@@ -1347,12 +1360,14 @@ defmodule Vutuv.Activity do
 
   `kinds` (a list of kind strings, `nil` = every source) restricts the count
   the same way `notifications_page/2`'s `kinds:` restricts the feed, so a
-  filtered tab's page count matches the rows it pages through.
+  filtered tab's page count matches the rows it pages through; `answer`
+  mirrors its `answer:` option.
   """
-  def notifications_count(user_id, kinds \\ nil)
-  def notifications_count(nil, _kinds), do: 0
+  def notifications_count(user_id, kinds \\ nil, answer \\ nil)
+  def notifications_count(nil, _kinds, _answer), do: 0
 
-  def notifications_count(user_id, kinds), do: total_count(user_id, nil, kinds, false)
+  def notifications_count(user_id, kinds, answer),
+    do: total_count(user_id, nil, kinds, false, answer)
 
   @doc """
   How many feed events are newer than the user's read marker (all of them when
@@ -1432,9 +1447,9 @@ defmodule Vutuv.Activity do
   # engaged with (`mark_post_seen/2`). It is deliberately not derived from
   # `read_at` — that one is nil for a member who never opened /notifications,
   # who still wants the per-post exceptions applied.
-  defp total_count(user_id, read_at, kinds, unread?) do
+  defp total_count(user_id, read_at, kinds, unread?, answer \\ nil) do
     counts =
-      for spec <- kind_specs(user_id, read_at, unread?),
+      for spec <- kind_specs(user_id, read_at, unread?, answer),
           kinds == nil or spec.kind in kinds,
           {count, dismiss} <- Enum.zip(spec.counts, spec.dismiss),
           do: unless_dismissed(count, user_id, dismiss, unread?)
@@ -1577,7 +1592,7 @@ defmodule Vutuv.Activity do
     end)
   end
 
-  defp reply_items(user_id, limit, cursor) do
+  defp reply_items(user_id, limit, cursor, answer) do
     from(r in PostReply,
       join: reply in assoc(r, :post),
       join: replier in assoc(reply, :user),
@@ -1589,6 +1604,7 @@ defmodule Vutuv.Activity do
         {r.id, r.inserted_at, struct(replier, ^User.listing_fields()), r.parent_post_id,
          r.post_id}
     )
+    |> answered_scope(user_id, answer, :post)
     |> at_or_before(cursor)
     |> Repo.all()
     |> preload_actor_avatars(2)
@@ -1605,8 +1621,9 @@ defmodule Vutuv.Activity do
   # New replies elsewhere in threads the user writes in: every reply in a
   # thread they rooted or answered in earlier — except their own replies and
   # replies answering them directly (those are "reply" events, never both).
-  defp thread_items(user_id, limit, cursor) do
+  defp thread_items(user_id, limit, cursor, answer) do
     thread_replies(user_id)
+    |> answered_scope(user_id, answer, :post)
     |> join(:inner, [reply_post: reply], replier in User,
       on: replier.id == reply.user_id,
       as: :replier
@@ -1640,8 +1657,9 @@ defmodule Vutuv.Activity do
   # Both joins are LEFT: whoever named the member is a member or an
   # organization (issue #1334), exactly one of the two per row, and an inner
   # join to `users` dropped every mention a page made.
-  defp mention_items(user_id, limit, cursor) do
+  defp mention_items(user_id, limit, cursor, answer) do
     mention_events(user_id)
+    |> answered_scope(user_id, answer, :post)
     |> join(:left, [mention_post: p], author in User, on: author.id == p.user_id, as: :author)
     |> join(:left, [mention_post: p], org in Organization,
       on: org.id == p.organization_id,
@@ -1688,9 +1706,10 @@ defmodule Vutuv.Activity do
   #
   # No viewer scoping is needed here: every note under the member's own posts is
   # theirs to see, including the ones addressed to them alone (issue #1071).
-  defp fediverse_reply_items(user_id, limit, cursor) do
+  defp fediverse_reply_items(user_id, limit, cursor, answer) do
     user_id
     |> fediverse_reply_events()
+    |> answered_scope(user_id, answer, :note)
     |> order_by([note: n], desc: n.received_at, desc: n.id)
     |> limit(^limit)
     |> select([note: n], n)
@@ -1722,9 +1741,10 @@ defmodule Vutuv.Activity do
     )
   end
 
-  defp count_fediverse_replies(user_id, read_at) do
+  defp count_fediverse_replies(user_id, read_at, answer) do
     user_id
     |> fediverse_reply_events()
+    |> answered_scope(user_id, answer, :note)
     |> select([note: n], %{count: count()})
     |> note_since(read_at)
   end
@@ -2412,28 +2432,67 @@ defmodule Vutuv.Activity do
     end
   end
 
-  defp count_replies(user_id, read_at, unread? \\ false) do
+  defp count_replies(user_id, read_at, unread? \\ false, answer \\ nil) do
     from(r in PostReply,
       join: reply in assoc(r, :post),
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
       select: %{count: count()}
     )
+    |> answered_scope(user_id, answer, :post)
     |> since(read_at)
     |> unless_seen(user_id, unread?)
   end
 
-  defp count_thread_replies(user_id, read_at, unread?) do
+  defp count_thread_replies(user_id, read_at, unread?, answer) do
     thread_replies(user_id)
+    |> answered_scope(user_id, answer, :post)
     |> select([thread_ref: r], %{count: count()})
     |> since(read_at)
     |> unless_seen(user_id, unread?)
   end
 
-  defp count_mentions(user_id, read_at, unread?) do
+  defp count_mentions(user_id, read_at, unread?, answer) do
     mention_events(user_id)
+    |> answered_scope(user_id, answer, :post)
     |> select([mention: m], %{count: count()})
     |> since(read_at)
     |> unless_seen(user_id, unread?)
+  end
+
+  # The reply inbox's Open / Answered split, over the kinds that carry
+  # somebody's words. "Answered" means the member wrote a post directly under
+  # that one: for the three local kinds the first binding's `post_id` is the
+  # post they would answer (the reply, the thread answer, the post that named
+  # them); for a reply from another network it is the note, which a local
+  # answer points at through `post_remote_replies`.
+  #
+  # Both id lists drop their NULLs on purpose: a reply outlives the post it
+  # answered (`parent_post_id` nilifies) and a note is collected six months
+  # out (`note_id` nilifies), and one NULL in a `NOT IN` list makes the
+  # predicate false for every row, so :open would silently show nothing.
+  defp answered_scope(query, _user_id, nil, _subject), do: query
+
+  defp answered_scope(query, user_id, answer, subject) do
+    # Which table points a post at what it answers, the column there naming
+    # it, and the event's own column holding the same id.
+    {schema, key, event_key} =
+      case subject do
+        :post -> {PostReply, :parent_post_id, :post_id}
+        :note -> {PostRemoteReply, :note_id, :id}
+      end
+
+    answered =
+      from(r in schema,
+        join: p in Post,
+        on: p.id == r.post_id,
+        where: p.user_id == ^user_id and not is_nil(field(r, ^key)),
+        select: field(r, ^key)
+      )
+
+    case answer do
+      :answered -> where(query, [event], field(event, ^event_key) in subquery(answered))
+      :open -> where(query, [event], field(event, ^event_key) not in subquery(answered))
+    end
   end
 
   # Drops the events whose subject post the member has already engaged with.
