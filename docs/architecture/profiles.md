@@ -1166,6 +1166,19 @@ through `compact_count/1` like every other count in the app. A network that
 offered no usable number leaves it `nil` and the row shows **nothing** — an
 absent count must never render as a misleading `0`.
 
+### Friendica posts
+
+A listed **Friendica** account (`Vutuv.Friendica`, stored as `user@instance`,
+linked at `https://instance/profile/name`) lands in the same posts card, behind
+its own flag `:fetch_friendica_posts`. Friendica offers a Mastodon API, but its
+`/api/v1/accounts/lookup` answers `401` without a login, and a nickname lookup
+can return a same-named account from another server. So the client reads the
+public ActivityPub outbox instead, through the walk it shares with BookWyrm
+(`Vutuv.SocialFeed.ActivityPub`): the actor's own public `Note`s, no replies,
+no boosts. The follower count is the `totalItems` of the followers collection
+(one extra request), and the avatar comes from WebFinger's avatar link, since
+Friendica leaves `icon` out of the actor an anonymous reader gets.
+
 ### BookWyrm reviews
 
 A listed **BookWyrm** account (`Vutuv.Bookwyrm`, stored as `user@instance`
@@ -1175,7 +1188,7 @@ cache, backoff, flag seam (`:fetch_bookwyrm_posts`) and opt-out, but gets a
 the posts card: a review is about a book, not a status update.
 
 BookWyrm has no Mastodon-compatible API, so the client reads what every
-ActivityPub server serves without credentials: WebFinger names the actor, the
+ActivityPub server serves (the walk lives in `Vutuv.SocialFeed.ActivityPub`) without credentials: WebFinger names the actor, the
 actor its outbox, and the outbox's first page lists the member's statuses
 newest first. Only public reviews by that actor are kept (an `Article` with an
 `inReplyToBook`); the reading-status notes and comments beside them are not.
