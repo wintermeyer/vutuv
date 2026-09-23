@@ -54,8 +54,7 @@ pages — both render `PostComponents.post_actions/1` and share `PostLive.Action
 
 - **There is no `core_components.ex`.** Do **not** use `<.input>`, `<.icon name="hero-…">`,
   or `<Layouts.app>` — they don't exist. Use the **`VutuvWeb.UI`** components (imported
-  everywhere) and the recipes in `.claude/rules/design.md`; that design rule is the
-  source of truth for every visual choice. Read it before touching a LiveView template.
+  everywhere).
 - **No `<Layouts.app>` wrapper and no `<.flash_group>`.** The chrome (sticky top bar +
   mobile bottom tab bar with live badges) is `VutuvWeb.ShellLive`, embedded once in
   `app.html.heex`. Pages render **inside** it; never add their own nav. Flash is shown

@@ -2218,8 +2218,7 @@ avatar column and draws the elbows, `app.css` draws the line off
 never the card. One consequence reaches back into the templates: the line is
 drawn to the bottom of the card, so **nothing may render after the answers** —
 the bar's refusal notice and a reply card's provenance footer both moved above
-for it, held there by `thread_replies_last_test.exs`. The full geometry is in
-`.claude/rules/design.md`.
+for it, held there by `thread_replies_last_test.exs`.
 
 What we already hold is painted at once from one indexed query
 (`stored_thread_replies/3`); the fetch behind it runs in `start_async` and gets

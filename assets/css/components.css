@@ -3566,7 +3566,7 @@ html[data-no-pull-refresh] body {
 
 @media (prefers-color-scheme: dark) {
   /* Built on brand-800, never brand-900, which is level with a slate-800 card
-     and would draw nothing (see the dark-tint rule in design.md). */
+     and would draw nothing. */
   [data-day].is-block-hover {
     background-color: color-mix(in srgb, #1e3a8a 60%, transparent);
     color: #dbeafe;
@@ -4560,7 +4560,3 @@ html[data-no-pull-refresh] body {
     opacity: 0.6;
   }
 }
-
-/* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
-   design-language change — a PostToolUse hook reminds you to update
-   .claude/rules/design.md so the design rule stays in sync. */

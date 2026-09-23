@@ -473,7 +473,7 @@ defmodule VutuvWeb.Admin.DashboardLive do
   # Newest first (the caller orders the list).
   #
   # Each row also carries the admin's own side of the relationship, split the
-  # way `.claude/rules/design.md` asks: **an act is a button, a status is not**.
+  # way the design system does: **an act is a button, a status is not**.
   # The follow pill takes the action column on the right; the "follows you" /
   # "connected" chip takes a line of its own under the handle, because sharing
   # the handle's line cut it to "@nah…" on a 375px phone.

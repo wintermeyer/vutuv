@@ -1,9 +1,8 @@
 defmodule VutuvWeb.UI do
   @moduledoc """
   Direction A design-system components — reuse these on hand-written pages so the
-  visual language stays consistent and DRY. See `.claude/rules/design.md` for the
-  full spec and raw-utility recipes. Legacy controller pages are styled centrally
-  in `assets/css/components.css`, not here.
+  visual language stays consistent and DRY. Legacy controller pages are styled
+  centrally in `assets/css/components.css`, not here.
 
   Imported into every HTML view and LiveView via `VutuvWeb` (`html`, `live_view`,
   `live_component`), so all of these are available everywhere with no explicit
@@ -167,7 +166,7 @@ defmodule VutuvWeb.UI do
   utilities the same way: `class={[input_class(f, :value), "resize-y"]}`.
 
   The two strings are the same recipe except for the border colours — keep
-  them in step when the input recipe changes (see .claude/rules/design.md).
+  them in step when the input recipe changes.
   """
   def input_class(form, field), do: input_class(form.errors[field] != nil)
 
@@ -5134,7 +5133,7 @@ defmodule VutuvWeb.UI do
 
   @doc """
   Classic-page (components.css-styled) edit/delete (and optional view) icon-button group. Renders the
-  canonical legacy anatomy from `design.md`: a `.btns-right` wrapper holding
+  canonical legacy anatomy: a `.btns-right` wrapper holding
   `.button.button--icon.button--small` controls with CSS-glyph icons
   (`i.icon.icon--edit|--delete|--search`), in **view → edit → delete** source
   order. Delete is rendered through Phoenix's `delete` method (so the
