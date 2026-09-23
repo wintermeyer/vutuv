@@ -651,7 +651,14 @@ every activity of a member it finds no key for, silently.
   fire only when the reposter federates and the **original author** federates
   too, since the `Announce` object is that author's Note id (issue #910).
   The Note carries the member-rendered HTML with absolutized links, and image
-  attachments via the public post-image proxy URLs. A public post's permalink
+  attachments via the public post-image proxy URLs. A photo attachment names
+  the **JPEG** (`og.jpg`, 1200px wide), not the AVIF the site serves: Mastodon
+  downloads an AVIF, refuses the type ("temporarily disabled for security
+  reasons") and shows an empty frame (issue #2279). The JPEG is written at
+  upload and on every crop into the private originals tree, since every
+  follower's server fetches it within seconds of a post federating. The choice
+  is one switch, `@federated_photo_format` in `VutuvWeb.Fediverse.Docs`; flip it
+  back to `:avif` once Mastodon accepts the type again. A public post's permalink
   answers an AP Accept with the Note (remote servers dereference ids).
   A photo post's **license** rides twice, because ActivityPub has no property
   for it and Mastodon reads none: a closing `Photos: CC BY 4.0 …` line in the

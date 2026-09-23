@@ -27,6 +27,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Mentions
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.PostImageStore
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
@@ -1152,6 +1153,15 @@ defmodule VutuvWeb.Fediverse.Docs do
 
   defp parent_author(%PostReply{}), do: nil
 
+  # Which file a federated photo names. `:jpeg` because Mastodon refuses AVIF
+  # (issue #2279): it downloads the file, rejects the type and shows an empty
+  # frame. Its `MediaAttachment::IMAGE_MIME_TYPES` marks AVIF as "temporarily
+  # disabled for security reasons"; once `image/avif` is back in that list in
+  # the Mastodon release most servers run, set this to `:avif` and add the
+  # type to `@mastodon_media_types` in `fediverse_video_note_test.exs`. Only
+  # posts published after the switch carry the other file.
+  @federated_photo_format :jpeg
+
   # Public posts only federate, and a public post's images are publicly
   # servable through the authorizing proxy — so their URLs can ride along.
   # A released review cover rides along as an attachment too — a public
@@ -1164,13 +1174,11 @@ defmodule VutuvWeb.Fediverse.Docs do
   defp put_attachments(note, post) do
     attachments =
       Enum.map(images(post), fn image ->
-        %{
-          "type" => "Document",
-          "mediaType" => "image/avif",
-          "url" => base() <> PostImage.url(image, "large")
-        }
+        {media_type, url, width, height} = photo_file(@federated_photo_format, image)
+
+        %{"type" => "Document", "mediaType" => media_type, "url" => base() <> url}
         |> put_name(image.alt)
-        |> put_size(image.width, image.height)
+        |> put_size(width, height)
         |> put_license(post.license)
       end) ++ video_attachments(post) ++ cover_attachments(post)
 
@@ -1179,6 +1187,17 @@ defmodule VutuvWeb.Fediverse.Docs do
       attachments -> Map.put(note, "attachment", attachments)
     end
   end
+
+  # Public only so the test can hold the branch that is switched off, which
+  # otherwise nothing would call until the day it is needed.
+  @doc false
+  def photo_file(:jpeg, image) do
+    {width, height} = PostImageStore.og_dimensions(image)
+    {"image/jpeg", PostImage.og_url(image), width, height}
+  end
+
+  def photo_file(:avif, image),
+    do: {"image/avif", PostImage.url(image, "large"), image.width, image.height}
 
   # The clip (issue #1913): exactly one `Document`, and it names the **H.264**
   # file — the one profile Mastodon copies without re-encoding; anything else

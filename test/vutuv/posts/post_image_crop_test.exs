@@ -168,15 +168,49 @@ defmodule Vutuv.Posts.PostImageCropTest do
   end
 
   describe "the link-preview JPEG of a cropped photo" do
-    test "shows the crop although it derives from the kept original", %{user: user, tmp: tmp} do
+    test "shows the crop", %{user: user, tmp: tmp} do
       image = pending_image!(user, tmp)
       {:ok, cropped} = Posts.crop_image(image, "0,0,0.5,0.5")
 
-      assert {:ok, jpeg} = PostImageStore.og_jpeg(cropped)
-      {:ok, decoded} = Image.from_binary(jpeg)
-      assert Image.width(decoded) == 320
-      assert Image.height(decoded) == 240
+      jpeg = File.read!(PostImageStore.og_file(cropped))
+      assert {320, 240} = jpeg_dimensions(jpeg)
     end
+
+    # Every follower's server fetches the JPEG within seconds of a post
+    # federating (issue #2279), so it is written once rather than per request,
+    # and a re-crop must replace it.
+    test "is stored at upload and follows a re-crop", %{user: user, tmp: tmp} do
+      image = pending_image!(user, tmp)
+      assert File.exists?(PostImageStore.og_path(image.token))
+
+      jpeg = File.read!(PostImageStore.og_file(image))
+      assert {640, 480} = jpeg_dimensions(jpeg)
+
+      {:ok, cropped} = Posts.crop_image(image, "0,0,0.5,0.5")
+      jpeg = File.read!(PostImageStore.og_file(cropped))
+      assert {320, 240} = jpeg_dimensions(jpeg)
+
+      {:ok, uncropped} = Posts.crop_image(cropped, nil)
+      jpeg = File.read!(PostImageStore.og_file(uncropped))
+      assert {640, 480} = jpeg_dimensions(jpeg)
+    end
+
+    test "is derived and kept on first request for a photo stored without it", %{
+      user: user,
+      tmp: tmp
+    } do
+      image = pending_image!(user, tmp)
+      File.rm!(PostImageStore.og_path(image.token))
+
+      jpeg = File.read!(PostImageStore.og_file(image))
+      assert {640, 480} = jpeg_dimensions(jpeg)
+      assert File.read!(PostImageStore.og_path(image.token)) == jpeg
+    end
+  end
+
+  defp jpeg_dimensions(jpeg) do
+    {:ok, decoded} = Image.from_binary(jpeg)
+    {Image.width(decoded), Image.height(decoded)}
   end
 
   describe "regeneration" do

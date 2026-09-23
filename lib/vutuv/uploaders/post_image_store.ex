@@ -15,6 +15,7 @@ defmodule Vutuv.PostImageStore do
                                               /pixelated.avif   (while unreleased)
       <uploads_dir_prefix>/originals/post_images/<token>/original.<ext>
                                                        /cleaned.<ext>
+                                                       /og.jpg
 
   Resolution, format and quality of the served versions come from
   `Vutuv.Uploads.Spec`: AVIF, EXIF-autorotated first and then metadata-
@@ -136,6 +137,7 @@ defmodule Vutuv.PostImageStore do
       # cached derivatives behind for the routes to serve: the cleaned copy,
       # the cropped download and the crop workbench all describe the old file.
       clear_original_derivatives(token)
+      store_og(rotated, token)
 
       {:ok,
        Map.merge(camera, %{
@@ -205,6 +207,7 @@ defmodule Vutuv.PostImageStore do
              :ok <- write_derived_versions(cropped, dir) do
           recut_pixelated(image, cropped, dir)
           clear_cropped_download(token)
+          store_og(cropped, token)
           {:ok, %{width: Image.width(cropped), height: Image.height(cropped)}}
         end
     end
@@ -251,37 +254,70 @@ defmodule Vutuv.PostImageStore do
   @og_width 1200
 
   @doc """
-  The dimensions `og_jpeg/1` serves, computed from the stored
+  The dimensions `og_file/1` serves, computed from the stored
   (post-rotation) dimensions: width capped at #{@og_width}px, aspect kept,
   never upscaled. Lets the `og:image:width`/`height` tags render without
   disk I/O (`VutuvWeb.OpenGraph`).
   """
-  def og_dimensions(%PostImage{width: width, height: height}) when width > @og_width do
+  def og_dimensions(%PostImage{width: width, height: height})
+      when is_integer(width) and is_integer(height) and width > @og_width do
     {@og_width, round(height * @og_width / width)}
   end
 
   def og_dimensions(%PostImage{width: width, height: height}), do: {width, height}
 
   @doc """
-  The image as JPEG bytes for the link preview (`og:image` — preview
-  scrapers don't decode AVIF): derived on the fly from the private
-  original, or from the largest served version when no original exists,
-  width-capped per `og_dimensions/1` and metadata-stripped (`keep: []` —
-  the original's EXIF/GPS must not leak, the rule the AVIF pipeline
-  enforces too). `:error` when nothing usable is on disk.
+  The on-disk path of the photo as JPEG: the link preview (`og:image`) and the file a
+  federated post names, since neither preview scrapers nor Mastodon take
+  AVIF (issue #2279). Width-capped per `og_dimensions/1` and metadata-stripped
+  (`keep: []` — the original's EXIF/GPS must not leak, the rule the AVIF
+  pipeline enforces too).
+
+  Written at upload and on every crop, and kept in the private originals
+  tree rather than beside the served versions, where the regenerator's stale
+  sweep would take it. Every follower's server asks for it within seconds of
+  a post federating, so it is streamed, not encoded, per request. A photo
+  stored before that derives it once from the original (or, without one, from
+  the largest served version) and keeps it. `nil` when nothing usable is on
+  disk.
   """
-  def og_jpeg(%PostImage{token: token} = image) do
-    case og_source(image, token) do
-      {kind, path} -> Spec.og_jpeg(path, &frame_and_cap(&1, kind, image))
-      _ -> :error
+  def og_file(%PostImage{token: token} = image) do
+    path = og_path(token)
+    if File.exists?(path), do: path, else: derive_og(image, token)
+  end
+
+  @doc "Where `og_file/1` keeps a photo's JPEG, whether or not it is there yet."
+  def og_path(token) when is_binary(token),
+    do: Path.join(Originals.dir(storage_dir(token)), "og.jpg")
+
+  defp derive_og(image, token) do
+    with {kind, path} <- og_source(image, token),
+         {:ok, jpeg} <- Spec.og_jpeg(path, &frame_and_cap(&1, kind, image)) do
+      Originals.publish(og_path(token), jpeg)
+    else
+      _ -> nil
     end
   end
 
-  defp frame_and_cap(rotated, kind, image) do
-    with {:ok, framed} <- og_frame(kind, image, rotated) do
-      Image.thumbnail(framed, "#{@og_width}", resize: :down)
+  # `framed` already shows the author's crop. The old file goes first, so a
+  # failed encode falls back to deriving on request rather than serving the
+  # previous frame.
+  defp store_og(framed, token) do
+    File.rm(og_path(token))
+
+    with {:ok, capped} <- cap_og(framed),
+         {:ok, jpeg} <- Spec.og_jpeg(capped) do
+      Originals.publish(og_path(token), jpeg)
     end
+
+    :ok
   end
+
+  defp frame_and_cap(rotated, kind, image) do
+    with {:ok, framed} <- og_frame(kind, image, rotated), do: cap_og(framed)
+  end
+
+  defp cap_og(framed), do: Image.thumbnail(framed, "#{@og_width}", resize: :down)
 
   defp og_source(image, token) do
     cond do
@@ -452,12 +488,12 @@ defmodule Vutuv.PostImageStore do
   end
 
   # Everything cached beside the original that merely *describes* it: the
-  # cleaned copy, the cropped download and the crop workbench. Cleared when
-  # the original itself is replaced (re-store).
+  # cleaned copy, the cropped download, the crop workbench and the preview
+  # JPEG. Cleared when the original itself is replaced (re-store).
   defp clear_original_derivatives(token) do
     storage_dir(token)
     |> Originals.dir()
-    |> Path.join("{cleaned,cropped,source}.*")
+    |> Path.join("{cleaned,cropped,source,og}.*")
     |> Path.wildcard()
     |> Enum.each(&File.rm/1)
   end

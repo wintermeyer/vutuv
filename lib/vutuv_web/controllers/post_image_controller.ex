@@ -13,7 +13,7 @@ defmodule VutuvWeb.PostImageController do
   The serving mechanics (X-Accel-Redirect vs `send_file`, the version parser,
   the cache and revalidation headers) live in `VutuvWeb.ImageProxy`, shared
   with the job-posting and organization proxies; this controller owns the post policy,
-  the on-the-fly `og.jpg` and the download filename. Pending images (post not
+  the `og.jpg` and the download filename. Pending images (post not
   yet submitted) are visible to their uploader alone; denied and unknown
   tokens are both 404 — the proxy must not leak whether an image exists.
 
@@ -102,8 +102,8 @@ defmodule VutuvWeb.PostImageController do
   # the version whitelist, because it is not a size of the picture and nothing
   # that enumerates versions should offer it.
   #
-  # "og.jpg" is the link-preview JPEG (og:image), derived on the fly rather
-  # than stored; "original.orig" is the author-enabled full-resolution
+  # "og.jpg" is the link-preview JPEG (og:image) and the file a federated
+  # post names, kept in the private originals tree; "original.orig" is the author-enabled full-resolution
   # download (issue #1104), which `serve/3` gates on that photo's own
   # `download_original` flag; "source.avif" is the author-only uncropped
   # workbench the composer's crop dialog loads. Everything else resolves
@@ -136,20 +136,19 @@ defmodule VutuvWeb.PostImageController do
     end
   end
 
-  # The og.jpg bytes are generated in the app (Vutuv.PostImageStore.og_jpeg/1),
-  # so they are sent directly in both serving modes — there is no file for
-  # nginx to accel-stream. Rare traffic: one fetch per scrape, and
-  # `send_derived/3`'s hash of the bytes then answers the next scrape's
-  # revalidation with a 304.
+  # The og.jpg lives in the private originals tree, outside nginx's alias, so
+  # it is sent from the app in both serving modes, like the crop workbench.
+  # Every follower's server fetches it as the post federates (issue #2279).
   defp serve(conn, image, :og) do
-    case Vutuv.PostImageStore.og_jpeg(image) do
-      {:ok, jpeg} ->
-        conn
-        |> put_download_name(image, "og", "jpg")
-        |> ImageProxy.send_derived(jpeg, "image/jpeg")
-
-      :error ->
+    case Vutuv.PostImageStore.og_file(image) do
+      nil ->
         ImageProxy.not_found(conn)
+
+      path ->
+        ImageProxy.send_version(conn, path,
+          content_type: "image/jpeg",
+          decorate: &put_download_name(&1, image, "og", &2)
+        )
     end
   end
 

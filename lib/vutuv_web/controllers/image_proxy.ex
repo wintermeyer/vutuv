@@ -10,7 +10,7 @@ defmodule VutuvWeb.ImageProxy do
 
   The controllers keep what genuinely differs: the row lookup, the
   visibility policy, and any per-response decoration (the post proxy's
-  download filename and its on-the-fly `og.jpg`).
+  download filename and its `og.jpg`).
 
   ## What a browser may remember (issue #2170)
 
@@ -160,7 +160,7 @@ defmodule VutuvWeb.ImageProxy do
 
   @doc """
   The derived tier for bytes **generated in the app** rather than read off
-  disk: the post proxy's on-the-fly `og.jpg` and a clip's cover frame.
+  disk: a clip's cover frame.
 
   The validator is a hash of the bytes, which are in hand by then anyway. It
   saves the send and not the derivation — but these are scraper fetches, one
