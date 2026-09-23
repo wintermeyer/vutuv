@@ -94,9 +94,8 @@ skip() {
 # The files none of precommit's five steps can read. DENY FIRST, and that order
 # is the whole point: a Markdown file that is itself a build or test input is
 # not exempt for ending in `.md`. `priv/help/*.md` compiles into
-# `VutuvWeb.HelpController`, `priv/dev_docs/*.md` into `DevDocController`, and
-# `.claude/rules/design.md` is read and asserted on by the dark-mode tests — an
-# extension-only rule would have skipped the gate on all three.
+# `VutuvWeb.HelpController` and `priv/dev_docs/*.md` into `DevDocController` —
+# an extension-only rule would have skipped the gate on both.
 #
 # The `*/*` arm is why the two Markdown arms are not one. In a `case` pattern
 # `*` matches `/` as well, so a bare `*.md` exempts Markdown at ANY depth, not

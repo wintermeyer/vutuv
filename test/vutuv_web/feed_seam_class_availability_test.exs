@@ -6,9 +6,8 @@ defmodule VutuvWeb.FeedSeamClassAvailabilityTest do
   release and the seam's markup is patched into a page still holding the
   *previous* release's stylesheet. So a class that only this line uses is a
   class that document cannot draw — the v7.347.0 ticker again, which arrived as
-  an unstyled paragraph across the tab bar. `.claude/rules/design.md` states the
-  check ("grep the tree for it unprefixed") and `VutuvWeb.ClassAvailability`
-  runs it, because the seam is exactly the kind of line somebody restyles
+  an unstyled paragraph across the tab bar. `VutuvWeb.ClassAvailability`
+  runs the check ("grep the tree for it unprefixed"), because the seam is exactly the kind of line somebody restyles
   without reading the comment above it.
 
   The approximation to know: a class another line introduced *in the same

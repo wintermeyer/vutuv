@@ -51,7 +51,7 @@ defmodule VutuvWeb.SettingsHubTest do
       # full itself, and filing the one row a member will hunt for under a
       # heading it does not belong to is exactly the failure this bound exists
       # to prevent. The exception is named rather than raising the bound for
-      # everybody — `.claude/rules/design.md` names Profile as the one, and a
+      # everybody — Profile is the one, and a
       # blanket nine would let the next group drift there unremarked.
       for {name, rows} <- menu do
         cap = if name == "Profile", do: 9, else: 8

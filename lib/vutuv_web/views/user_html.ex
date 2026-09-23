@@ -721,8 +721,7 @@ defmodule VutuvWeb.UserHTML do
   for a mutual follow (the `vernetzt` word family, guarded by
   `VutuvWeb.ConnectionVocabularyTest`), an emerald tint for a one-way inbound
   follow. There is no negative state, because not following back is the state
-  nearly every profile is in — see `.claude/rules/design.md` for why that line
-  was worth nothing. `data-profile-relationship` names the state for tests,
+  nearly every profile is in, so that line was worth nothing. `data-profile-relationship` names the state for tests,
   which is a steadier probe than a translated word.
   """
   attr(:follow_id, :any, required: true)

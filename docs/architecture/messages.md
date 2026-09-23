@@ -24,8 +24,7 @@ handler keeps the draft body in the form so a reconnect can recover it; what
 empties the composer after a send is the **re-seed token** `assign_form/1` bumps
 beside the reset body (`seed=`), because the editor deliberately ignores its own
 text coming back — every other re-render on this page, the other side's typing
-bubble included, must leave the writer's caret alone. See
-`.claude/rules/design.md` for the component — including that there is no
+bubble included, must leave the writer's caret alone. There is no
 toolbar since issue #1886: marks come from the selection bubble, blocks from
 the slash menu, and the `Text | Markdown` switch sits under the field. Emoji
 come with it (issue #1197) as the `:tada:` type-through, which stores the emoji

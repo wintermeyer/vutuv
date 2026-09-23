@@ -895,8 +895,7 @@ The composer's body field is the shared **Milkdown WYSIWYG Markdown editor**
 message composer). It edits Markdown *source* in place — the field stays a
 `<textarea>` and the body is still stored and rendered as Markdown — so nothing
 downstream (`VutuvWeb.Markdown`, the `.md`/`.txt`/`.json`/`.xml` siblings)
-changes. See `.claude/rules/design.md` for the component and its gotchas — above
-all that the editor takes the server's value at mount and then only when
+changes. The main gotcha: the editor takes the server's value at mount and then only when
 `seed=` changes (`reset_composer/1` bumps it after a post and after *Discard
 draft*). The body echoed back by `validate` is the writer's own text returning,
 and re-parsing it would throw their caret to the end.

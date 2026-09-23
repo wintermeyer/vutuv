@@ -252,10 +252,9 @@ defmodule Vutuv.PrecommitHookTest do
     test "Markdown the build reads is not documentation", ctx do
       # The reason the rule is deny-first rather than extension-first:
       # `priv/help/*.md` compiles into `HelpController`, `priv/dev_docs/*.md`
-      # into `DevDocController`, `.claude/rules/design.md` is read and asserted
-      # on by the dark-mode tests, and `rel/` holds the release templates the
+      # into `DevDocController`, and `rel/` holds the release templates the
       # deploy builds from.
-      for path <- [".claude/rules/design.md", "priv/help/imprint_en.md", "rel/overlays/notes.md"] do
+      for path <- ["priv/help/imprint_en.md", "rel/overlays/notes.md"] do
         repo = tmp_project([path])
 
         assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}",

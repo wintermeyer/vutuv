@@ -1,8 +1,7 @@
 defmodule VutuvWeb.MutedHeadingDarkModeTest do
   @moduledoc """
   Dark mode follows the system with no toggle, so every text colour needs a
-  `dark:` counterpart. `.claude/rules/design.md` states the rule for muted text
-  and warns that `slate-500` is already borderline in light mode.
+  `dark:` counterpart, and `slate-500` is already borderline in light mode.
 
   `<.section_title>` shipped without its half: bare `text-slate-500` on a dark
   card is about 3.8:1, under the AA floor of 4.5:1, and `text-sm font-semibold`
@@ -18,7 +17,6 @@ defmodule VutuvWeb.MutedHeadingDarkModeTest do
   use ExUnit.Case, async: true
 
   @ui Path.expand("../../lib/vutuv_web/components/ui.ex", __DIR__)
-  @design_rule Path.expand("../../.claude/rules/design.md", __DIR__)
 
   test "no muted text colour in the component kit is missing its dark half" do
     lines = @ui |> File.read!() |> String.split("\n")
@@ -31,7 +29,7 @@ defmodule VutuvWeb.MutedHeadingDarkModeTest do
       |> Enum.map(fn {line, n} -> "ui.ex:#{n}: #{String.trim(line)}" end)
 
     assert offenders == [],
-           "muted text needs a dark: counterpart (design.md: text-slate-600 " <>
+           "muted text needs a dark: counterpart (text-slate-600 " <>
              "dark:text-slate-400):\n" <> Enum.join(offenders, "\n")
   end
 
@@ -64,19 +62,5 @@ defmodule VutuvWeb.MutedHeadingDarkModeTest do
            "a muted heading on a dark card is ~3.8:1 without its dark half, " <>
              "under AA — append dark:text-slate-400 or use <.section_title>:\n" <>
              Enum.join(offenders, "\n")
-  end
-
-  test "the section-title recipe in the design rule carries the dark half" do
-    rule =
-      @design_rule
-      |> File.read!()
-      |> String.split("\n")
-      |> Enum.find(&String.starts_with?(&1, "- **Section title:**"))
-
-    assert rule, "the design rule no longer states a section-title recipe"
-
-    assert rule =~ "dark:text-slate-400",
-           "design.md's section-title recipe dropped its dark half, so the next " <>
-             "hand-rolled copy will be written without one"
   end
 end

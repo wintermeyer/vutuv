@@ -1,6 +1,6 @@
 defmodule VutuvWeb.BrandLinkDarkModeTest do
   @moduledoc """
-  The brand text-link recipe (`.claude/rules/design.md`) had drifted into a
+  The brand text-link recipe had drifted into a
   dozen spellings — 83 call sites carried no `dark:` variant at all, so those
   links lost contrast in dark mode — until the 2026-07-30 sweep normalized
   every one to the canonical pair. This guard keeps it that way.
@@ -45,7 +45,7 @@ defmodule VutuvWeb.BrandLinkDarkModeTest do
     assert offenders == [],
            "Brand text links missing the canonical dark pair — use\n" <>
              "  #{@light_base} #{@light_hover} #{@dark_base} #{@dark_hover}\n" <>
-             "(a variant chain repeats verbatim under dark:, see .claude/rules/design.md):\n" <>
+             "(a variant chain repeats verbatim under dark:):\n" <>
              Enum.join(offenders, "\n")
   end
 
