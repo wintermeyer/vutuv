@@ -159,7 +159,7 @@ defmodule Vutuv.FediverseImageHoldTest do
       # The whole point: the follower that already has the text now gets the
       # picture. Without the Update it never would - nothing else revisits a
       # post whose scan came back late.
-      assert delivery.activity_json =~ PostImage.url(image, "large")
+      assert delivery.activity_json =~ PostImage.og_url(image)
     end
 
     test "carries a book review's cover, which never federated before", %{user: user} do

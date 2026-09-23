@@ -240,8 +240,8 @@ defmodule Vutuv.Posts.PostImage do
 
   @doc """
   The link-preview JPEG URL (the post's `og:image`, see
-  `VutuvWeb.OpenGraph`) — derived on the fly by the proxy, not a stored
-  version (`Vutuv.PostImageStore.og_jpeg/1`).
+  `VutuvWeb.OpenGraph`, and the file a federated post names) — not one of the
+  served versions (`Vutuv.PostImageStore.og_file/1`).
   """
   def og_url(%__MODULE__{token: token} = image),
     do: "#{token_prefix(token)}og.jpg#{crop_buster(image)}"

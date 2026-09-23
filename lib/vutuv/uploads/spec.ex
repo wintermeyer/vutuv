@@ -499,10 +499,20 @@ defmodule Vutuv.Uploads.Spec do
   """
   def og_jpeg(path, shape) when is_binary(path) and is_function(shape, 1) do
     with {:ok, rotated} <- open_rotated(path),
-         {:ok, shaped} <- shape.(rotated),
-         {:ok, data} <- Operation.jpegsave_buffer(shaped, keep: [], Q: 80) do
-      {:ok, data}
+         {:ok, shaped} <- shape.(rotated) do
+      og_jpeg(shaped)
     else
+      _ -> :error
+    end
+  end
+
+  @doc """
+  `og_jpeg/2`'s last step on its own, for a store that already holds the
+  shaped image in memory (a post photo writes its preview at upload).
+  """
+  def og_jpeg(%VipsImage{} = image) do
+    case Operation.jpegsave_buffer(image, keep: [], Q: 80) do
+      {:ok, data} -> {:ok, data}
       _ -> :error
     end
   end

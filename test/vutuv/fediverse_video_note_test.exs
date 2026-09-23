@@ -11,6 +11,7 @@ defmodule Vutuv.FediverseVideoNoteTest do
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostImage
   alias Vutuv.Repo
   alias Vutuv.VideoFixtures
   alias Vutuv.Videos
@@ -52,7 +53,50 @@ defmodule Vutuv.FediverseVideoNoteTest do
     {:ok, post} = Posts.create_post(user, %{body: "Look", image_ids: [image.id]})
     note = post |> Repo.preload(Docs.note_preloads()) |> Docs.note(user)
 
-    assert [%{"mediaType" => "image/avif", "name" => "A bridge", "width" => 640, "height" => 480}] =
+    assert [%{"mediaType" => "image/jpeg", "name" => "A bridge", "width" => 640, "height" => 480}] =
              note["attachment"]
+  end
+
+  # Mastodon refuses AVIF (issue #2279): it downloads the file, rejects the
+  # type and shows an empty frame. The attachment names the JPEG, at the size
+  # that JPEG is served in.
+  test "a photo federates as the link-preview JPEG, at its size", %{user: user} do
+    image = insert(:post_image, user: user, width: 2400, height: 1200)
+    {:ok, post} = Posts.create_post(user, %{body: "Wide", image_ids: [image.id]})
+    note = post |> Repo.preload(Docs.note_preloads()) |> Docs.note(user)
+
+    assert [%{"url" => url, "width" => 1200, "height" => 600}] = note["attachment"]
+    assert url =~ "/post_images/#{image.token}/og.jpg"
+  end
+
+  # The switch back (`@federated_photo_format` in `Docs`) waits for Mastodon to
+  # take AVIF again; this keeps that branch naming a file we really serve.
+  test "the AVIF branch names the large version at the photo's own size", %{user: user} do
+    image = insert(:post_image, user: user, width: 2400, height: 1200)
+
+    assert {"image/avif", url, 2400, 1200} = Docs.photo_file(:avif, image)
+    assert url == PostImage.url(image, "large")
+  end
+
+  # What Mastodon's `MediaAttachment` accepts from a remote server today; any
+  # other type is downloaded, refused and shown as an empty frame.
+  @mastodon_media_types ~w(image/jpeg image/png image/gif image/webp video/mp4)
+
+  test "every attachment is a type Mastodon accepts", %{user: user} do
+    path = VideoFixtures.mp4_path()
+    {:ok, video} = Videos.create_pending_video(user, path, Path.basename(path))
+    :ok = Job.run(video.id)
+    image = insert(:post_image, user: user, width: 640, height: 480)
+
+    {:ok, post} =
+      Posts.create_post(user, %{body: "Both", video_id: video.id, image_ids: [image.id]})
+
+    note = post |> Repo.preload(Docs.note_preloads()) |> Docs.note(user)
+
+    assert [_, _] = note["attachment"]
+
+    for attachment <- note["attachment"] do
+      assert attachment["mediaType"] in @mastodon_media_types
+    end
   end
 end

@@ -423,8 +423,8 @@ LinkedIn and X the title is all the text a card carries, and the
 `og:description` is the opening of the whole body (`PostTeaser.opening/2`, 200
 characters, paragraph breaks folded), which Bluesky, Mastodon, Slack and
 Facebook draw under the title. The picture is the post's first image
-(`/post_images/<token>/og.jpg`, derived on the fly by the authorizing proxy, so
-audience changes keep guarding it), else — for a member's post — its own
+(`/post_images/<token>/og.jpg`, served by the authorizing proxy, so audience
+changes keep guarding it), else — for a member's post — its own
 **generated card** at `<permalink>/og.png` (author, headline and the first six
 lines in the largest of three sizes that fits), else the author's card or the
 page's logo, else the brand card. Restricted posts and teasers never leak the
