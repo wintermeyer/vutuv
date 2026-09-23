@@ -1352,6 +1352,28 @@ defmodule VutuvWeb.FediverseControllerTest do
       assert body["content"] =~ "Hallo Fediverse"
     end
 
+    # Before VutuvWeb.Plug.ActivityStreamsAccept the profile 406ed and the
+    # permalink, which is every Note's id, came back as HTML.
+    test "the JSON-LD form of the AP Accept is answered like activity+json", %{conn: conn} do
+      user = federated_user()
+      post = create_post!(user, %{body: "Hallo Fediverse"})
+
+      for accept <- [
+            ~s(application/ld+json; profile="https://www.w3.org/ns/activitystreams"),
+            "application/ld+json"
+          ],
+          {path, type} <- [
+            {"/#{user.username}", "Person"},
+            {"/#{user.username}/posts/#{post.id}", "Note"}
+          ] do
+        conn = conn |> recycle() |> put_req_header("accept", accept) |> get(path)
+
+        assert conn.status == 200, "expected 200 for #{path} with #{accept}"
+        assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+        assert Jason.decode!(conn.resp_body)["type"] == type
+      end
+    end
+
     test "a book review post's Note carries the review facts in its content", %{conn: conn} do
       user = federated_user()
 
