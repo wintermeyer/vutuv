@@ -214,6 +214,35 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert value_for(%{provider: "Mastodon", value: "https://mastodon.social/@Gargron#bio"}) ==
                "Gargron@mastodon.social"
     end
+
+    # BookWyrm serves a profile at /user/<name>, so the generic parser would
+    # read the path word "user" as the handle.
+    test "reads BookWyrm's /user/<name> profile URL and the address form" do
+      for value <- [
+            "https://bookwyrm.de/user/Be_Kinky",
+            "https://BookWyrm.de/user/Be_Kinky/?tab=reviews",
+            "@Be_Kinky@bookwyrm.de",
+            "Be_Kinky@bookwyrm.de"
+          ] do
+        assert value_for(%{provider: "BookWyrm", value: value}) == "Be_Kinky@bookwyrm.de",
+               "expected #{value} to store Be_Kinky@bookwyrm.de"
+      end
+    end
+
+    test "links a BookWyrm account at /user/<name> and shows the full address" do
+      account = %SocialMediaAccount{provider: "BookWyrm", value: "Be_Kinky@bookwyrm.de"}
+
+      assert SocialMediaAccount.url(account) == "https://bookwyrm.de/user/Be_Kinky"
+      assert SocialMediaAccount.display(account) == "@Be_Kinky@bookwyrm.de"
+    end
+
+    test "rejects a BookWyrm name without its instance, naming the brand" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "BookWyrm", value: "x"})
+
+      refute changeset.valid?
+      assert Enum.any?(errors_on(changeset).value, &(&1 =~ "bookwyrm.social"))
+    end
   end
 
   describe "code-forge value parsing (#921)" do

@@ -3885,6 +3885,53 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  A star rating out of five, drawn as five stars in half steps — the step
+  BookWyrm rates in — with the exact figure as the accessible name and in
+  `data-rating`. A half star is a filled star clipped to its left half over an
+  empty one, since no font draws a half star reliably.
+  """
+  attr(:rating, :float, required: true)
+
+  def star_rating(assigns) do
+    halves = round(assigns.rating * 2)
+
+    assigns =
+      assign(assigns,
+        full: div(halves, 2),
+        half?: rem(halves, 2) == 1,
+        empty: 5 - div(halves + 1, 2),
+        label: gettext("%{rating} out of 5 stars", rating: rating_value(assigns.rating))
+      )
+
+    ~H"""
+    <span
+      role="img"
+      aria-label={@label}
+      title={@label}
+      data-rating={Float.to_string(@rating)}
+      class="inline-flex tracking-[1px] text-amber-600 dark:text-amber-400"
+    >
+      <span :for={_ <- 1..@full//1} aria-hidden="true">★</span>
+      <span :if={@half?} class="relative" aria-hidden="true">
+        <span class="text-slate-300 dark:text-slate-600">★</span>
+        <span class="absolute inset-y-0 left-0 w-1/2 overflow-hidden">★</span>
+      </span>
+      <span :for={_ <- 1..@empty//1} class="text-slate-300 dark:text-slate-600" aria-hidden="true">
+        ★
+      </span>
+    </span>
+    """
+  end
+
+  # A rating as a person reads it: `4` for a whole number, `3.5` / `3,5` (the
+  # locale's decimal separator) for a half.
+  defp rating_value(rating) when is_number(rating) do
+    if rating == trunc(rating),
+      do: Integer.to_string(trunc(rating)),
+      else: one_decimal(rating / 1)
+  end
+
+  @doc """
   Exact, thousands-grouped form of a count (`60123` -> `"60,123"`, or
   `"60.123"` under the German locale), for the rare place that wants the full
   number rather than the floored `compact_count/1` — the live member counter on
@@ -5590,6 +5637,10 @@ defmodule VutuvWeb.UI do
 
   # A link that leaves the site (the profile address card's map link).
   defp detail_icon_path("arrow-up-right"), do: "m4.5 19.5 15-15m0 0H8.25m11.25 0v11.25"
+
+  defp detail_icon_path("book-open"),
+    do:
+      "M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"
 
   @doc """
   The grouped settings menu: the **one map** of everything a member can change

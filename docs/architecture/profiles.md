@@ -1166,6 +1166,33 @@ through `compact_count/1` like every other count in the app. A network that
 offered no usable number leaves it `nil` and the row shows **nothing** — an
 absent count must never render as a misleading `0`.
 
+### BookWyrm reviews
+
+A listed **BookWyrm** account (`Vutuv.Bookwyrm`, stored as `user@instance`
+like a Mastodon handle, linked at `https://instance/user/name`) rides the same
+cache, backoff, flag seam (`:fetch_bookwyrm_posts`) and opt-out, but gets a
+**"Book reviews" card** of its own (`#profile-book-reviews`) instead of rows in
+the posts card: a review is about a book, not a status update.
+
+BookWyrm has no Mastodon-compatible API, so the client reads what every
+ActivityPub server serves without credentials: WebFinger names the actor, the
+actor its outbox, and the outbox's first page lists the member's statuses
+newest first. Only public reviews by that actor are kept (an `Article` with an
+`inReplyToBook`); the reading-status notes and comments beside them are not.
+For each of the three newest the client fetches the book's `Edition` (title,
+first author, cover) and the author's name, side by side, and carries them as
+`%Vutuv.SocialFeed.Book{}` on the post. The review's own title and the book's
+title are read out of BookWyrm's generated `name`
+(`Rezension von "Titel" (5 Sterne): Überschrift`), which is in the reviewer's
+language, so the parse keys on the quoted title rather than on the words
+around it. Any of those lookups failing leaves the review with less detail,
+never drops it.
+
+The cover goes through `SocialFeed.Http.fetch_avatar/2`: fetched
+server-side, AI-checked like an avatar and embedded as a data URI, so a visitor's
+browser never contacts the instance. The stars are `<.star_rating>`, in half
+steps because BookWyrm rates in them.
+
 ## Verified social-media handles
 
 A listed handle is a claim, not a fact: anyone can type anyone's handle into the

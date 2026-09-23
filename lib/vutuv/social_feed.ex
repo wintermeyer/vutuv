@@ -1,14 +1,15 @@
 defmodule Vutuv.SocialFeed do
   @moduledoc """
-  The inline social feeds on the profile's "Social media posts" card: the
-  latest public posts of a member's listed Mastodon and Bluesky accounts,
-  merged into one card.
+  The inline social feeds on the profile: the latest public posts of a
+  member's listed Mastodon and Bluesky accounts, merged into the "Social media
+  posts" card, and the latest book reviews of a BookWyrm account, which get a
+  "Book reviews" card of their own.
 
   This module is the provider-agnostic half. It knows which providers can be
   fetched (`@providers` maps the `social_media_accounts.provider` value to its
   client module), gates each behind its own feature flag, and owns the
   persisted fetch state on the account row. The per-network HTTP/parsing lives
-  in the clients (`Vutuv.Mastodon`, `Vutuv.Bluesky`), which only implement
+  in the clients (`Vutuv.Mastodon`, `Vutuv.Bluesky`, `Vutuv.Bookwyrm`), which only implement
   `fetch_posts/1`; the single-flight cache (`Vutuv.SocialFeed.Cache`) owns the
   fetch tasks — pages talk to `cached_posts/1` and `request_posts/1` only.
 
@@ -29,11 +30,19 @@ defmodule Vutuv.SocialFeed do
 
   # provider value on the account row => the client module whose fetch_posts/1
   # the cache's fetch task runs.
-  @providers %{"Mastodon" => Vutuv.Mastodon, "Bluesky" => Vutuv.Bluesky}
+  @providers %{
+    "Mastodon" => Vutuv.Mastodon,
+    "Bluesky" => Vutuv.Bluesky,
+    "BookWyrm" => Vutuv.Bookwyrm
+  }
 
   # Per-provider feature flags (both off in tests; tests flip them per-test
   # and stub HTTP via the provider's req-options seam).
-  @flags %{"Mastodon" => :fetch_mastodon_posts, "Bluesky" => :fetch_bluesky_posts}
+  @flags %{
+    "Mastodon" => :fetch_mastodon_posts,
+    "Bluesky" => :fetch_bluesky_posts,
+    "BookWyrm" => :fetch_bookwyrm_posts
+  }
 
   @doc "Whether fetching this provider's posts is on at all (off in tests)."
   def enabled?(provider) when is_map_key(@flags, provider),

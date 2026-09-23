@@ -7335,7 +7335,12 @@ defmodule Vutuv.Fediverse do
   # A refetched note counts as public only if it still addresses the public
   # collection; anything else (including an answer we cannot parse) is a signal
   # to stop showing it, never a reason to keep it.
-  defp doc_public?(doc) do
+  @doc """
+  Whether an ActivityPub object is addressed to the public collection, in any
+  of the spellings servers use. Public because the BookWyrm client
+  (`Vutuv.Bookwyrm`) asks the same question of a review.
+  """
+  def doc_public?(doc) do
     [doc["to"], doc["cc"]]
     |> Enum.flat_map(&normalize_uri_list/1)
     |> Enum.any?(&(&1 in @public_collections))

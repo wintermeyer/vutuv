@@ -18,7 +18,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [i18n.md](i18n.md) | the interface languages: how a request gets its locale, the Gettext catalogs and their extract/merge traps, per-locale email bodies, locale-sensitive formatting, and how to add a language |
 | [search.md](search.md) | the search page, query operators, post full-text search |
 | [messages.md](messages.md) | 1:1 direct messages, message requests, unread-email nudges |
-| [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |
+| [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card, BookWyrm reviews |
 | [job-references.md](job-references.md) | Arbeitszeugnisse: private-by-default upload, CV linkage, PDF/OCR text extraction, and the AI review (daily-fetched prompt, the context-window trap, the queue) |
 | [organizations.md](organizations.md) | verified organization pages at `/organizations`: the domain-proof trust model (DNS TXT / well-known file), lifecycle states, engagement, moderation, agent formats |
 | [jobs.md](jobs.md) | job postings at `/jobs/:slug`: the 90-day lifecycle & sweeper, structured location (offline GeoNames), the salary model, visibility gates, the AGG hint, easy apply, JSON-LD & agent formats |
