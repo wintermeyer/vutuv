@@ -1,0 +1,99 @@
+{
+  "lang": "en",
+  "accept_language": "en-GB,en",
+  "pdf_name": "CV_Miriam_Kessler.pdf",
+
+  "miriam": {
+    "headline": "I build software with Elixir and Phoenix that people enjoy using. I organise the Elixir meetup in Koblenz.",
+    "tags": "Elixir, Phoenix Framework, PostgreSQL, Team Leadership, Open Source",
+    "cv": [
+      {"title": "Lead Developer", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [1, 2023], "to": null,
+       "desc": "Leading a team of six developers. Architecture, code reviews and mentoring."},
+      {"title": "Senior Elixir Developer", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [3, 2020], "to": [12, 2022],
+       "desc": "Moved our planning software to Phoenix LiveView."},
+      {"title": "Elixir Developer", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [8, 2017], "to": [2, 2020], "desc": null},
+      {"title": "Working Student, Software Development", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [10, 2015], "to": [7, 2017], "desc": null},
+      {"title": "Web Development Internship", "org": "Rhein-Mosel Medien GmbH", "kind": "internship", "from": [3, 2015], "to": [8, 2015], "desc": null}
+    ],
+    "education": {"school": "Koblenz University of Applied Sciences", "degree": "Bachelor of Science", "field": "Computer Science", "from": [10, 2013], "to": [9, 2017]},
+    "links": [
+      {"url": "https://miriamkessler.dev", "desc": "Blog: Software that feels good", "site": "blog"},
+      {"url": "https://elixir-stammtisch-koblenz.de", "desc": "Elixir Meetup Koblenz", "site": "stammtisch"},
+      {"url": "https://lahnblick-software.de", "desc": "Lahnblick Software GmbH", "site": "lahnblick"}
+    ],
+    "github_repos": [
+      "Drag-and-drop scheduling with Phoenix LiveView, no JavaScript framework needed.",
+      "Small, readable examples of supervision trees, GenServers and Registry.",
+      "The website of the Elixir meetup in Koblenz."
+    ],
+    "mastodon_posts": [
+      "Built a complete form with LiveView streams today. Not a single line of JavaScript. I'm in love. #Elixir #LiveView",
+      "The slides from my meetup talk \"LiveView without fear of latency\" are online. Thanks to everyone who came!",
+      "Pair programming with our working student: today she explained pattern matching in guards to me, which I've been doing wrong for years. Best team."
+    ],
+    "bluesky_posts": [
+      "New blog post: OTP in everyday life. Why supervision trees are really org charts.",
+      "Koblenz in the evening light, seen from Ehrenbreitstein. Next meetup on 1 October!"
+    ]
+  },
+
+  "sites": {
+    "blog": {"nav": ["Articles", "Talks", "About"], "kicker": "Elixir · Phoenix · LiveView", "title": "Software that<br>feels good.",
+             "lead": "Notes from ten years of Elixir: architecture, teams, and why LiveView made our planning software faster.",
+             "cards": [["12 Sep 2026", "LiveView without fear of latency"], ["28 Aug 2026", "OTP in everyday life: supervision trees"], ["3 Aug 2026", "Code reviews that are fun"]]},
+    "stammtisch": {"kicker": "Every first Thursday", "title": "Elixir Meetup<br>Koblenz",
+                   "facts": [["Next meetup", "Thu, 1 October, 7 pm"], ["Venue", "Old town, near Deutsches Eck"], ["Topic", "LiveView 1.1 &amp; pizza"]]},
+    "lahnblick": {"nav": ["Product", "Team", "Careers", "Request a demo"], "title": "Scheduling for trades,<br>in real time.",
+                  "lead": "Appointments, quotes and invoices in one place. Built with Elixir in Koblenz.",
+                  "rows": ["Mon · Boiler service, Braun family", "Mon · New bathroom, Lahnstein", "Tue · Quote, roof repair", "Tue · Invoice, Kurz electrics"]}
+  },
+
+  "news": {
+    "follow": [["flipboard.com", "NationalGeographic"]],
+    "top_contains": "Watch the Seasons Unfold on a Photographic Journey Through Nikko, Japan",
+    "second_contains": "For a New Perspective on Luxor"
+  },
+
+  "post": {
+    "line1": "Good morning! Who's coming to the Elixir meetup in Koblenz next week?",
+    "line2": "I'll bring pizza for everyone.",
+    "tags": ["Elixir", "Koblenz", "Community"]
+  },
+  "reply": "Count me in! I'll bring cake.",
+
+  "chat": {
+    "opening_anna": "Hi Miriam! Thanks again for your LiveView talk at the last meetup.",
+    "opening_miriam": "My pleasure! I really enjoyed it.",
+    "anna": [
+      "Hi Miriam! By the way, we're looking for an Elixir developer: [{job_title}]({job_url})",
+      "Feel free to have a look at what else we have on the job board.",
+      "If you're interested, send me your CV as a PDF by email. **But without a photo!**"
+    ],
+    "miriam": "Thanks! Sounds exciting, I'll have a look right away."
+  },
+
+  "search": {"q": "Elixir", "near": "Koblenz", "radius": "50"},
+
+  "jobs": [
+    {"main": true, "poster": "anna_berger", "title": "Elixir Developer (m/f/d)", "org": "Rheinkiesel Software GmbH", "workplace": "hybrid",
+     "zip": "56068", "city": "Koblenz", "country": "DE", "salary": [62000, 78000], "required": "Elixir, Phoenix Framework", "nice": "PostgreSQL",
+     "desc": "We are a team of twelve in Koblenz, building software for trade businesses along the Rhine and Moselle with Elixir and Phoenix LiveView: scheduling, quotes and invoices, all in real time.\n\n**What you will do**\n\n- Build new features in Elixir and Phoenix LiveView, from the first sketch to deployment\n- Look after our PostgreSQL database and make it faster\n- Code reviews and pair programming with the team\n\n**What you bring**\n\n- Experience with Elixir, or the wish to learn it properly\n- Joy in clean, well-tested code\n- Good English for everyday team work\n\n**What to expect**\n\n- Two days a week in the office at the Deutsches Eck, the rest remote\n- 30 days of holiday and a €2,000 training budget per year\n- A ticket to ElixirConf EU every year\n- Pizza at the monthly Elixir meetup"},
+    {"poster": "jonas_keller", "title": "Senior Elixir Engineer (m/f/d)", "org": "Nordlicht Studio", "workplace": "remote", "remote": ["DE", "AT", "CH"],
+     "salary": [78000, 95000], "required": "Elixir, OTP", "nice": "Phoenix Framework", "desc": "Distributed systems with Elixir and OTP, fully remote."},
+    {"poster": "lena_hoffmann", "title": "Phoenix LiveView Developer (m/f/d)", "org": "Taunusbrücke Cloud GmbH", "workplace": "hybrid",
+     "zip": "60311", "city": "Frankfurt am Main", "country": "DE", "salary": [66000, 82000], "required": "Phoenix Framework, Elixir",
+     "desc": "Real-time dashboards for data centres, built with Phoenix LiveView."},
+    {"poster": "anna_berger", "title": "Working Student Elixir (m/f/d)", "org": "Rheinkiesel Software GmbH", "workplace": "hybrid", "employment": "working_student",
+     "zip": "56068", "city": "Koblenz", "country": "DE", "required": "Elixir", "desc": "Learn Elixir on a real project alongside your studies."},
+    {"poster": "anna_berger", "title": "Backend Developer Elixir (m/f/d)", "org": "Deichblick Logistik GmbH", "workplace": "hybrid", "zip": "56564", "city": "Neuwied", "country": "DE", "salary": [58000, 72000]},
+    {"poster": "jonas_keller", "title": "Senior Phoenix Developer (m/f/d)", "org": "Westerwald Datenwerk GmbH", "workplace": "onsite", "zip": "56410", "city": "Montabaur", "country": "DE", "salary": [70000, 86000]},
+    {"poster": "lena_hoffmann", "title": "Elixir/OTP Engineer (m/f/d)", "org": "Moselkurve Energie AG", "workplace": "hybrid", "zip": "56626", "city": "Andernach", "country": "DE", "salary": [64000, 80000]},
+    {"poster": "anna_berger", "title": "Full-Stack Elixir Developer (m/f/d)", "org": "Domblick Fintech GmbH", "workplace": "hybrid", "zip": "50667", "city": "Köln", "country": "DE", "salary": [65000, 82000]},
+    {"poster": "jonas_keller", "title": "Elixir Developer, Mobility (m/f/d)", "org": "Spreewerk Mobility GmbH", "workplace": "onsite", "zip": "10115", "city": "Berlin", "country": "DE", "salary": [60000, 78000]},
+    {"poster": "lena_hoffmann", "title": "Lead Engineer Elixir (m/f/d)", "org": "Isarfunk Media GmbH", "workplace": "hybrid", "zip": "80331", "city": "München", "country": "DE", "salary": [85000, 105000]},
+    {"poster": "anna_berger", "title": "Elixir Developer, E-Commerce (m/f/d)", "org": "Hafenkante Commerce GmbH", "workplace": "onsite", "zip": "20095", "city": "Hamburg", "country": "DE", "salary": [62000, 76000]},
+    {"poster": "jonas_keller", "title": "Elixir Consultant (m/f/d)", "org": "Alpenbyte GmbH", "workplace": "hybrid", "zip": "1010", "city": "Wien", "country": "AT", "salary": [60000, 75000]},
+    {"poster": "lena_hoffmann", "title": "Junior Elixir Developer (m/f/d)", "org": "Rheinkiesel Software GmbH", "workplace": "hybrid", "zip": "56068", "city": "Koblenz", "country": "DE", "salary": [45000, 55000]}
+  ],
+  "job_default_desc": "We are looking for someone to join our Elixir team in {city}."
+}

@@ -1,0 +1,99 @@
+{
+  "lang": "de",
+  "accept_language": "de-DE,de",
+  "pdf_name": "Lebenslauf_Miriam_Kessler.pdf",
+
+  "miriam": {
+    "headline": "Ich baue mit Elixir und Phoenix Software, die Menschen gern benutzen. Organisiere den Elixir-Stammtisch in Koblenz.",
+    "tags": "Elixir, Phoenix Framework, PostgreSQL, Teamleitung, Open Source",
+    "cv": [
+      {"title": "Lead Developer", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [1, 2023], "to": null,
+       "desc": "Leite ein Team aus sechs Entwicklerinnen und Entwicklern. Architektur, Code Reviews und Mentoring."},
+      {"title": "Senior Elixir-Entwicklerin", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [3, 2020], "to": [12, 2022],
+       "desc": "Umstellung der Planungssoftware auf Phoenix LiveView."},
+      {"title": "Elixir-Entwicklerin", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [8, 2017], "to": [2, 2020], "desc": null},
+      {"title": "Werkstudentin Softwareentwicklung", "org": "Lahnblick Software GmbH", "kind": "employment", "from": [10, 2015], "to": [7, 2017], "desc": null},
+      {"title": "Praktikum Webentwicklung", "org": "Rhein-Mosel Medien GmbH", "kind": "internship", "from": [3, 2015], "to": [8, 2015], "desc": null}
+    ],
+    "education": {"school": "Hochschule Koblenz", "degree": "Bachelor of Science", "field": "Informatik", "from": [10, 2013], "to": [9, 2017]},
+    "links": [
+      {"url": "https://miriamkessler.dev", "desc": "Blog: Software, die sich gut anfühlt", "site": "blog"},
+      {"url": "https://elixir-stammtisch-koblenz.de", "desc": "Elixir-Stammtisch Koblenz", "site": "stammtisch"},
+      {"url": "https://lahnblick-software.de", "desc": "Lahnblick Software GmbH", "site": "lahnblick"}
+    ],
+    "github_repos": [
+      "Drag-and-drop-Terminplanung mit Phoenix LiveView, ganz ohne JavaScript-Framework.",
+      "Kleine, lesbare Beispiele für Supervisor-Bäume, GenServer und Registry.",
+      "Die Webseite des Elixir-Stammtischs Koblenz."
+    ],
+    "mastodon_posts": [
+      "Heute zum ersten Mal ein komplettes Formular mit LiveView-Streams gebaut. Keine Zeile JavaScript. Ich bin verliebt. #Elixir #LiveView",
+      "Folien von meinem Stammtisch-Vortrag \"LiveView ohne Angst vor Latenz\" sind online. Danke an alle, die gekommen sind!",
+      "Pair Programming mit der Werkstudentin: sie hat mir heute Pattern Matching in Guards erklärt, das ich seit Jahren falsch nutze. Bestes Team."
+    ],
+    "bluesky_posts": [
+      "Neuer Blogartikel: OTP im Alltag. Warum Supervisor-Bäume eigentlich Organigramme sind.",
+      "Koblenz im Abendlicht, vom Ehrenbreitstein aus. Nächster Stammtisch am 1. Oktober!"
+    ]
+  },
+
+  "sites": {
+    "blog": {"nav": ["Artikel", "Vorträge", "Über mich"], "kicker": "Elixir · Phoenix · LiveView", "title": "Software, die sich<br>gut anfühlt.",
+             "lead": "Notizen aus zehn Jahren Elixir: Architektur, Teams und warum LiveView unsere Planungssoftware schneller gemacht hat.",
+             "cards": [["12. Sep. 2026", "LiveView ohne Angst vor Latenz"], ["28. Aug. 2026", "OTP im Alltag: Supervisor-Bäume"], ["3. Aug. 2026", "Code Reviews, die Spaß machen"]]},
+    "stammtisch": {"kicker": "Jeden ersten Donnerstag", "title": "Elixir-Stammtisch<br>Koblenz",
+                   "facts": [["Nächstes Treffen", "Do., 1. Oktober, 19 Uhr"], ["Ort", "Altstadt, nahe Deutsches Eck"], ["Thema", "LiveView 1.1 &amp; Pizza"]]},
+    "lahnblick": {"nav": ["Produkt", "Team", "Karriere", "Demo anfragen"], "title": "Planung für Handwerk,<br>in Echtzeit.",
+                  "lead": "Termine, Angebote und Rechnungen an einem Ort. Gebaut mit Elixir in Koblenz.",
+                  "rows": ["Mo · Heizungswartung Fam. Braun", "Mo · Bad Neubau Lahnstein", "Di · Angebot Dachsanierung", "Di · Rechnung Elektrik Kurz"]}
+  },
+
+  "news": {
+    "follow": [["ard.social", "tagesschau"], ["social.heise.de", "heiseonline"]],
+    "top_contains": "Vor Trump-Xi-Gipfel: China und USA beraten über KI",
+    "second_contains": "Volkswagen ID. Buzz fährt Guinness-Rekord ein"
+  },
+
+  "post": {
+    "line1": "Guten Morgen! Wer kommt nächste Woche zum Elixir-Stammtisch nach Koblenz?",
+    "line2": "Ich bringe Pizza für alle mit.",
+    "tags": ["Elixir", "Koblenz", "Community"]
+  },
+  "reply": "Bin dabei! Ich bringe Kuchen mit.",
+
+  "chat": {
+    "opening_anna": "Hallo Miriam! Danke nochmal für deinen Vortrag über LiveView beim letzten Stammtisch.",
+    "opening_miriam": "Sehr gern! Hat mir viel Spaß gemacht.",
+    "anna": [
+      "Hi Miriam! Wir suchen übrigens eine Elixir-Entwicklerin: [{job_title}]({job_url})",
+      "Du kannst auch mal schauen, was wir sonst noch in der Jobbörse haben.",
+      "Schicke mir bei Interesse Deinen Lebenslauf als PDF per E-Mail. **Aber ohne Foto!**"
+    ],
+    "miriam": "Danke! Klingt spannend, ich schaue es mir gleich an."
+  },
+
+  "search": {"q": "Elixir", "near": "Koblenz", "radius": "50"},
+
+  "jobs": [
+    {"main": true, "poster": "anna_berger", "title": "Elixir-Entwickler (m/w/d)", "org": "Rheinkiesel Software GmbH", "workplace": "hybrid",
+     "zip": "56068", "city": "Koblenz", "country": "DE", "salary": [62000, 78000], "required": "Elixir, Phoenix Framework", "nice": "PostgreSQL",
+     "desc": "Wir sind ein zwölfköpfiges Team in Koblenz und bauen mit Elixir und Phoenix LiveView Software für Handwerksbetriebe an Rhein und Mosel: Terminplanung, Angebote und Rechnungen, alles in Echtzeit.\n\n**Ihre Aufgaben**\n\n- Neue Funktionen in Elixir und Phoenix LiveView entwickeln, vom ersten Entwurf bis zum Deployment\n- Unsere PostgreSQL-Datenbank pflegen und schneller machen\n- Code Reviews im Team und Pair Programming\n\n**Das bringen Sie mit**\n\n- Erfahrung mit Elixir oder die Lust, es richtig zu lernen\n- Freude an sauberem, getestetem Code\n- Gutes Deutsch für den Team-Alltag\n\n**Was Sie erwartet**\n\n- Zwei Tage pro Woche im Büro am Deutschen Eck, der Rest remote\n- 30 Tage Urlaub und 2.000 € Weiterbildungsbudget im Jahr\n- Jedes Jahr ein Ticket für die ElixirConf EU\n- Pizza beim monatlichen Elixir-Stammtisch"},
+    {"poster": "jonas_keller", "title": "Senior Elixir Engineer (m/w/d)", "org": "Nordlicht Studio", "workplace": "remote", "remote": ["DE", "AT", "CH"],
+     "salary": [78000, 95000], "required": "Elixir, OTP", "nice": "Phoenix Framework", "desc": "Verteilte Systeme mit Elixir und OTP, komplett remote."},
+    {"poster": "lena_hoffmann", "title": "Phoenix LiveView Entwickler (m/w/d)", "org": "Taunusbrücke Cloud GmbH", "workplace": "hybrid",
+     "zip": "60311", "city": "Frankfurt am Main", "country": "DE", "salary": [66000, 82000], "required": "Phoenix Framework, Elixir",
+     "desc": "Echtzeit-Dashboards für Rechenzentren, gebaut mit Phoenix LiveView."},
+    {"poster": "anna_berger", "title": "Werkstudent Elixir (m/w/d)", "org": "Rheinkiesel Software GmbH", "workplace": "hybrid", "employment": "working_student",
+     "zip": "56068", "city": "Koblenz", "country": "DE", "required": "Elixir", "desc": "Lerne Elixir im echten Projekt, neben dem Studium."},
+    {"poster": "anna_berger", "title": "Backend-Entwicklerin Elixir (m/w/d)", "org": "Deichblick Logistik GmbH", "workplace": "hybrid", "zip": "56564", "city": "Neuwied", "country": "DE", "salary": [58000, 72000]},
+    {"poster": "jonas_keller", "title": "Senior Phoenix Developer (m/w/d)", "org": "Westerwald Datenwerk GmbH", "workplace": "onsite", "zip": "56410", "city": "Montabaur", "country": "DE", "salary": [70000, 86000]},
+    {"poster": "lena_hoffmann", "title": "Elixir/OTP Engineer (m/w/d)", "org": "Moselkurve Energie AG", "workplace": "hybrid", "zip": "56626", "city": "Andernach", "country": "DE", "salary": [64000, 80000]},
+    {"poster": "anna_berger", "title": "Elixir-Entwickler:in Full-Stack (m/w/d)", "org": "Domblick Fintech GmbH", "workplace": "hybrid", "zip": "50667", "city": "Köln", "country": "DE", "salary": [65000, 82000]},
+    {"poster": "jonas_keller", "title": "Elixir Developer (m/w/d)", "org": "Spreewerk Mobility GmbH", "workplace": "onsite", "zip": "10115", "city": "Berlin", "country": "DE", "salary": [60000, 78000]},
+    {"poster": "lena_hoffmann", "title": "Lead Engineer Elixir (m/w/d)", "org": "Isarfunk Media GmbH", "workplace": "hybrid", "zip": "80331", "city": "München", "country": "DE", "salary": [85000, 105000]},
+    {"poster": "anna_berger", "title": "Elixir-Entwickler (m/w/d) E-Commerce", "org": "Hafenkante Commerce GmbH", "workplace": "onsite", "zip": "20095", "city": "Hamburg", "country": "DE", "salary": [62000, 76000]},
+    {"poster": "jonas_keller", "title": "Elixir Consultant (m/w/d)", "org": "Alpenbyte GmbH", "workplace": "hybrid", "zip": "1010", "city": "Wien", "country": "AT", "salary": [60000, 75000]},
+    {"poster": "lena_hoffmann", "title": "Junior Elixir-Entwickler (m/w/d)", "org": "Rheinkiesel Software GmbH", "workplace": "hybrid", "zip": "56068", "city": "Koblenz", "country": "DE", "salary": [45000, 55000]}
+  ],
+  "job_default_desc": "Wir suchen Verstärkung für unser Elixir-Team in {city}."
+}
