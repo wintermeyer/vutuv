@@ -103,4 +103,10 @@ defmodule Vutuv.MarkdownContent do
     |> String.replace(~r/```[\s\S]*?```|~~~[\s\S]*?~~~/, "")
     |> String.replace(~r/`[^`]*`/, "")
   end
+
+  @doc """
+  `body` without its embedded images (`@image_markdown`), for a surface that
+  shows a post's pictures on their own and would otherwise show each twice.
+  """
+  def strip_images(body), do: Regex.replace(@image_markdown, body, "")
 end

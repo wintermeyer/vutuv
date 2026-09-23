@@ -86,14 +86,40 @@ defmodule VutuvWeb.NotificationLive.Groups do
   `:connection` and `:endorsement`.
   """
   def sections(items, read_marker) do
+    by_day(items, fn day, day_items ->
+      %{day: day, groups: day_groups(day, day_items, read_marker)}
+    end)
+  end
+
+  @doc """
+  The reply inbox's shape (`?filter=replies`, the page's default): the same
+  newest-first calendar-day sections as `sections/2`, but every item is a row
+  of its own, `[%{day: Date, rows: [line]}]`. Each row is a line exactly as a
+  card holds one (`:id`, `:verb`, `:actors`, `:item`, `:unread?`, …), so the
+  row can name its actor with the same links a card line uses.
+
+  Nothing merges here on purpose: the inbox answers "who wrote to me, and
+  have I dealt with it", which is a question about each reply, not about the
+  post it landed under.
+  """
+  def inbox_sections(items, read_marker) do
+    by_day(items, fn day, day_items ->
+      %{
+        day: day,
+        rows: Enum.map(day_items, &build_line({:single, &1.id}, day, [&1], read_marker))
+      }
+    end)
+  end
+
+  # The reader's calendar days, newest first, each day's items newest first,
+  # handed to `fun` to shape into a section.
+  defp by_day(items, fun) do
     items
     |> Enum.map(&normalize/1)
     |> Enum.sort_by(&NaiveDateTime.to_iso8601(&1.at_naive), :desc)
     |> Enum.group_by(& &1.day)
     |> Enum.sort_by(fn {day, _} -> day end, {:desc, Date})
-    |> Enum.map(fn {day, day_items} ->
-      %{day: day, groups: day_groups(day, day_items, read_marker)}
-    end)
+    |> Enum.map(fn {day, day_items} -> fun.(day, day_items) end)
   end
 
   # Merge one day's items into cards. `Enum.sort_by/3` is stable, so within

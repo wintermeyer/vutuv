@@ -640,7 +640,24 @@ Around the list:
   line; the visit itself still advances `users.notifications_read_at` and
   clears the bell. A line whose post the reader already engaged with is exempt
   (see the read-state section above) — it is listed, plain.
-* **Filter chips** (all / replies / reactions / people / more) restrict the
+* **The reply inbox** is what `/notifications` opens on (`?filter=replies`,
+  the default): every reply, thread answer, mention and reply from another
+  network as a row of its own (`Groups.inbox_sections/2`), newest first under
+  the day headings, never merged under its post. A row names the post it
+  answers, two lines of its words (`PostTeaser.opening_lines/2`, blank lines
+  dropped) and what the member already did about it: a status pill (new,
+  read, answered), their own answer, their like. Answered and liked are read
+  at request time by `Vutuv.Activity.ReplyStatus` (a post of theirs directly
+  under the reply, a `post_likes` / `fediverse_note_likes` row), so nothing is
+  stored for them. A second row of chips (`?answer=open|answered`) narrows
+  the list in SQL through `notifications_page/2`'s `answer:` option, whose
+  `NOT IN` lists drop their NULLs on purpose. A resting mouse pointer shows
+  the whole post with its pictures (the `ReplyPreview` hook pushes `preview`
+  after 350 ms, only where `(hover: hover)`); "Show context" folds a
+  `Posts.thread_window/3` of the conversation open under the row. Both load
+  for one row on demand (`VutuvWeb.NotificationLive.ReplyInbox`). On a phone
+  a tap on the teaser unfolds the words, as on a card line.
+* **Filter chips** (replies / reactions / people / more / all) restrict the
   feed server-side via `Activity.notifications_page/2`'s `kinds:` option (only
   the matching source queries run, so pagination stays exact) and live in the
   URL (`?filter=`), patched without a reload. Each chip carries the count of

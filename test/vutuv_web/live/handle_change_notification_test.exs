@@ -13,7 +13,7 @@ defmodule VutuvWeb.HandleChangeNotificationTest do
 
       {:ok, _} = Accounts.update_username(victim, %{"username" => "newname"})
 
-      body = html_response(get(conn, ~p"/notifications"), 200)
+      body = html_response(get(conn, ~p"/notifications?filter=all"), 200)
 
       # Before/after handles are spelled out in the notification text.
       assert body =~ "changed their handle from @oldname to @newname"
@@ -30,7 +30,7 @@ defmodule VutuvWeb.HandleChangeNotificationTest do
 
       {:ok, _} = Accounts.update_username(victim, %{"username" => "newname"})
 
-      {:ok, live, _html} = live(conn, ~p"/notifications")
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=all")
       # Seven posts, five shown -> "and 2 more".
       assert render(live) =~ "and 2 more"
     end

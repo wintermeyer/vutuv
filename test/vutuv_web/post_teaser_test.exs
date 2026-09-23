@@ -217,4 +217,22 @@ defmodule VutuvWeb.PostTeaserTest do
       assert PostTeaser.plain_line(post) == "Der Rest"
     end
   end
+
+  describe "opening_lines/2" do
+    test "keeps a member's lines in order and drops the blank ones between them" do
+      post = %Post{body: "Danke für den **Artikel**.\n\n\nWie testet ihr das?\n\nGruß"}
+
+      assert PostTeaser.opening_lines(post) == "Danke für den Artikel.\nWie testet ihr das?\nGruß"
+    end
+
+    test "cuts a remote reply's plain text without reading it as Markdown" do
+      note = %Note{content_text: "1. Punkt\n\n   \n*nicht fett*"}
+
+      assert PostTeaser.opening_lines(note) == "1. Punkt\n*nicht fett*"
+    end
+
+    test "is empty for a post with no words" do
+      assert PostTeaser.opening_lines(%Note{content_text: nil}) == ""
+    end
+  end
 end
