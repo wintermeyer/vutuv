@@ -570,13 +570,12 @@ defmodule VutuvWeb.UserProfileLive do
   # and assign/3 skips equal values — flip through empty so the card
   # re-renders with the new Berlin day, like the vutuv posts above.
   defp refresh_social_feed_stamps(socket) do
-    case socket.assigns.social_feed_entries do
-      [] ->
-        socket
-
-      entries ->
-        socket |> assign(:social_feed_entries, []) |> assign(:social_feed_entries, entries)
-    end
+    Enum.reduce([:social_feed_entries, :book_reviews], socket, fn key, socket ->
+      case socket.assigns[key] do
+        [] -> socket
+        entries -> socket |> assign(key, []) |> assign(key, entries)
+      end
+    end)
   end
 
   # Only a logged-in non-owner may endorse, and only a *non* honor tag
@@ -1089,7 +1088,7 @@ defmodule VutuvWeb.UserProfileLive do
   end
 
   # The inline social feeds (Vutuv.SocialFeed): every feed-capable account
-  # (Mastodon, Bluesky) on the profile, whatever the cache already holds for
+  # (Mastodon, Bluesky, BookWyrm) on the profile, whatever the cache already holds for
   # each — a synchronous ETS read, never the network. The fast path runs on
   # connected sockets only, so the disconnected (SEO / crawler) pass renders
   # without posts, consistent with the agent formats (ProfileDoc deliberately
@@ -1150,7 +1149,7 @@ defmodule VutuvWeb.UserProfileLive do
     entries =
       socket.assigns.social_feeds
       |> Enum.flat_map(fn {{provider, _handle}, feed} ->
-        Enum.map(feed.posts, fn post ->
+        for post <- feed.posts, !review?(post) do
           %{
             provider: provider,
             feed: feed,
@@ -1158,12 +1157,32 @@ defmodule VutuvWeb.UserProfileLive do
             key: cross_post_key(post.text),
             sources: [%{provider: provider, feed: feed}]
           }
-        end)
+        end
       end)
       |> merge_cross_posts()
       |> Enum.sort_by(& &1.post.created_at, {:desc, DateTime})
 
-    assign(socket, :social_feed_entries, entries)
+    socket
+    |> assign(:social_feed_entries, entries)
+    |> assign(:book_reviews, book_reviews(socket.assigns.social_feeds))
+  end
+
+  # A review (a post carrying the book it is about, `Vutuv.Bookwyrm`) gets the
+  # "Book reviews" card of its own rather than a row among the posts: it is
+  # about a book, not a status update. Several listed accounts share the card,
+  # newest review first. Map.get, not a field read: a stale ETS entry from an
+  # older module version may carry posts without the field.
+  @book_reviews_shown 3
+
+  defp review?(post), do: match?(%SocialFeed.Book{}, Map.get(post, :book))
+
+  defp book_reviews(feeds) do
+    feeds
+    |> Enum.flat_map(fn {_key, feed} ->
+      for post <- feed.posts, review?(post), do: %{feed: feed, post: post}
+    end)
+    |> Enum.sort_by(& &1.post.created_at, {:desc, DateTime})
+    |> Enum.take(@book_reviews_shown)
   end
 
   # There is no shared id across networks — a crosspost is two unrelated
@@ -1230,10 +1249,17 @@ defmodule VutuvWeb.UserProfileLive do
   defp rendered_social_feed(%SocialFeed.Feed{} = feed) do
     %{
       feed
-      | posts: Enum.map(feed.posts, &Map.put(&1, :html, VutuvWeb.Markdown.render_remote(&1.text)))
+      | posts: Enum.map(feed.posts, &render_post_html/1)
     }
   rescue
     _stale_shape -> nil
+  end
+
+  # The review card shows the plain `text`, so a review skips the pipeline.
+  defp render_post_html(post) do
+    if review?(post),
+      do: post,
+      else: Map.put(post, :html, VutuvWeb.Markdown.render_remote(post.text))
   end
 
   # How long an account row may show its loading spinner before giving up

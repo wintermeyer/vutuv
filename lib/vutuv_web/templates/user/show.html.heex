@@ -1561,6 +1561,93 @@ up. The rest of the geometry is one block in the phone section of
       </ul>
     </.card>
 
+    <%!-- The latest book reviews of a listed BookWyrm account (Vutuv.Bookwyrm,
+    through the same Vutuv.SocialFeed cache and opt-out as the card above).
+    Each row is one link to the review on its instance: the cover (fetched
+    server-side as a data URI, like the feed avatars), then title, author,
+    stars, the review's own title and two lines of its text. The text is plain
+    text from a remote server, so it is only ever HEEx-escaped here. The cover's
+    width/height attributes keep it book-sized in a tab still holding the
+    previous release's stylesheet, which the socket patches this card into. --%>
+    <.card :if={@book_reviews != []} id="profile-book-reviews">
+      <.section_header title={gettext("Book reviews")}>
+        <:action>
+          <span class="text-sm text-slate-500 dark:text-slate-400">
+            {gettext("via BookWyrm")}
+          </span>
+        </:action>
+      </.section_header>
+      <ul class="-mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <li :for={%{feed: feed, post: %{book: book} = post} <- @book_reviews}>
+          <.link
+            href={post.url}
+            target="_blank"
+            rel="ugc nofollow noopener noreferrer"
+            class="group -mx-2 flex gap-4 rounded-lg px-2 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+          >
+            <img
+              :if={book.cover}
+              src={book.cover}
+              alt=""
+              width="56"
+              height="84"
+              class="h-[84px] w-14 shrink-0 rounded-sm object-cover shadow-sm ring-1 ring-slate-900/10"
+            />
+            <div
+              :if={!book.cover}
+              class="flex h-[84px] w-14 shrink-0 items-center justify-center rounded-sm bg-slate-100 text-slate-400 ring-1 ring-slate-900/5 dark:bg-slate-800 dark:text-slate-500"
+            >
+              <.detail_icon name="book-open" class="h-6 w-6" />
+            </div>
+            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div class="flex items-baseline justify-between gap-3">
+                <span class="truncate font-semibold text-slate-900 group-hover:text-brand-700 dark:text-white dark:group-hover:text-brand-300">
+                  {book.title}
+                </span>
+                <.post_time
+                  id={"book-review-time-#{feed.handle}-#{post.id}"}
+                  at={post.created_at}
+                  class="shrink-0 text-sm text-slate-500 dark:text-slate-400"
+                />
+              </div>
+              <span :if={book.author} class="text-sm text-slate-600 dark:text-slate-400">
+                {book.author}
+              </span>
+              <div
+                :if={book.rating || book.headline}
+                class="flex flex-wrap items-center gap-x-2 text-sm"
+              >
+                <.star_rating :if={book.rating} rating={book.rating} />
+                <span
+                  :if={book.headline}
+                  class="font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  {book.headline}
+                </span>
+              </div>
+              <p
+                :if={post.text != ""}
+                class="mt-0.5 line-clamp-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+              >
+                {post.text}
+              </p>
+            </div>
+          </.link>
+        </li>
+      </ul>
+      <div class="-mb-2 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
+        <.link
+          :for={feed <- @book_reviews |> Enum.map(& &1.feed) |> Enum.uniq_by(& &1.url)}
+          href={feed.url}
+          target="_blank"
+          rel="noopener nofollow"
+          class="block py-1 font-medium text-brand-700 hover:underline dark:text-brand-300"
+        >
+          {gettext("All reviews on %{host}", host: URI.parse(feed.url).host)} ↗
+        </.link>
+      </div>
+    </.card>
+
     <.card :if={@as_owner? or address_card?(@user.addresses)} id="profile-addresses">
       <.section_header title={ngettext("Address", "Addresses", @totals.addresses)} />
       <.empty_add :if={@as_owner? and @totals.addresses == 0} href={~p"/settings/addresses/new"}>

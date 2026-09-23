@@ -669,6 +669,7 @@ config :vutuv, :markdown_cache, true
 # :bluesky_req_options).
 config :vutuv, :fetch_mastodon_posts, true
 config :vutuv, :fetch_bluesky_posts, true
+config :vutuv, :fetch_bookwyrm_posts, true
 
 # The posts a followed tag pulls from the other servers it names (issue #2126).
 # Off = nothing is ever asked and the standing job does not even start — the

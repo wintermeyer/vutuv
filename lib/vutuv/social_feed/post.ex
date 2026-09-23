@@ -3,7 +3,9 @@ defmodule Vutuv.SocialFeed.Post do
   One remote social post as the profile page shows it: sanitized plain text,
   the post's URL on its home network, and when it was posted. Built
   exclusively by the provider clients' `fetch_posts/1`; the `text` is already
-  reduced to plain text there (never render it with `raw/1`).
+  reduced to plain text there (never render it with `raw/1`). A book review
+  (`Vutuv.Bookwyrm`) also carries the book it is about in `book`; every other
+  post leaves it nil.
 
   `html` is presentation data the web layer fills in
   (`VutuvWeb.UserProfileLive` via `VutuvWeb.Markdown.render_remote/1`): the
@@ -12,14 +14,15 @@ defmodule Vutuv.SocialFeed.Post do
   the cache.
   """
 
-  defstruct [:id, :url, :text, :html, :created_at]
+  defstruct [:id, :url, :text, :html, :created_at, :book]
 
   @type t :: %__MODULE__{
           id: String.t(),
           url: String.t(),
           text: String.t(),
           html: String.t() | nil,
-          created_at: DateTime.t()
+          created_at: DateTime.t(),
+          book: Vutuv.SocialFeed.Book.t() | nil
         }
 
   # Remote post text is clamped to this many characters (with an ellipsis) in

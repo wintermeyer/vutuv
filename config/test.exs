@@ -207,6 +207,7 @@ config :vutuv, :refresh_top_posters, false
 # :bluesky_req_options.
 config :vutuv, :fetch_mastodon_posts, false
 config :vutuv, :fetch_bluesky_posts, false
+config :vutuv, :fetch_bookwyrm_posts, false
 config :vutuv, :fetch_code_stats, false
 # The followed-tag pull (issue #2126): off, so the standing job never starts and
 # would use the SQL sandbox connection from a process that does not own it. Its

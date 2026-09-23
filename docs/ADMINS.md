@@ -276,7 +276,8 @@ saw 90 days after the last sighting; on by default),
 [Scripted sign-ups](#scripted-sign-ups); on by default),
 `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
-`:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
+`:fetch_bluesky_posts`, `:fetch_bookwyrm_posts` (the profile's "Book reviews"
+card for a listed BookWyrm account), `:fetch_code_stats` (the profile "Code" card's
 GitHub/GitLab/Codeberg and self-hosted Gitea/Forgejo statistics), `:generate_screenshots` (profile link
 previews, an organization page's homepage capture **and** the auto-screenshot
 for single-link posts, including cached
@@ -645,7 +646,8 @@ vutuv runs fine without internet access:
   rendered at all; nothing contacts gravatar.com unless a member presses it,
   and registration never does),
   `:fetch_mastodon_posts` / `:fetch_bluesky_posts` (the social-feed card on
-  profiles), `:fetch_code_stats` (the profile "Code" card's GitHub/GitLab/
+  profiles), `:fetch_bookwyrm_posts` (the "Book reviews" card, read from the
+  member's BookWyrm instance), `:fetch_code_stats` (the profile "Code" card's GitHub/GitLab/
   Codeberg and self-hosted Gitea/Forgejo statistics — off, the accounts stay
   plain links, and a self-hosted address is taken at its word because the
   instance cannot be asked), and
