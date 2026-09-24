@@ -71,7 +71,7 @@ defmodule VutuvWeb.CvUpdateNotificationTest do
       entry = Repo.get_by!(WorkExperience, user_id: author.id, title: "Head of Bridges")
       assert entry.announce_to_followers?
 
-      body = html_response(get(follower_conn, ~p"/notifications?filter=all"), 200)
+      body = html_response(get(follower_conn, ~p"/notifications"), 200)
 
       assert body =~ "added a new position to their CV: Head of Bridges · Span AG"
       assert body =~ "CV update"
@@ -97,7 +97,7 @@ defmodule VutuvWeb.CvUpdateNotificationTest do
         })
       end
 
-      body = html_response(get(follower_conn, ~p"/notifications?filter=all"), 200)
+      body = html_response(get(follower_conn, ~p"/notifications"), 200)
 
       # One row, counting both, with each entry named and linked.
       assert body =~ "added 2 new entries to their CV"
@@ -121,7 +121,7 @@ defmodule VutuvWeb.CvUpdateNotificationTest do
         }
       })
 
-      body = html_response(get(follower_conn, ~p"/notifications?filter=all"), 200)
+      body = html_response(get(follower_conn, ~p"/notifications"), 200)
 
       refute body =~ "Quiet Job"
       refute body =~ "CV update"
@@ -147,7 +147,7 @@ defmodule VutuvWeb.CvUpdateNotificationTest do
           announce_to_followers?: true
         )
 
-      assert html_response(get(conn, ~p"/notifications?filter=all"), 200) =~ entry.title
+      assert html_response(get(conn, ~p"/notifications"), 200) =~ entry.title
     end
 
     test "the notification settings page saves it", %{conn: conn} do
@@ -179,11 +179,11 @@ defmodule VutuvWeb.CvUpdateNotificationTest do
           announce_to_followers?: true
         )
 
-      assert html_response(get(conn, ~p"/notifications?filter=all"), 200) =~ entry.title
+      assert html_response(get(conn, ~p"/notifications"), 200) =~ entry.title
 
       put(conn, ~p"/settings/notifications", %{"user" => %{"cv_update_notifications?" => "false"}})
 
-      refute html_response(get(conn, ~p"/notifications?filter=all"), 200) =~ entry.title
+      refute html_response(get(conn, ~p"/notifications"), 200) =~ entry.title
     end
   end
 

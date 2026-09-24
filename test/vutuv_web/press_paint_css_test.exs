@@ -20,7 +20,6 @@ defmodule VutuvWeb.PressPaintCssTest do
   @css Path.expand("../../assets/css/app.css", __DIR__)
   @js Path.expand("../../assets/js/app.js", __DIR__)
   @feed Path.expand("../../lib/vutuv_web/live/post_live/feed.ex", __DIR__)
-  @notifications Path.expand("../../lib/vutuv_web/live/notification_live/index.ex", __DIR__)
   @shell Path.expand("../../lib/vutuv_web/live/shell_live.ex", __DIR__)
 
   test "the threshold is configured once and read by name" do
@@ -196,7 +195,6 @@ defmodule VutuvWeb.PressPaintCssTest do
   test "every host carries the markers the paint depends on" do
     for {path, markers} <- [
           {@feed, ["data-filter-scope", "data-filter-list"]},
-          {@notifications, ["data-filter-scope", "data-filter-list"]},
           {@shell, ["data-nav-bar", "data-nav-item"]}
         ] do
       source = File.read!(path)

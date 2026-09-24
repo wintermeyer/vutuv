@@ -107,7 +107,7 @@ defmodule VutuvWeb.OrganizationFollowsMemberTest do
     page = active_organization_for(insert(:activated_user))
     {:ok, _} = Social.follow_as_organization(page, member)
 
-    html = conn |> get(~p"/notifications?filter=all") |> html_response(200)
+    html = conn |> get(~p"/notifications") |> html_response(200)
 
     assert html =~ page.name
     assert html =~ "/organizations/#{page.slug}"

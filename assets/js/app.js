@@ -71,7 +71,7 @@ import { AdCalendar } from "./ad_calendar"
 // the top of the page cannot reload it away (see ad_draft.js).
 import { AdDraft } from "./ad_draft"
 // Hover preview of a reply on /notifications.
-import { ReplyPreview } from "./reply_preview"
+import { InlineReply } from "./inline_reply"
 // The card behind a `@user@host` mention in a post: who that is, and a Follow
 // button, instead of leaving the site for their server (self-contained; its
 // panel lives on <body>, outside every LiveView root. See mention_card.js).
@@ -1299,7 +1299,7 @@ const Hooks = {
   AdSlot,
   AdCalendar,
   AdDraft,
-  ReplyPreview,
+  InlineReply,
   LocalTime: {
     mounted() {
       localizeTime(this.el)

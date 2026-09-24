@@ -289,7 +289,15 @@ defmodule Vutuv.Profiles.CvUpdates do
   end
 
   defp before_cursor(query, nil), do: query
-  defp before_cursor(query, %{at: at}), do: having(query, [e], max(e.inserted_at) <= ^at)
+
+  defp before_cursor(query, %{at: at} = cursor) do
+    query = having(query, [e], max(e.inserted_at) <= ^at)
+
+    case cursor[:since] do
+      nil -> query
+      since -> having(query, [e], max(e.inserted_at) >= ^since)
+    end
+  end
 
   # One aggregated row -> the shape a CV update notification has everywhere.
   defp to_group_item(nil), do: nil

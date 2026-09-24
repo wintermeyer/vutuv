@@ -1,77 +1,50 @@
 defmodule VutuvWeb.NotificationLive.Index do
   @moduledoc """
-  Notifications page. The feed is real data derived at read time by
-  `Vutuv.Activity.notifications_page/2` from the event tables that already
-  exist, so it reaches back to events from before this page existed.
+  The notifications page: one timeline of what happened, with every look the
+  member took at it drawn as a line (2026-09 rebuild, replacing the filter
+  chips, the reply inbox and the post cards grouped by subject).
 
-  The page opens on the **reply inbox** (`?filter=replies`): one row per
-  reply, thread answer, mention or reply from another network, each saying
-  whether the member has read it, answered it (their answer quoted) or liked
-  it, with an Open / Answered row of chips (`?answer=`) over it. A resting
-  pointer previews the whole post, "Show context" folds the conversation open
-  under the row (`VutuvWeb.NotificationLive.ReplyInbox` loads both on demand,
-  `Vutuv.Activity.ReplyStatus` reads the state).
+  ## Why lines
 
-  Every other chip keeps the cards (the 2026-09 layout, replacing the
-  2026-07 rows):
+  A member who looked at 14:00, had no time to act and came back at 18:00
+  used to find everything marked read: the one read marker
+  (`users.notifications_read_at`) moves on every look, so it cannot say what
+  was already on screen at 14:00. Each look is now a row of its own
+  (`Vutuv.Activity.record_notification_visit/2`, written on the connected
+  mount here and when the bell's preview closes), and
+  `VutuvWeb.NotificationLive.Timeline` draws them between the events: what
+  arrived after the last look sits above its line and is marked new.
 
-    * Raw events are grouped **by subject** under **the reader's calendar
-      days** by `VutuvWeb.NotificationLive.Groups`: everything about one post
-      — likes, replies, mentions, answers deeper in its thread, and what other
-      networks sent back — is one **post card** headed by the post itself (a
-      two-line teaser, its first pictures or its link screenshot on the right,
-      a count of what came back), followed by one line per verb: every reply
-      keeps a line of its own carrying its words, likes and re-shares merge
-      into one line each. The day's followers, connections and endorsements
-      are one **people card**. Measured on the real feed before the change: 39
-      events on one day were about 11 posts, and the verb-keyed rows showed
-      the busiest post three times over.
-    * A reply line **unfolds** on tap (`toggle_line`) into the reply formatted
-      the way /feed formats a post (`<.quoted_post>`, cut to the reader's
-      `:notification_post_lines`) plus a Reply link to its permalink; a card
-      with more than `@card_lines` lines folds the rest behind "Show N more"
-      (`unfold`). Both are socket round trips, so the dead render is exactly
-      what the connected one starts from.
-    * Within a day the cards with an **unanswered reply** come first, then the
-      rest of what is new since the previous visit, then what the reader has
-      seen — the page draws a "Seen before" rule at that transition. Unread is
-      still the pre-visit read marker (tint + coral dot), and the visit still
-      advances the marker and clears the shell's bell badge.
-    * The **filter chips** (replies / reactions / people / more / all) count
-      what is new since the last visit and restrict the feed server-side via
-      `notifications_page`'s `kinds:` option; they live in the URL
-      (`?filter=`), patched without a reload. A press **paints itself** rather
-      than waiting for the answer: the bar is `data-filter-bar="track"`, each
-      chip `data-filter-tab`, and the whole list `data-filter-list` inside the
-      column's `data-filter-scope` — the shared in-flight rules in `app.css`
-      do the rest, off the `phx-click-loading` LiveView puts on a pressed patch
-      link.
-    * The last 30 days are one line under the title
-      (`Vutuv.Activity.activity_summary/2`); the rail (right column on md+,
-      below the list on phones) keeps the **Follow back** suggestions (recent
-      followers, reload-free follow via `Vutuv.Social`).
+  ## Time travel
 
-  The page is **numbered** (`?page=`), not an endless list: both the page and
-  the filter live in the URL, so a page can be linked to and the back button
-  works, and both are patched without a reload. `Vutuv.Activity` walks the
-  merged feed by offset for it (`page:`), and `notifications_count/2` gives the
-  pager its total under the same filter. The first page renders on the
-  **static** mount too (issue #919), so the list is in the first HTTP paint.
+    * `?at=<visit>` shows the list as it stood at that look: nothing newer,
+      and "new" measured from the look before it.
+    * `?day=<date>` opens a day (and the one before it, so a morning is never
+      a near-empty page). The month calendar is the feed's
+      (`VutuvWeb.PostLive.FeedCalendar`), shaded by
+      `Vutuv.Activity.notification_counts_by_day/2`.
 
-  Live events arrive over `Vutuv.Activity` (PubSub `"user:<id>"`) and merge into
-  their card, but only while the reader is on page 1 - an older page is a
-  fixed window into the past and must not shift under them. Because grouping is
-  a pure function over the retained item list, every change (paging, live push,
-  the DayClock's midnight rollover) simply recomputes the sections - there is no
-  stream to patch in place.
+  Without either the page shows today and yesterday and takes live arrivals.
+
+  ## Rows
+
+  Replies, thread answers, mentions and replies from other networks are the
+  feed's own cards (`post_card/1`, `remote_reply_card/1`), headed by what they
+  answer and followed by the member's own answer. The card's Reply opens the
+  composer under it (the `InlineReply` hook; without JavaScript the link still
+  leads to the reply page). Likes of one post are one line, new people one
+  line, everything rarer one line each. "Only words to me" (`?only=words`)
+  keeps the cards alone.
+
+  The static render carries the whole list (issue #919); the visit is only
+  recorded, and the read marker only moved, once the socket connects.
   """
   use VutuvWeb, :live_view
 
   import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
-  import VutuvWeb.UserHTML, only: [user_row: 1]
+  import VutuvWeb.PostComponents, only: [post_card: 1, remote_reply_card: 1]
+  import VutuvWeb.PostLive.FeedCalendar
 
-  # What a notification says and where it leads, shared with the browser
-  # notification ShellLive raises for the same event (issue #1249).
   import VutuvWeb.NotificationLine,
     only: [
       cv_entry_label: 1,
@@ -79,1720 +52,959 @@ defmodule VutuvWeb.NotificationLive.Index do
       kind_classes: 1,
       kind_glyph: 1,
       kind_label: 1,
+      actor_target: 1,
       notification_target: 2,
-      notification_text: 1,
-      quote_source: 1
+      notification_text: 1
     ]
 
-  # Like the feed and messages: not a page for anonymous visitors —
-  # redirect to /login instead of rendering an empty 200.
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+  on_mount(VutuvWeb.Live.RemoteCounts)
 
-  alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Activity.ReplyStatus
   alias Vutuv.Fediverse
-  alias Vutuv.Fediverse.Note
-  alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
-  alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.Screenshots
-  alias Vutuv.Screenshot
+  alias Vutuv.Repo
   alias Vutuv.Social
   alias Vutuv.ViewerClock
+  alias VutuvWeb.Live.FeedTimeTravel
   alias VutuvWeb.Live.MountHandoff
-  alias VutuvWeb.Markdown
-  alias VutuvWeb.NotificationLive.Groups
-  alias VutuvWeb.NotificationLive.ReplyInbox
-  alias VutuvWeb.PostComponents
+  alias VutuvWeb.Live.RemoteReplyActions
+  alias VutuvWeb.NotificationLive.Timeline
   alias VutuvWeb.PostTeaser
-  alias VutuvWeb.UserHelpers
 
-  @page_size 50
-  @summary_days 30
-  @follow_back_limit 5
+  # One window (two days) reads at most this many events; a busier one offers
+  # "Load more" inside the window.
+  @window_limit 300
 
-  # How many lines a card shows before folding the rest behind a count. Four
-  # keeps a card with a dozen answers to the height of the busiest real one
-  # (three replies and a like line) while a tap still reaches everything.
-  @card_lines 4
+  # How many of a handle change's rewritten posts are named.
+  @change_preview_limit 5
 
-  # A reply's folded teaser: two lines of its words.
-  @teaser_lines 2
+  # How many actors a reactions line names before "and N more".
+  @named_actors 3
 
-  # The filter chips: each maps to the event kinds `notifications_page`'s
-  # `kinds:` option keeps. "all" passes nil (every source).
-  #
-  # Every kind in `Vutuv.Activity.kinds/0` must appear under exactly one chip,
-  # or it is unreachable from the chips AND `filtered_out?/2` drops it from the
-  # live push for any reader not on "All" — which is what happened to
-  # `reference_check`. `notification_filter_coverage_test.exs` fails the build
-  # when the two lists drift apart again.
-  @filters %{
-    "all" => nil,
-    "replies" => ~w(reply thread mention fediverse_reply),
-    "reactions" => ~w(like fediverse_reaction),
-    "people" => ~w(follower connection endorsement),
-    "other" => ~w(organization_role moderation image_rejected report_outcome report_protection
-         handle_change cv_update username reference_check)
-  }
+  # A live arrival rebuilds the page; several in a burst rebuild it once.
+  @reload_delay 1_000
 
-  # The page opens on the reply inbox: who wrote to the member and whether
-  # they have dealt with it is what they come for (2026-09). "All" keeps the
-  # cards grouped by post, one chip further along.
-  @default_filter "replies"
-
-  @doc false
-  def filters, do: @filters
+  # What the static render hands the connected mount (`load_first/1`).
+  @payload_keys [:upper, :top_day, :cursor, :entries, :visits, :cards]
 
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
 
-    # The previous visit's read marker - what "new since your last visit"
-    # highlights - and its per-chip badge counts, all captured *before* this
-    # visit advances the marker below.
-    read_marker = user.notifications_read_at
-    new_counts = if connected?(socket), do: unread_counts(user), else: %{}
-
-    # The rows the member already acknowledged one by one, from the browser
-    # notifications they clicked — captured here for the same reason as the
-    # marker above: `mark_notifications_read/1` drops them a line further down,
-    # and this visit should still show them as read rather than as news.
-    dismissed = Activity.dismissed_event_ids(user.id)
+    # "New" is measured from the look before this sitting (a reload or a
+    # reconnect inside it must not swallow what the first look marked new),
+    # and from the read marker for a member who has no looks recorded yet.
+    new_since = Activity.previous_notification_visit(user.id) || user.notifications_read_at
 
     if connected?(socket) do
       Activity.subscribe(user.id)
       Activity.mark_notifications_read(user.id)
-      # Roll the day sections over at Berlin midnight without a reload.
+      Activity.record_notification_visit(user.id, "page")
       Vutuv.DayClock.subscribe()
     end
 
     {:ok,
      socket
      |> assign(:page_title, gettext("Notifications"))
-     |> assign(:read_marker, read_marker)
-     |> assign(:new_counts, new_counts)
-     |> assign(:dismissed, dismissed)
+     |> assign(:new_since, new_since)
+     |> assign(:dismissed, Activity.dismissed_event_ids(user.id))
      |> assign(:today, ViewerClock.today())
-     |> assign(:quote_lines, User.notification_post_lines(user))
-     |> assign(:expanded, MapSet.new())
-     |> assign(:unfolded, MapSet.new())
-     |> assign(:contexts, %{})
-     |> assign_rail(connected?(socket))}
+     |> assign(:composing, nil)
+     |> assign(:reload_scheduled?, false)
+     |> assign(:cal_open?, false)
+     |> assign(:cal_counts, %{})
+     |> assign(:cal_counted, nil)
+     |> assign(:cal_capped?, false)
+     |> assign(:travel, nil)
+     |> assign(:day, nil)}
   end
 
-  # The filter (?filter=reactions), the reply inbox's Open / Answered row
-  # (?answer=open) and the page (?page=3) live in the URL, so the chips and the
-  # pager are patch links and the back button works; an unknown filter falls
-  # back to the reply inbox, an unknown answer to all of them, an unparseable
-  # page to 1. Runs on both the static and the connected mount, so the page is
-  # in the first HTTP paint (issue #919).
   @impl true
   def handle_params(params, _uri, socket) do
-    filter =
-      if Map.has_key?(@filters, params["filter"]), do: params["filter"], else: @default_filter
+    travel = parse_at(params["at"])
+    day = if travel, do: ViewerClock.date(travel), else: parse_day(params["day"])
 
-    {:noreply,
-     socket
-     |> assign(:filter, filter)
-     |> assign(:answer, if(filter == "replies", do: answer_param(params["answer"])))
-     |> assign(:page, Pages.page_param(params))
-     |> assign(:preview, nil)
-     |> load_page()}
+    same_window? =
+      Map.has_key?(socket.assigns, :blocks) and
+        {travel, day} == {socket.assigns.travel, socket.assigns.day}
+
+    socket =
+      socket
+      |> assign(:travel, travel)
+      |> assign(:day, day)
+      |> assign(:only_words?, params["only"] == "words")
+      |> assign(:cal_month, FeedTimeTravel.month_of(day))
+
+    # The switch only filters what is already loaded; a new window loads.
+    socket = if same_window?, do: rebuild(socket), else: load_first(socket)
+
+    {:noreply, load_calendar_counts(socket)}
   end
 
-  defp answer_param("open"), do: :open
-  defp answer_param("answered"), do: :answered
-  defp answer_param(_other), do: nil
+  # ── Events ──
 
-  # The rail's "Follow back" pill (user_row live?): follow with no reload,
-  # then recompute the rail so the new followee drops out.
+  # The card's Reply, caught by the `InlineReply` hook: the composer opens
+  # under the card, and a second press folds it away.
   @impl true
+  def handle_event("compose", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :composing, if(socket.assigns.composing == id, do: nil, else: id))}
+  end
+
+  def handle_event("cancel-compose", _params, socket),
+    do: {:noreply, assign(socket, :composing, nil)}
+
+  def handle_event("load-more", _params, socket) do
+    {:noreply, load_next_page(socket)}
+  end
+
+  # A new follower's Follow back, without a reload.
   def handle_event("follow", %{"followee" => followee_id}, socket) do
-    case Social.follow(socket.assigns.current_user, followee_id) do
-      {:ok, _} -> {:noreply, assign_rail(socket, true)}
-      _ -> {:noreply, socket}
-    end
+    Social.follow(socket.assigns.current_user, followee_id)
+    {:noreply, load(socket)}
   end
 
-  def handle_event("unfollow", %{"id" => follow_id}, socket) do
-    # Scoped to the viewer, so a request can only drop the viewer's own edge.
-    Social.unfollow!(socket.assigns.current_user.id, follow_id)
-    {:noreply, assign_rail(socket, true)}
+  # The ⋯ menu of a reply from another network offers Report to its reader.
+  def handle_event("report-remote-reply", %{"id" => id}, socket) do
+    RemoteReplyActions.report(socket, id, &load/1)
   end
 
-  # A reply line unfolds into the formatted quote and folds again on the next
-  # tap. Kept per line id, so a live push or a midnight rollover that rebuilds
-  # the sections leaves an open line open. The quote itself is rendered here,
-  # on the unfold, not for every reply on the page: a full Markdown pass per
-  # line was paid for fifty lines and shown for none until somebody tapped.
-  def handle_event("toggle_line", %{"id" => id}, socket) do
-    expanded = socket.assigns.expanded
-
-    if MapSet.member?(expanded, id) do
-      {:noreply, assign(socket, :expanded, MapSet.delete(expanded, id))}
-    else
-      viewer = socket.assigns.current_user
-      lines = socket.assigns.quote_lines
-
-      {:noreply,
-       socket
-       |> assign(:expanded, MapSet.put(expanded, id))
-       |> update(:items, fn items ->
-         Enum.map(items, &if(&1.id == id, do: with_reply_preview(&1, viewer, lines), else: &1))
-       end)
-       |> assign_sections()}
-    end
+  # The calendar's controls (`VutuvWeb.PostLive.FeedCalendar`).
+  def handle_event("cal-toggle", _params, socket) do
+    {:noreply, socket |> update(:cal_open?, &(!&1)) |> load_calendar_counts()}
   end
 
-  # "Show N more" on a card: every line from then on, for this card.
-  def handle_event("unfold", %{"id" => id}, socket) do
-    {:noreply, update(socket, :unfolded, &MapSet.put(&1, id))}
-  end
-
-  # The reply inbox's hover preview, pushed by the `ReplyPreview` hook once a
-  # pointer has rested on a row: the whole post, loaded for this one row.
-  # A second row's preview replaces the first; leaving the row closes it.
-  def handle_event("preview", %{"id" => id}, socket) do
-    case find_item(socket, id) do
-      nil ->
-        {:noreply, socket}
-
-      item ->
-        content = ReplyInbox.preview(item, socket.assigns.current_user)
-        {:noreply, assign(socket, :preview, content && %{id: id, content: content})}
-    end
-  end
-
-  def handle_event("preview_close", %{"id" => id}, socket) do
-    case socket.assigns.preview do
-      %{id: ^id} -> {:noreply, assign(socket, :preview, nil)}
-      _ -> {:noreply, socket}
-    end
-  end
-
-  # "Show context": the conversation around one reply, folded open under its
-  # row and closed again by the same button.
-  def handle_event("context", %{"id" => id}, socket) do
-    contexts = socket.assigns.contexts
-
-    cond do
-      Map.has_key?(contexts, id) ->
-        {:noreply, assign(socket, :contexts, Map.delete(contexts, id))}
-
-      item = find_item(socket, id) ->
-        context = ReplyInbox.context(item, socket.assigns.current_user)
-        {:noreply, assign(socket, :contexts, Map.put(contexts, id, context))}
-
-      true ->
-        {:noreply, socket}
-    end
-  end
-
-  # The heart on a reply inbox row: like the reply, or take the like back. The
-  # row's state is then read again rather than assumed, so a like the network
-  # refused (a block, the hourly budget) does not paint a heart.
-  def handle_event("like_reply", %{"id" => id}, socket) do
-    user = socket.assigns.current_user
-
-    case find_item(socket, id) do
-      nil ->
-        {:noreply, socket}
-
-      item ->
-        toggle_like(item, user)
-        [fresh] = ReplyStatus.put(user, [item])
-
+  def handle_event("cal-month", %{"n" => n}, socket) do
+    case Integer.parse(to_string(n)) do
+      {n, ""} ->
         {:noreply,
          socket
-         |> update(:items, fn items ->
-           Enum.map(items, &if(&1.id == id, do: %{&1 | liked?: fresh.liked?}, else: &1))
-         end)
-         |> assign_sections()}
+         |> update(:cal_month, &FeedTimeTravel.shift_month(&1, n))
+         |> load_calendar_counts()}
+
+      _ ->
+        {:noreply, socket}
     end
   end
 
+  def handle_event("cal-day", %{"date" => date}, socket) do
+    case parse_day(date) do
+      nil -> {:noreply, socket}
+      day -> {:noreply, push_patch(socket, to: page_path(socket.assigns, day: day, at: nil))}
+    end
+  end
+
+  def handle_event("travel-now", _params, socket),
+    do: {:noreply, push_patch(socket, to: page_path(socket.assigns, day: nil, at: nil))}
+
+  # ── Messages ──
+
   # An event that interrupts nobody (a throttled like, anything on a muted
-  # post, see `Vutuv.Activity.notify/2`) still belongs on this page.
+  # post) still belongs on this page.
   @impl true
   def handle_info({:quiet_notification, notification}, socket),
     do: handle_info({:new_notification, notification}, socket)
 
-  def handle_info({:new_notification, notification}, socket) do
-    # The user is watching the event arrive, so it is already read: advance
-    # the read marker, which broadcasts :notifications_read and keeps the
-    # shell's bell badge at zero instead of bumping it for an event shown
-    # live here.
-    Activity.mark_notifications_read(socket.assigns.current_user.id)
-
-    item =
-      notification
-      |> Map.put_new(:kind, "activity")
-      |> Map.put_new(:at, DateTime.utc_now())
-      # `Activity.notify/2` gives a push the same id its derived row will have,
-      # so an event that arrives twice (a CV sitting growing, a reconnect)
-      # replaces the row an open page already shows instead of stacking
-      # another. Only a kind with no source row behind it falls through to a
-      # minted id outside that namespace.
-      |> Map.put_new(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
-
-    cond do
-      # Not part of what this chip shows: it belongs to neither the list nor
-      # the chip's total. A reply that just arrived cannot be answered yet, so
-      # it is not part of the inbox's Answered list either.
-      filtered_out?(item, socket.assigns.filter) or socket.assigns.answer == :answered ->
-        {:noreply, socket}
-
-      # An older page is a fixed window into the past: merging a brand-new
-      # event into it would show it out of order and push everything below it
-      # down by one. Only the total grows, so the event is on page 1 the next
-      # time the reader loads it.
-      socket.assigns.page > 1 ->
-        {:noreply, update(socket, :total, &(&1 + 1))}
-
-      true ->
-        viewer = socket.assigns.current_user
-
-        # A reply that just arrived is neither answered nor liked yet.
-        {[item], posts} =
-          item
-          |> Map.merge(%{answer: nil, liked?: false})
-          |> List.wrap()
-          |> with_post_previews(viewer)
-
-        {:noreply,
-         socket
-         |> update(:items, fn items ->
-           [item | Enum.reject(items, &(&1.id == item.id))] |> Enum.take(@page_size)
-         end)
-         # The page already holds a card for every post it shows, so only the
-         # first event about a *new* post builds one here.
-         |> update(:post_cards, &Map.merge(&1, post_cards([item], posts, &1)))
-         |> update(:total, &(&1 + 1))
-         |> update(:answer_counts, &count_new_reply(&1, item))
-         |> assign_sections()}
+  # The member is watching it arrive, so it is read: the marker moves once the
+  # burst is in, and the shell's badge stays at zero. Only the live present
+  # shows arrivals; a day or a look in the past is a fixed window.
+  def handle_info({:new_notification, _notification}, socket) do
+    if socket.assigns.reload_scheduled? do
+      {:noreply, socket}
+    else
+      Process.send_after(self(), :reload, @reload_delay)
+      {:noreply, assign(socket, :reload_scheduled?, true)}
     end
   end
 
-  # The reader's day may have rolled over (Vutuv.DayClock ticks hourly):
-  # recompute the sections so "Today" becomes "Yesterday" without a reload.
+  def handle_info(:reload, socket) do
+    Activity.mark_notifications_read(socket.assigns.current_user.id)
+    socket = assign(socket, :reload_scheduled?, false)
+    {:noreply, if(present?(socket.assigns), do: load(socket), else: socket)}
+  end
+
+  # An answer written under a card: fold the composer and show the answer.
+  def handle_info({:composer_answered, _id, _post}, socket) do
+    {:noreply, socket |> assign(:composing, nil) |> load()}
+  end
+
+  # Midnight in the reader's zone (`Vutuv.DayClock` ticks hourly): the present
+  # moves on to a new day; a day or a look in the past only relabels.
   def handle_info(:day_changed, socket) do
-    {:noreply, socket |> assign(:today, ViewerClock.today()) |> assign_sections()}
+    today = ViewerClock.today()
+
+    cond do
+      today == socket.assigns.today -> {:noreply, socket}
+      present?(socket.assigns) -> {:noreply, socket |> assign(:today, today) |> load()}
+      true -> {:noreply, assign(socket, :today, today)}
+    end
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  # A reply arriving live is an open one, so the inbox's Open and All counts
-  # grow with it; nothing counts on the other chips.
-  defp count_new_reply(%{} = counts, _item),
-    do: %{counts | open: counts.open + 1, all: counts.all + 1}
+  # ── Loading ──
 
-  defp count_new_reply(nil, _item), do: nil
+  defp present?(assigns), do: is_nil(assigns.travel) and is_nil(assigns.day)
 
-  # One numbered page of the feed under the active filter, plus the filtered
-  # total the pager windows over. Both are one query per source / one query in
-  # total, and both run on the static mount as well: the pager is part of the
-  # page, so a no-JS visitor and the first paint must carry it. The static
-  # pass stashes what it computed and the connected mount's handle_params —
-  # moments later, same viewer, same URL — takes it instead of re-running the
-  # same queries (`VutuvWeb.Live.MountHandoff`). The subject carries the
-  # filter and the *requested* page, so a patch to another chip or page can
-  # never reuse a stale stash; any miss (expired, consumed, a patch, a
-  # reconnect) falls back to the plain full load. The visit's mark-read write
-  # lives in mount, not here, so the handoff leaves it at exactly once.
-  defp load_page(socket) do
+  # The first load of a window runs twice per visit, once for the static render
+  # and once on connect, moments apart: the static pass stashes what it read
+  # and the connected one takes it (`VutuvWeb.Live.MountHandoff`). Any miss
+  # (expired, a patch, a reconnect) simply loads.
+  defp load_first(socket) do
     viewer_id = socket.assigns.current_user.id
-    subject = {:notifications, socket.assigns.filter, socket.assigns.answer, socket.assigns.page}
+    subject = {:notifications, socket.assigns.day, socket.assigns.travel}
 
     if connected?(socket) do
       case MountHandoff.take(viewer_id, subject) do
-        {:ok, payload} -> apply_page(socket, payload)
-        :error -> apply_page(socket, page_payload(socket))
+        {:ok, payload} -> socket |> assign(payload) |> rebuild()
+        :error -> load(socket)
       end
     else
-      payload = page_payload(socket)
-      MountHandoff.stash(viewer_id, subject, payload)
-      apply_page(socket, payload)
+      socket = load(socket)
+      MountHandoff.stash(viewer_id, subject, Map.take(socket.assigns, @payload_keys))
+      socket
     end
   end
 
-  # Everything one page load computes, as data — what the dead render hands
-  # the connected mount through the single-use stash. A payload map rather
-  # than an assigns diff because :page is corrected here (a ?page= past the
-  # end falls back), and a diff against the pre-existing raw value would lose
-  # that correction on the connected side.
-  defp page_payload(socket) do
+  # The window the page shows: the chosen day (today by default) and the day
+  # before it, cut at the look being travelled to, or at now.
+  defp window(assigns) do
+    top_day = assigns.day || ViewerClock.today()
+    {from, _} = ViewerClock.day_window(Date.add(top_day, -1))
+    {_, day_end} = ViewerClock.day_window(top_day)
+    upper = assigns.travel || Enum.min([day_end, NaiveDateTime.utc_now(:second)], NaiveDateTime)
+    {from, upper, top_day, day_end}
+  end
+
+  defp load(socket) do
     user = socket.assigns.current_user
-    %{filter: filter, answer: answer} = socket.assigns
-    kinds = @filters[filter]
+    {from, upper, top_day, day_end} = window(socket.assigns)
 
-    # The total comes first: a ?page= past the end falls back to page 1 (the
-    # same fallback Vutuv.Pages gives every browse page), so the rows shown and
-    # the page the pager marks current can never disagree.
-    total = Activity.notifications_count(user.id, kinds, answer)
-    page = Pages.effective_page(%{"page" => socket.assigns.page}, total, @page_size)
-
-    feed =
+    page =
       Activity.notifications_page(user.id,
-        limit: @page_size,
-        kinds: kinds,
-        page: page,
-        answer: answer
+        limit: @window_limit,
+        cursor: %{at: upper, ids: [], since: from}
       )
 
-    # Rows the reader already dealt with out in the feed stay listed — the page
-    # is the log of what happened — they just stop rendering as new, so the
-    # list and the badge tell one story.
-    {items, posts} =
-      feed.entries
-      |> then(&Activity.with_seen_flags(user.id, &1, socket.assigns.dismissed))
-      |> put_reply_status(filter, user)
-      |> with_post_previews(user)
+    entries = prepare(page.entries, socket.assigns)
+
+    # One read of the looks for the whole window, the rail's day included.
+    # The sitting the member is in is "now", not one of them.
+    visits =
+      user.id |> Activity.notification_visits(from, day_end) |> earlier_looks(socket.assigns)
+
+    socket
+    |> assign(:upper, upper)
+    |> assign(:top_day, top_day)
+    |> assign(:cursor, page.more? && page.next_cursor)
+    |> assign(:entries, entries)
+    |> assign(:visits, visits)
+    |> assign(:cards, cards(entries, user))
+    |> rebuild()
+  end
+
+  defp load_next_page(%{assigns: %{cursor: nil}} = socket), do: socket
+
+  defp load_next_page(socket) do
+    user = socket.assigns.current_user
+
+    page =
+      Activity.notifications_page(user.id, limit: @window_limit, cursor: socket.assigns.cursor)
+
+    entries = prepare(page.entries, socket.assigns)
+
+    socket
+    |> assign(:cursor, page.more? && page.next_cursor)
+    |> update(:entries, &(&1 ++ entries))
+    |> update(:cards, &merge_cards(&1, cards(entries, user)))
+    |> rebuild()
+  end
+
+  # Read state (dismissed in the shell, engaged with in the feed) and what the
+  # member did about each reply.
+  defp prepare(entries, assigns) do
+    user = assigns.current_user
+
+    entries
+    |> then(&Activity.with_seen_flags(user.id, &1, assigns.dismissed))
+    |> then(&ReplyStatus.put(user, &1))
+  end
+
+  # The blocks from what is loaded, with no reads: the switch costs nothing
+  # but the grouping.
+  defp rebuild(socket) do
+    %{upper: upper, travel: travel, top_day: top_day, visits: visits} = socket.assigns
+
+    # The look being travelled to is the top of the page, not a line on it.
+    lines = Enum.filter(visits, &(NaiveDateTime.compare(&1.at, upper) == :lt))
+
+    blocks =
+      Timeline.build(socket.assigns.entries, lines,
+        new_since: if(travel, do: last_at(lines), else: socket.assigns.new_since),
+        only_words?: socket.assigns.only_words?
+      )
+
+    socket
+    |> assign(:blocks, blocks)
+    |> assign(:empty?, not Enum.any?(blocks, &match?({:row, _}, &1)))
+    |> assign(:day_visits, Enum.filter(visits, &(ViewerClock.date(&1.at) == top_day)))
+  end
+
+  defp last_at([]), do: nil
+  defp last_at(visits), do: List.last(visits).at
+
+  defp earlier_looks(visits, %{new_since: nil}), do: visits
+
+  defp earlier_looks(visits, %{new_since: since}),
+    do: Enum.filter(visits, &(NaiveDateTime.compare(&1.at, since) != :gt))
+
+  # The calendar's shading: only once the socket is up and the grid is open,
+  # and once per month it is paged to.
+  defp load_calendar_counts(%{assigns: %{cal_open?: true, cal_month: month}} = socket) do
+    if connected?(socket) and socket.assigns.cal_counted != month do
+      {counts, capped?} =
+        Activity.notification_counts_by_day(socket.assigns.current_user.id, month)
+
+      socket
+      |> assign(:cal_counts, counts)
+      |> assign(:cal_capped?, capped?)
+      |> assign(:cal_counted, month)
+    else
+      socket
+    end
+  end
+
+  defp load_calendar_counts(socket), do: socket
+
+  # Everything the rows draw beyond the events themselves, in a handful of
+  # batched reads: the posts a card shows and the posts a line names, their
+  # counts, the replies from other networks and what the member did to them.
+  # Built per loaded page and merged, so "Load more" reads only its own rows.
+  defp cards(entries, viewer) do
+    card_ids = entries |> Enum.map(&card_post_id/1) |> Enum.reject(&is_nil/1)
+
+    named_ids =
+      Enum.flat_map(entries, &[&1[:post_id], &1[:root_post_id] | List.wrap(&1[:post_ids])])
+
+    answers = for %{answer: %Post{} = post} <- entries, do: post.id
+
+    posts = Posts.visible_posts_by_ids(viewer, card_ids ++ named_ids ++ answers)
+
+    card_posts =
+      card_ids
+      |> Enum.map(&Map.get(posts, &1))
+      |> Enum.reject(&is_nil/1)
+      |> Repo.preload(Posts.render_preloads())
+      |> Map.new(&{&1.id, &1})
+
+    notes =
+      for(%{kind: "fediverse_reply"} = item <- entries, do: item[:note_id])
+      |> Fediverse.get_notes()
+
+    marks = Fediverse.mark_lookup(Map.values(notes), viewer)
 
     %{
-      page: page,
-      total: total,
-      items: items,
-      post_cards: post_cards(items, posts),
-      answer_counts: answer_counts(filter, user.id, kinds, answer, total)
+      posts: posts,
+      card_posts: card_posts,
+      engagement: Posts.post_engagement_map(Map.keys(card_posts), viewer),
+      notes: notes,
+      marks: Map.new(notes, fn {id, note} -> {id, marks.(note)} end)
     }
   end
 
-  # What the member did about each reply (answered it? liked it?), which only
-  # the reply inbox shows.
-  defp put_reply_status(entries, "replies", user), do: ReplyStatus.put(user, entries)
-  defp put_reply_status(entries, _filter, _user), do: entries
+  defp merge_cards(old, new), do: Map.merge(old, new, fn _key, a, b -> Map.merge(a, b) end)
 
-  # The Open / Answered / All counts over the inbox's second row. Every reply
-  # is exactly one of open or answered, so one query more than the page's own
-  # total answers all three.
-  defp answer_counts("replies", user_id, kinds, answer, total) do
-    all = if answer, do: Activity.notifications_count(user_id, kinds, nil), else: total
+  # The post a words row shows as its card.
+  defp card_post_id(%{kind: kind} = item) when kind in ~w(reply thread), do: item[:reply_post_id]
+  defp card_post_id(%{kind: "mention"} = item), do: item[:post_id]
+  defp card_post_id(_item), do: nil
 
-    open =
-      case answer do
-        :open -> total
-        :answered -> all - total
-        nil -> Activity.notifications_count(user_id, kinds, :open)
-      end
+  # The post a words row answers: the member's own post, or a thread's root.
+  defp subject_post_id(%{kind: "thread"} = item), do: item[:root_post_id]
 
-    %{open: open, answered: all - open, all: all}
+  defp subject_post_id(%{kind: kind} = item) when kind in ~w(reply fediverse_reply),
+    do: item[:post_id]
+
+  defp subject_post_id(_item), do: nil
+
+  # ── URLs ──
+
+  defp page_path(assigns, overrides) do
+    day = Keyword.get(overrides, :day, assigns.day)
+    at = Keyword.get(overrides, :at, assigns.travel)
+    only? = Keyword.get(overrides, :only_words?, assigns.only_words?)
+
+    query =
+      [
+        at: at && NaiveDateTime.to_iso8601(at),
+        day: is_nil(at) && day && Date.to_iso8601(day),
+        only: only? && "words"
+      ]
+      |> Enum.filter(fn {_key, value} -> value end)
+
+    if query == [], do: ~p"/notifications", else: ~p"/notifications?#{query}"
   end
 
-  defp answer_counts(_filter, _user_id, _kinds, _answer, _total), do: nil
-
-  defp find_item(socket, id), do: Enum.find(socket.assigns.items, &(&1.id == id))
-
-  defp toggle_like(%{kind: "fediverse_reply", liked?: liked?} = item, user) do
-    case Fediverse.get_note(item[:note_id]) do
-      nil -> :noop
-      note when liked? -> Fediverse.unlike_note(user, note)
-      note -> Fediverse.like_note(user, note)
+  defp parse_at(value) when is_binary(value) do
+    with {:ok, at} <- NaiveDateTime.from_iso8601(value),
+         :lt <- NaiveDateTime.compare(at, NaiveDateTime.utc_now()) do
+      NaiveDateTime.truncate(at, :second)
+    else
+      _ -> nil
     end
   end
 
-  defp toggle_like(%{liked?: liked?} = item, user) do
-    id = ReplyStatus.subject(item, :post)
+  defp parse_at(_value), do: nil
 
-    case Map.get(Posts.visible_posts_by_ids(user, [id]), id) do
-      nil -> :noop
-      post when liked? -> Posts.unlike_post(user, post)
-      post -> Posts.like_post(user, post)
+  defp parse_day(value) do
+    case FeedTimeTravel.parse_date(value) do
+      {:ok, date} -> if FeedTimeTravel.reachable?(date), do: date
+      :error -> nil
     end
   end
 
-  defp apply_page(socket, payload) do
-    socket
-    |> assign(payload)
-    |> assign_sections()
-  end
-
-  # The reply inbox lists one row per reply; every other chip the cards.
-  defp assign_sections(%{assigns: %{filter: "replies"}} = socket) do
-    inbox = Groups.inbox_sections(socket.assigns.items, socket.assigns.read_marker)
-
-    socket
-    |> assign(:inbox, inbox)
-    |> assign(:sections, [])
-    |> assign(:empty?, inbox == [])
-  end
-
-  defp assign_sections(socket) do
-    sections =
-      socket.assigns.items
-      |> Groups.sections(socket.assigns.read_marker)
-      |> Enum.map(&Map.put(&1, :rows, with_seen_rule(&1.groups)))
-
-    socket
-    |> assign(:inbox, [])
-    |> assign(:sections, sections)
-    |> assign(:empty?, sections == [])
-  end
-
-  # `[{group, rule?}]`: the "Seen before" rule sits before the first seen card
-  # that follows a new one in the same day — once, since `Groups` sorts a
-  # day's new cards ahead of its seen ones. A day that is all new or all seen
-  # draws no rule.
-  defp with_seen_rule(groups) do
-    {rows, _state} =
-      Enum.map_reduce(groups, :before, fn group, state ->
-        cond do
-          group.unread? -> {{group, false}, :new_seen}
-          state == :new_seen -> {{group, true}, :done}
-          true -> {{group, false}, state}
-        end
-      end)
-
-    rows
-  end
-
-  defp filtered_out?(item, filter) do
-    case @filters[filter] do
-      nil -> false
-      kinds -> item.kind not in kinds
-    end
-  end
-
-  # The day's first thread line, for the opt-out hint (issue #1025): one hint
-  # per day, on the first line that would be silenced.
-  defp first_thread_line_id(groups) do
-    Enum.find_value(groups, fn
-      %{kind: "post", events: events} -> Enum.find_value(events, &(&1.verb == :thread && &1.id))
-      _group -> nil
-    end)
-  end
-
-  # What is new since the last visit, per chip. The whole-feed count is what
-  # the shell badge showed; the split into chips is one more query, and only
-  # when there is something to split.
-  defp unread_counts(user) do
-    case Activity.unread_notification_count(user) do
-      0 ->
-        %{"all" => 0}
-
-      all ->
-        user
-        |> Activity.unread_notification_counts(Map.delete(@filters, "all"))
-        |> Map.put("all", all)
-    end
-  end
-
-  # The rail and the summary line need the DB and the viewer's follow graph;
-  # the static render skips both (they arrive with the connected mount).
-  defp assign_rail(socket, false) do
-    socket
-    |> assign(:follow_back, [])
-    |> assign(:work_info_by_id, %{})
-    |> assign(:summary, nil)
-  end
-
-  defp assign_rail(socket, true) do
-    user = socket.assigns.current_user
-    follow_back = Social.followers_to_follow_back(user.id, @follow_back_limit)
-    since = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -@summary_days, :day)
-    summary = Activity.activity_summary(user.id, since)
-
-    socket
-    |> assign(:follow_back, follow_back)
-    |> assign(:work_info_by_id, UserHelpers.work_information_map(follow_back, 45))
-    |> assign(:summary, if(summary_total(summary) > 0, do: summary, else: nil))
-  end
-
-  defp summary_total(summary) do
-    summary.followers + summary.connections + summary.likes + summary.replies +
-      summary.endorsements
-  end
+  # ── Render ──
 
   @impl true
   def render(assigns) do
     ~H"""
     <div id="notifications" class="py-6 md:py-8">
       <div class="grid gap-6 md:grid-cols-3">
-        <%!-- `data-filter-scope` pairs the chips with the list they replace: the
-        in-flight paint in `app.css` dims every `[data-filter-list]` inside this
-        container while one of its chips is waiting for an answer, so both
-        markers have to stay under this one element. --%>
-        <div data-filter-scope class="min-w-0 md:col-span-2">
-          <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div class="min-w-0 md:col-span-2">
+          <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {gettext("Notifications")}
             </h1>
-            <p
-              :if={unread_badge(@new_counts, "all")}
-              id="new-count"
-              class="mb-0 text-sm font-semibold text-accent"
+            <.link
+              id="only-words"
+              patch={page_path(assigns, only_words?: !@only_words?)}
+              role="switch"
+              aria-checked={to_string(@only_words?)}
+              class="inline-flex min-h-10 items-center gap-2.5 text-sm font-medium text-slate-700 dark:text-slate-300"
             >
-              {new_count_label(unread_badge(@new_counts, "all"))}
-            </p>
+              <span class={[
+                "relative h-6 w-10 shrink-0 rounded-full transition-colors",
+                if(@only_words?, do: "bg-brand-600", else: "bg-slate-300 dark:bg-slate-600")
+              ]}>
+                <span class={[
+                  "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+                  @only_words? && "translate-x-4"
+                ]}></span>
+              </span>
+              {gettext("Only words to me")}
+            </.link>
           </div>
 
-          <%!-- The last 30 days as one quiet line: the context the reader
-          glances at, never the thing they came for. --%>
-          <p
-            :if={@summary}
-            id="activity-summary"
-            class="mb-0 mt-1 text-xs text-slate-600 dark:text-slate-400"
+          <%!-- The phone has no rail column: the calendar and the looks of the
+          day sit above the list, folded. --%>
+          <div class="mt-4 md:hidden">
+            <.time_travel id="phone" {rail(assigns)} />
+          </div>
+
+          <div
+            :if={@travel}
+            id="travel-banner"
+            class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-700/60"
           >
-            {summary_line(@summary)}
+            <p class="mb-0 min-w-0 flex-1">
+              <strong>{gettext("As of %{time}.", time: ViewerClock.format(@travel, :time))}</strong>
+              {gettext("This is the list as it stood when you were here. Everything that came later is hidden.")}
+            </p>
+            <.link
+              patch={page_path(assigns, day: nil, at: nil)}
+              class="inline-flex h-9 items-center rounded-lg bg-amber-600 px-3 text-sm font-semibold text-white hover:bg-amber-700"
+            >
+              {gettext("Back to now")}
+            </.link>
+          </div>
+
+          <div id="notification-timeline">
+            <.block
+              :for={block <- @blocks}
+              block={block}
+              current_user={@current_user}
+              cards={@cards}
+              composing={@composing}
+              socket={@socket}
+            />
+          </div>
+
+          <p :if={@empty?} class="mt-6 text-slate-600 dark:text-slate-400">
+            {gettext("Nothing happened in these two days.")}
           </p>
 
-          <%!-- `data-filter-bar="track"` picks which of the app's two tab looks
-          the in-flight paint reaches for: here the white pill on a filled
-          trough, so a pressed chip turns into this bar's own active chip rather
-          than into the brand pill the post filter tabs wear. --%>
-          <div
-            id="notification-filter"
-            data-filter-bar="track"
-            class="mt-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800"
-          >
+          <.load_more :if={@cursor} class="mt-6" />
+
+          <div class="mt-6 flex justify-center">
             <.link
-              :for={{value, label} <- filter_options()}
-              patch={filter_path(value)}
-              data-filter-tab={value}
-              aria-current={@filter == value && "page"}
-              class={filter_tab_class(@filter == value)}
+              id="earlier-days"
+              patch={page_path(assigns, day: Date.add(@top_day, -2), at: nil)}
+              class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
             >
-              {label}<span
-                :if={unread_badge(@new_counts, value)}
-                data-filter-count
-                class="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-5 text-white"
-              >{compact_count(unread_badge(@new_counts, value))}</span>
+              {gettext("Earlier days")}
             </.link>
-          </div>
-
-          <%!-- The reply inbox's second row: of the replies, the ones still
-          waiting for an answer, the answered ones, or all of them. --%>
-          <nav
-            :if={@answer_counts}
-            id="answer-filter"
-            aria-label={gettext("Replies")}
-            class="mt-3 flex flex-wrap gap-2"
-          >
-            <.link
-              :for={{value, label, count} <- answer_options(@answer_counts)}
-              patch={answer_path(value)}
-              data-answer-filter={value || "all"}
-              aria-current={@answer == value && "page"}
-              class={filter_chip_class(@answer == value)}
-            >
-              {label} · {compact_count(count)}
-            </.link>
-          </nav>
-
-          <%!-- Everything a chip replaces lives in one `data-filter-list`, so the
-          shared paint can dim it while the answer is on its way. The chips stay
-          outside it: the reader has to keep seeing which one they pressed. --%>
-          <div data-filter-list>
-            <section :for={section <- @inbox} data-day-section>
-              <h2
-                class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-                data-day-heading
-              >
-                {day_label(section.day, @today)}
-              </h2>
-              <%!-- No `overflow-hidden` here: a row's hover preview hangs out
-              over the rows below it. --%>
-              <ul class="mt-2 divide-y divide-slate-100 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-slate-900 dark:ring-slate-800">
-                <.inbox_row
-                  :for={row <- section.rows}
-                  row={row}
-                  current_user={@current_user}
-                  quote_lines={@quote_lines}
-                  parent={parent_card(row, @post_cards)}
-                  expanded={MapSet.member?(@expanded, row.id)}
-                  context={Map.get(@contexts, row.id, :closed)}
-                  preview={@preview}
-                />
-              </ul>
-            </section>
-
-            <section :for={section <- @sections} data-day-section>
-              <h2
-                class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-                data-day-heading
-              >
-                {day_label(section.day, @today)}
-              </h2>
-              <% thread_hint_id = first_thread_line_id(section.groups) %>
-              <div class="mt-2 space-y-3">
-                <%= for {group, rule?} <- section.rows do %>
-                  <div
-                    :if={rule?}
-                    data-seen-rule
-                    class="flex items-center gap-3 px-1 pt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"
-                  >
-                    <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700" aria-hidden="true"></span>
-                    {gettext("Seen before")}
-                    <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700" aria-hidden="true"></span>
-                  </div>
-                  <.notification_card
-                    group={group}
-                    current_user={@current_user}
-                    quote_lines={@quote_lines}
-                    post_cards={@post_cards}
-                    expanded={@expanded}
-                    unfolded={@unfolded}
-                    thread_hint_id={thread_hint_id}
-                  />
-                <% end %>
-              </div>
-            </section>
-
-            <p :if={@empty?} class="mt-6 text-slate-600 dark:text-slate-400">
-              {gettext("Nothing new yet.")}
-            </p>
-
-            <%!-- Numbered pages, patched over the socket: the page rides the URL
-            beside the filter, so it survives a reload and the back button. --%>
-            <.pager
-              params={%{"page" => @page}}
-              total={@total}
-              per_page={page_size()}
-              path={~p"/notifications"}
-              query={pager_query(@filter, @answer)}
-            />
           </div>
         </div>
 
-        <aside class="min-w-0 space-y-6">
-          <.card :if={@follow_back != []} id="follow-back" class="p-5">
-            <.section_title>{gettext("Follow back")}</.section_title>
-            <ul class="mt-4 space-y-4">
-              <.user_row
-                :for={member <- @follow_back}
-                user={member}
-                current_user={@current_user}
-                current_user_id={@current_user.id}
-                work_info_by_id={@work_info_by_id}
-                following_by_id={%{}}
-                live?
-              />
-            </ul>
-          </.card>
+        <aside class="hidden min-w-0 md:block">
+          <.time_travel id="desktop" {rail(assigns)} />
         </aside>
       </div>
     </div>
     """
   end
 
-  # The page size, as a function: inside ~H a bare `@page_size` would read the
-  # assigns, not the module attribute.
-  defp page_size, do: @page_size
+  # What the rail draws, the links to each look built here with the page's own
+  # URL rule.
+  defp rail(assigns) do
+    assigns
+    |> Map.take([:cal_open?, :cal_month, :cal_counts, :cal_capped?, :day, :today, :top_day])
+    |> Map.put(:now_path, page_path(assigns, day: nil, at: nil))
+    |> Map.put(:now?, present?(assigns))
+    |> Map.put(
+      :looks,
+      assigns.day_visits
+      |> Enum.reverse()
+      |> Enum.map(
+        &%{visit: &1, path: page_path(assigns, at: &1.at), current?: assigns.travel == &1.at}
+      )
+    )
+  end
 
-  # The pager carries the active chip onto every page link, so paging inside a
-  # filter stays inside it.
-  defp pager_query("replies", nil), do: %{}
-  defp pager_query("replies", answer), do: %{"answer" => Atom.to_string(answer)}
-  defp pager_query(filter, _answer), do: %{"filter" => filter}
+  # The calendar and the looks of the shown day.
+  attr(:id, :string, required: true)
+  attr(:cal_open?, :boolean, required: true)
+  attr(:cal_month, :any, required: true)
+  attr(:cal_counts, :map, required: true)
+  attr(:cal_capped?, :boolean, required: true)
+  attr(:day, :any, required: true)
+  attr(:today, :any, required: true)
+  attr(:top_day, :any, required: true)
+  attr(:looks, :list, required: true)
+  attr(:now_path, :string, required: true)
+  attr(:now?, :boolean, required: true)
 
-  # ── One card ──
-
-  attr(:group, :map, required: true)
-  attr(:current_user, :any, required: true)
-  attr(:quote_lines, :integer, required: true)
-  attr(:post_cards, :map, default: %{})
-  attr(:expanded, :any, required: true)
-  attr(:unfolded, :any, required: true)
-  attr(:thread_hint_id, :string, default: nil)
-
-  defp notification_card(%{group: %{kind: "post"}} = assigns) do
-    lines = assigns.group.events
-    unfolded? = MapSet.member?(assigns.unfolded, assigns.group.id)
-    shown = if unfolded?, do: lines, else: Enum.take(lines, @card_lines)
-
-    assigns =
-      assigns
-      |> assign(:card, Map.get(assigns.post_cards, assigns.group.post_id))
-      |> assign(:shown, shown)
-      |> assign(:hidden, length(lines) - length(shown))
-
+  defp time_travel(assigns) do
     ~H"""
-    <.notification_article group={@group}>
-      <.post_card_head
-        card={@card}
-        eyebrow={card_eyebrow(@card, @group, @current_user)}
-        counts={card_counts(@group.events)}
-        at={@group.at}
-        unread?={@group.unread?}
+    <div class="space-y-3">
+      <.feed_calendar
+        id={"notification-calendar-#{@id}"}
+        open?={@cal_open?}
+        month={@cal_month}
+        day={@day}
+        today={@today}
+        metric="notifications"
+        switch?={false}
+        counts={@cal_counts}
+        capped?={@cal_capped?}
       />
 
-      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
-        <.card_line
-          :for={line <- @shown}
-          line={line}
-          current_user={@current_user}
-          quote_lines={@quote_lines}
-          expanded={MapSet.member?(@expanded, line.id)}
-          thread_hint={line.id == @thread_hint_id}
-        />
-      </ul>
-
-      <button
-        :if={@hidden > 0}
-        type="button"
-        phx-click="unfold"
-        phx-value-id={@group.id}
-        data-card-more
-        class="mt-1 inline-flex min-h-10 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      <section
+        id={"visits-#{@id}"}
+        class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
       >
-        {gettext("Show %{formatted} more", formatted: compact_count(@hidden))}
-      </button>
-    </.notification_article>
-    """
-  end
-
-  # The day's people: their avatars, a tally, and one line per verb.
-  defp notification_card(%{group: %{kind: "people"}} = assigns) do
-    ~H"""
-    <.notification_article group={@group}>
-      <div class="flex items-start gap-3">
-        <div class="flex shrink-0 -space-x-2">
-          <.avatar
-            :for={actor <- Enum.take(@group.actors, 4)}
-            src={actor.avatar}
-            size="sm"
-            presence
-            presence_id={actor.id}
-            alt={"Avatar of #{actor.name}"}
-            class="ring-2 ring-white dark:ring-slate-900"
-          />
-        </div>
-        <div class="min-w-0 flex-1">
-          <span data-card-eyebrow class={eyebrow_class()}>{gettext("People")}</span>
-          <span
-            data-card-title
-            class="mt-0.5 block text-sm font-medium text-slate-900 dark:text-white"
-          >
-            {people_title(@group)}
-          </span>
-        </div>
-        <.row_meta at={@group.at} unread?={@group.unread?} />
-      </div>
-
-      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
-        <.card_line
-          :for={line <- @group.events}
-          line={line}
-          current_user={@current_user}
-          quote_lines={@quote_lines}
-          expanded={false}
-          thread_hint={false}
-        />
-      </ul>
-    </.notification_article>
-    """
-  end
-
-  # Every rarer kind: one row per event, each carrying its own content.
-  defp notification_card(assigns) do
-    assigns = assign(assigns, :n, assigns.group.item)
-
-    ~H"""
-    <.notification_article group={@group} class="flex gap-3">
-      <.row_visual group={@group} />
-      <div class="min-w-0 flex-1">
-        <p class="mb-0 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-          <.actor_links group={@group} current_user={@current_user} />
-          <% target = notification_target(@n, @current_user) %>
-          <%= cond do %>
-            <%!-- The one row that is not a single link: see username_line/1. --%>
-            <% @group.kind == "username" -> %>
-              <.username_line handle={@n.username} />
-            <% target -> %>
-              <.link href={target} class="hover:text-brand-700 hover:underline dark:hover:text-brand-300">
-                {group_text(@group)}
-              </.link>
-            <% true -> %>
-              {group_text(@group)}
-          <% end %>
-        </p>
-
-        <%!-- A CV update covering several entries names them, each linking to
-        its own page (issue #980). A single entry is named in the line itself. --%>
-        <div
-          :if={@group.kind == "cv_update" and (@n[:entry_count] || 0) > 1}
-          class="mt-1.5"
-          data-cv-entries="true"
+        <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {gettext("Your visits on %{day}", day: ViewerClock.format(@top_day, :day_month))}
+        </h2>
+        <ul class="space-y-1">
+          <li :if={@top_day == @today}>
+            <.link patch={@now_path} aria-current={@now? && "true"} class={visit_class(@now?)}>
+              <span class="w-12 font-bold tabular-nums text-accent">
+                {ViewerClock.format(NaiveDateTime.utc_now(:second), :time)}
+              </span>
+              <span class="text-sm text-slate-500 dark:text-slate-400">
+                {pgettext("visit list", "now")}
+              </span>
+            </.link>
+          </li>
+          <li :for={look <- @looks}>
+            <.link
+              patch={look.path}
+              aria-current={look.current? && "true"}
+              data-visit={NaiveDateTime.to_iso8601(look.visit.at)}
+              class={visit_class(look.current?)}
+            >
+              <span class="w-12 font-bold tabular-nums">{ViewerClock.format(look.visit.at, :time)}</span>
+              <span class="text-sm text-slate-500 dark:text-slate-400">{visit_source(look.visit)}</span>
+            </.link>
+          </li>
+        </ul>
+        <p
+          :if={@looks == [] and @top_day != @today}
+          class="mb-0 text-sm text-slate-500 dark:text-slate-400"
         >
-          <ul class="space-y-0.5">
-            <li :for={entry <- @n[:entries] || []} class="text-sm">
-              <.link
-                href={cv_entry_path(@n, entry)}
-                class="text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
-              >
-                {cv_entry_label(entry)}
-              </.link>
-            </li>
-          </ul>
-          <p :if={cv_entries_more(@n) > 0} class="mb-0 mt-1 text-xs text-slate-600 dark:text-slate-400">
-            {gettext("and %{count} more", count: compact_count(cv_entries_more(@n)))}
-          </p>
-        </div>
-
-        <%!-- A handle change lists the recipient's own rewritten posts as
-        compact excerpt links, plus a count of any remaining ones. --%>
-        <div :if={@group.kind == "handle_change"} class="mt-1.5 space-y-1" data-change-posts="true">
-          <.link
-            :for={cp <- @n[:change_posts] || []}
-            href={~p"/#{@current_user}/posts/#{cp.post.id}"}
-            class="block text-sm text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
-          >
-            <span class="line-clamp-1 whitespace-pre-line">{cp.text}</span>
-          </.link>
-          <p :if={handle_change_more(@n) > 0} class="mb-0 text-xs text-slate-600 dark:text-slate-400">
-            {gettext("and %{count} more", count: compact_count(handle_change_more(@n)))}
-          </p>
-        </div>
-      </div>
-      <.row_meta at={@group.at} unread?={@group.unread?} />
-    </.notification_article>
+          {gettext("You were not here on this day.")}
+        </p>
+        <p class="mb-0 mt-2 text-xs text-slate-500 dark:text-slate-400">
+          {gettext("A visit shows the list as it stood at that moment.")}
+        </p>
+      </section>
+    </div>
     """
   end
 
-  # The shell every card wears, whatever it holds: the id and the markers the
-  # tests and the CSS key on (`assets/css/components.css` reads
-  # `[data-notification-row][data-unread]` to paint the quote clamp's fade on
-  # the card's own tint, so the tint cannot live in only one of the clauses).
-  attr(:group, :map, required: true)
-  attr(:class, :string, default: nil)
-  slot(:inner_block, required: true)
+  defp visit_class(true),
+    do:
+      "flex min-h-10 items-center gap-3 rounded-lg bg-brand-50 px-2 text-brand-800 dark:bg-brand-800/60 dark:text-brand-200"
 
-  defp notification_article(assigns) do
+  defp visit_class(false),
+    do:
+      "flex min-h-10 items-center gap-3 rounded-lg px-2 text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"
+
+  defp visit_source(%{source: "bell"}), do: gettext("via the bell")
+  defp visit_source(_visit), do: gettext("opened the page")
+
+  # ── Blocks ──
+
+  attr(:block, :any, required: true)
+  attr(:current_user, :any, required: true)
+  attr(:cards, :map, required: true)
+  attr(:composing, :any, required: true)
+  attr(:socket, :any, required: true)
+
+  defp block(%{block: {:day, day}} = assigns) do
+    assigns = assign(assigns, :day, day)
+
+    ~H"""
+    <h2
+      data-day-heading
+      class="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+    >
+      {day_label(@day)}
+    </h2>
+    """
+  end
+
+  defp block(%{block: {:fresh, count, since}} = assigns) do
+    assigns = assign(assigns, count: count, since: since)
+
+    ~H"""
+    <div data-fresh-line class="my-3 flex items-center gap-3 text-xs font-semibold text-accent">
+      <span class="h-px flex-1 bg-accent/60" aria-hidden="true"></span>
+      {fresh_label(@count, @since)}
+      <span class="h-px flex-1 bg-accent/60" aria-hidden="true"></span>
+    </div>
+    """
+  end
+
+  defp block(%{block: {:visits, visits}} = assigns) do
+    assigns = assign(assigns, :visits, visits)
+
+    ~H"""
+    <div
+      data-visit-line
+      class="my-3 flex items-center gap-3 text-xs font-semibold text-slate-500 dark:text-slate-400"
+    >
+      <span class="h-0.5 flex-1 rounded bg-slate-300 dark:bg-slate-700" aria-hidden="true"></span>
+      <span>
+        {gettext("You were here · %{time}",
+          time: Enum.map_join(@visits, ", ", &ViewerClock.format(&1.at, :time))
+        )}
+        <span :if={match?([%{source: "bell"}], @visits)} class="font-normal">
+          {gettext("via the bell")}
+        </span>
+      </span>
+      <span class="h-0.5 flex-1 rounded bg-slate-300 dark:bg-slate-700" aria-hidden="true"></span>
+    </div>
+    """
+  end
+
+  defp block(%{block: {:row, row}} = assigns) do
+    assigns = assign(assigns, :row, row)
+
     ~H"""
     <article
-      id={"notification-#{@group.id}"}
-      data-notification-row
-      data-kind={@group.kind}
-      data-unread={@group.unread? && "true"}
+      id={"row-#{@row.id}"}
+      data-row={@row.type}
+      data-kind={@row[:item] && @row.item.kind}
+      data-fresh={@row.fresh? && "true"}
+      phx-hook={@row.type == :words && "InlineReply"}
+      data-row-id={@row.id}
       class={[
-        "rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800 sm:px-5",
-        @class,
-        @group.unread? && "bg-brand-50/60 dark:bg-brand-800/25"
+        "relative mb-2 rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800",
+        @row.type == :words && "px-4 pb-2 pt-3 sm:px-5",
+        @row.type != :words && "flex gap-3 px-4 py-3 sm:px-5",
+        @row.fresh? && "bg-brand-50/60 ring-brand-200 dark:bg-brand-800/25 dark:ring-brand-800"
       ]}
     >
-      {render_slot(@inner_block)}
+      <span
+        :if={@row.fresh?}
+        class="absolute left-1.5 top-5 h-1.5 w-1.5 rounded-full bg-accent"
+        aria-hidden="true"
+      ></span>
+      <.row_body
+        row={@row}
+        current_user={@current_user}
+        cards={@cards}
+        composing={@composing}
+        socket={@socket}
+      />
     </article>
     """
   end
 
-  # The right edge of a card head, a card line and a single row alike: the
-  # clock time over the unread dot.
-  attr(:at, :any, required: true)
-  attr(:unread?, :boolean, required: true)
-
-  defp row_meta(assigns) do
-    ~H"""
-    <div class="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
-      <.row_time at={@at} />
-      <.unread_dot :if={@unread?} />
-    </div>
-    """
-  end
-
-  attr(:class, :string, default: nil)
-
-  defp unread_dot(assigns) do
-    ~H"""
-    <span class={["h-2 w-2 rounded-full bg-accent", @class]}>
-      <span class="sr-only">{gettext("New")}</span>
-    </span>
-    """
-  end
-
-  defp eyebrow_class,
-    do:
-      "block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-
-  # ── The head of a post card ──
-
-  # What the post says on the left, its first photos or its link screenshot on
-  # the right, and under the text a line counting what came back. Above it all
-  # an eyebrow saying whose post this is — the reader's own for a like or a
-  # reply, somebody else's for a mention, a thread they wrote in.
-  #
-  # The text starts at the same edge whether the post carries a picture or not
-  # — the pictures hang off the right — so a column of cards reads as one
-  # column rather than as two indents. The head is one link to the post: the
-  # reader's question is "which post was that", and the answer is one tap away.
-  attr(:card, :any, required: true)
-  attr(:eyebrow, :string, required: true)
-  attr(:counts, :list, required: true)
-  attr(:at, :any, required: true)
-  attr(:unread?, :boolean, required: true)
-
-  defp post_card_head(assigns) do
-    ~H"""
-    <div class="flex items-start gap-3">
-      <div class="min-w-0 flex-1">
-        <span :if={@eyebrow} data-card-eyebrow class={eyebrow_class()}>{@eyebrow}</span>
-        <.link
-          :if={@card}
-          href={Posts.path(@card.post)}
-          data-post-card
-          class="mt-0.5 block text-sm font-medium text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
-        >
-          <%!-- A photo post has no text to name it with (`PostTeaser` skips an
-          image-only line), so the card says so rather than opening on a blank
-          line the reader has to interpret. --%>
-          <span
-            :if={@card.text == ""}
-            data-post-card-textless
-            class="italic font-normal text-slate-500 dark:text-slate-400"
-          >
-            {gettext("Post without text")}
-          </span>
-          <span :if={@card.text != ""} class="line-clamp-2 whitespace-pre-line">{@card.text}</span>
-        </.link>
-        <%!-- The post is hidden from the reader or gone (a visibility-scoped
-        lookup returned nothing): the lines below still say what happened. --%>
-        <p :if={!@card} class="mb-0 mt-0.5 text-sm italic text-slate-500 dark:text-slate-400">
-          {gettext("The post is no longer available.")}
-        </p>
-        <span :if={@counts != []} class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-          {Enum.join(@counts, " · ")}
-        </span>
-      </div>
-
-      <.post_card_images :if={@card} card={@card} big={@card.text == ""} />
-      <.post_card_screenshot :if={@card && @card.images == [] && @card.screenshot} card={@card} />
-
-      <.row_meta at={@at} unread?={@unread?} />
-    </div>
-    """
-  end
-
-  # Up to two photos, then the rest as a count on the second one. Two, because
-  # the card's right edge has to sit in the same place whether the post carries
-  # two pictures or twenty — a strip that grows with the picture count would
-  # make the text column a different width on every card.
-  #
-  # On a post with no text the photo *is* what names it, so it takes the space
-  # the missing text left and is rendered a size larger.
-  attr(:card, :map, required: true)
-  attr(:big, :boolean, default: false)
-
-  defp post_card_images(assigns) do
-    ~H"""
-    <.link
-      :if={@card.images != []}
-      href={Posts.path(@card.post)}
-      data-post-card-images
-      class="flex shrink-0 gap-1"
-    >
-      <span :for={{image, index} <- Enum.with_index(@card.images)} class="relative block">
-        <img
-          src={PostImage.url(image, "thumb")}
-          alt={PostComponents.photo_alt(image)}
-          loading="lazy"
-          class={["rounded-lg object-cover", if(@big, do: "h-16 w-16", else: "h-12 w-12")]}
-        />
-        <span
-          :if={@card.more_images > 0 and index == length(@card.images) - 1}
-          data-images-more={@card.more_images}
-          class="absolute bottom-0.5 right-0.5 rounded-md bg-slate-900/70 px-1 text-[11px] font-semibold leading-tight text-white"
-        >
-          +{compact_count(@card.more_images)}
-        </span>
-      </span>
-    </.link>
-    """
-  end
-
-  # A link post's auto screenshot, in the slot the photos would take: the same
-  # capture the feed floats beside the post, at thumbnail size, so a card about
-  # a shared link shows the page it points at. Decorative — the head's text link
-  # already names and opens the post — so it is kept out of the tab order.
-  attr(:card, :map, required: true)
-
-  defp post_card_screenshot(assigns) do
-    ~H"""
-    <.link
-      href={Posts.path(@card.post)}
-      data-post-card-screenshot
-      aria-hidden="true"
-      tabindex="-1"
-      class="shrink-0"
-    >
-      <.picture
-        picture={Screenshot.picture({@card.screenshot.screenshot, @card.screenshot})}
-        width="72"
-        height="48"
-        loading="lazy"
-        alt=""
-        class="h-12 w-[4.5rem] rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
-      />
-    </.link>
-    """
-  end
-
-  # ── One line inside a card ──
-
-  # Who did what, on one line: a small kind glyph, the actors, the verb — and
-  # for a reply its words, clamped to two lines, as the button that unfolds
-  # the formatted quote. The card's head already named the post, so no line
-  # repeats it.
-  attr(:line, :map, required: true)
+  attr(:row, :map, required: true)
   attr(:current_user, :any, required: true)
-  attr(:quote_lines, :integer, required: true)
-  attr(:expanded, :boolean, required: true)
-  attr(:thread_hint, :boolean, default: false)
+  attr(:cards, :map, required: true)
+  attr(:composing, :any, required: true)
+  attr(:socket, :any, required: true)
 
-  defp card_line(assigns) do
+  defp row_body(%{row: %{type: :words, item: item}} = assigns) do
+    post = Map.get(assigns.cards.card_posts, card_post_id(item))
+    note = Map.get(assigns.cards.notes, item[:note_id])
+    subject = Map.get(assigns.cards.posts, subject_post_id(item))
+
+    answer =
+      case item[:answer] do
+        %Post{} = answer -> answer
+        _ -> nil
+      end
+
     assigns =
-      assigns
-      |> assign(:n, assigns.line.item)
-      |> assign(:teaser, line_teaser(assigns.line))
-      |> assign(:kind, line_kind(assigns.line))
+      assign(assigns,
+        item: item,
+        post: post,
+        note: note,
+        subject: subject,
+        answer: answer
+      )
 
     ~H"""
-    <li
-      id={"notification-#{@line.id}"}
-      data-notification-event
-      data-event-kind={@kind}
-      data-unread={@line.unread? && "true"}
-      class="py-2 first:pt-0 last:pb-0"
-    >
-      <div class="flex items-start gap-2.5">
+    <p class="mb-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+      <span class="shrink-0" aria-hidden="true">↩︎</span>
+      <span class="shrink-0">{context_label(@item)}</span>
+      <.link
+        :if={@subject}
+        href={Posts.path(@subject)}
+        class="min-w-0 truncate hover:text-brand-700 dark:hover:text-brand-300"
+      >
+        „{PostTeaser.plain_line(@subject, length: 120)}“
+      </.link>
+    </p>
+
+    <.post_card
+      :if={@post}
+      post={@post}
+      viewer={@current_user}
+      conn_or_socket={@socket}
+      engagement={@cards.engagement[@post.id]}
+      mode={:preview}
+      surface={:flat}
+      show_reply_banner={false}
+      quotable={false}
+      entry_id={"notification-#{@row.id}"}
+    />
+    <.remote_reply_card :if={@note} note={@note} viewer={@current_user} marks={@cards.marks[@note.id]} live? />
+    <p :if={!@post and !@note} class="mb-2 text-sm text-slate-700 dark:text-slate-300">
+      <.actor_link actor={Timeline.actor(@item)} /> {notification_text(@item)}
+    </p>
+
+    <p :if={@answer} data-answer class="mb-2 truncate text-sm text-emerald-700 dark:text-emerald-300">
+      ↩︎
+      <.link href={Posts.path(@answer)} class="font-semibold hover:underline">
+        {gettext("Your answer:")}
+      </.link>
+      {PostTeaser.plain_line(@answer, length: 160)}
+    </p>
+
+    <div :if={@composing == @row.id} class="mb-2 space-y-2">
+      <.live_component
+        module={VutuvWeb.PostLive.Composer}
+        id={"answer-#{@row.id}"}
+        host={:inline_reply}
+        current_user={@current_user}
+        post={nil}
+        parent={@post}
+        remote_note={@note}
+        surface={:flat}
+      />
+      <button
+        type="button"
+        phx-click="cancel-compose"
+        class="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+      >
+        {gettext("Cancel")}
+      </button>
+    </div>
+    """
+  end
+
+  defp row_body(%{row: %{type: :reactions} = row} = assigns) do
+    named = Enum.take(row.actors, @named_actors)
+
+    assigns =
+      assign(assigns,
+        post: Map.get(assigns.cards.posts, row.post_id),
+        named: named,
+        overflow: length(row.actors) - length(named)
+      )
+
+    ~H"""
+    <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300">
+      ♥
+    </span>
+    <div class="min-w-0 flex-1 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+      <p class="mb-0">
+        <span class="font-semibold">{reaction_counts(@row)}</span>
+        <.link
+          :if={@post}
+          href={Posts.path(@post)}
+          class="text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+        >
+          {pgettext("reactions", "on “%{post}”", post: PostTeaser.plain_line(@post, length: 90))}
+        </.link>
+      </p>
+      <p class="mb-0 text-xs text-slate-600 dark:text-slate-400">
+        <span :for={{actor, index} <- Enum.with_index(@named)}>{if index > 0, do: ", "}<.actor_link actor={actor} /></span>
+        <span :if={@overflow > 0}>
+          {gettext("and %{count} more", count: compact_count(@overflow))}
+        </span>
+      </p>
+    </div>
+    <.row_time at={@row.at} />
+    """
+  end
+
+  defp row_body(%{row: %{type: :people, persons: persons}} = assigns) do
+    assigns = assign(assigns, :persons, persons)
+
+    ~H"""
+    <span class={[
+      "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+      kind_classes("follower")
+    ]}>
+      {kind_glyph("follower")}
+    </span>
+    <div class="min-w-0 flex-1 text-sm text-slate-800 dark:text-slate-100">
+      <p class="mb-1 font-semibold">
+        <%= if length(@persons) == 1 do %>
+          <.actor_link actor={hd(@persons)} /> <span class="font-normal">{gettext("follows you")}</span>
+        <% else %>
+          {ngettext("%{formatted} new contact", "%{formatted} new contacts", length(@persons),
+            formatted: compact_count(length(@persons))
+          )}
+        <% end %>
+      </p>
+      <ul class="flex flex-wrap gap-x-4 gap-y-1.5">
+        <li :for={person <- @persons} class="flex items-center gap-2">
+          <.actor_link :if={length(@persons) > 1} actor={person} />
+          <span
+            :if={person.connected?}
+            class="rounded-full bg-emerald-50 px-2 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+          >
+            {pgettext("contact", "connected")}
+          </span>
+          <button
+            :if={!person.connected? and person.kind != "organization" and person.id}
+            type="button"
+            phx-click="follow"
+            phx-value-followee={person.id}
+            class="min-h-8 rounded-full px-3 text-xs font-semibold text-brand-700 ring-1 ring-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:ring-brand-400 dark:hover:bg-brand-800/30"
+          >
+            {gettext("Follow back")}
+          </button>
+        </li>
+      </ul>
+    </div>
+    <.row_time at={@row.at} />
+    """
+  end
+
+  defp row_body(%{row: %{type: :other, item: item}} = assigns) do
+    assigns =
+      assign(assigns,
+        n: item,
+        actor: item[:actor_name] && Timeline.actor(item),
+        target: notification_target(item, assigns.current_user)
+      )
+
+    ~H"""
+    <.row_visual kind={@n.kind} actor={@actor} />
+    <div class="min-w-0 flex-1">
+      <p class="mb-0 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+        <.actor_link :if={@actor} actor={@actor} />
+        <%= cond do %>
+          <% @n.kind == "username" -> %>
+            <.username_line handle={@n.username} />
+          <% @target -> %>
+            <.link href={@target} class="hover:text-brand-700 hover:underline dark:hover:text-brand-300">
+              {notification_text(@n)}
+            </.link>
+          <% true -> %>
+            {notification_text(@n)}
+        <% end %>
+      </p>
+
+      <ul :if={@n.kind == "cv_update" and (@n[:entry_count] || 0) > 1} class="mt-1.5 space-y-0.5" data-cv-entries="true">
+        <li :for={entry <- @n[:entries] || []} class="text-sm">
+          <.link
+            href={cv_entry_path(@n, entry)}
+            class="text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+          >
+            {cv_entry_label(entry)}
+          </.link>
+        </li>
+        <li :if={cv_entries_more(@n) > 0} class="text-xs text-slate-600 dark:text-slate-400">
+          {gettext("and %{count} more", count: compact_count(cv_entries_more(@n)))}
+        </li>
+      </ul>
+
+      <div :if={@n.kind == "handle_change"} class="mt-1.5 space-y-1" data-change-posts="true">
+        <.link
+          :for={post <- change_posts(@n, @cards.posts)}
+          href={Posts.path(post)}
+          class="block text-sm text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+        >
+          <span class="line-clamp-1">{PostTeaser.plain_line(post, length: 120)}</span>
+        </.link>
+        <p :if={change_posts_more(@n) > 0} class="mb-0 text-xs text-slate-600 dark:text-slate-400">
+          {gettext("and %{count} more", count: compact_count(change_posts_more(@n)))}
+        </p>
+      </div>
+    </div>
+    <.row_time at={@row.at} />
+    """
+  end
+
+  # ── Pieces ──
+
+  attr(:kind, :string, required: true)
+  attr(:actor, :any, required: true)
+
+  defp row_visual(assigns) do
+    ~H"""
+    <%= if @actor && @actor.avatar do %>
+      <.link href={@actor.param && actor_target(%{actor_kind: @actor.kind, actor_param: @actor.param})} class="relative mt-0.5 shrink-0 self-start">
+        <.presence_wrap id={@actor.id} size="sm">
+          <.avatar src={@actor.avatar} size="sm" alt={gettext("Avatar of %{name}", name: @actor.name)} />
+        </.presence_wrap>
         <span
           class={[
-            "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+            "absolute -bottom-1 -left-1 z-20 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-white dark:ring-slate-900",
             kind_classes(@kind)
           ]}
-          aria-hidden="true"
+          title={kind_label(@kind)}
         >
           {kind_glyph(@kind)}
         </span>
-        <div class="min-w-0 flex-1">
-          <p class="mb-0 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-            <span class="sr-only">{kind_label(@kind)}:</span>
-            <.actor_links group={@line} current_user={@current_user} named={named_actors(@line)} />
-            {line_text(@line)}
-          </p>
-
-          <.reply_words
-            line={@line}
-            teaser={@teaser}
-            expanded={@expanded}
-            current_user={@current_user}
-            quote_lines={@quote_lines}
-          />
-          <%!-- The day's first thread line says why it is here and links to the
-          switch that stops it (issue #1025), once per day so it stays a hint and
-          not a banner. It shows only when thread events reach this reader, which
-          is exactly when the switch is still on. --%>
-          <p
-            :if={@thread_hint}
-            data-thread-hint
-            class="mb-0 mt-1 text-xs text-slate-500 dark:text-slate-400"
-          >
-            {gettext("You wrote in this thread.")}
-            <.link
-              href={~p"/settings/notifications"}
-              class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-            >
-              {gettext("Turn off thread notifications")} ›
-            </.link>
-          </p>
-        </div>
-        <.row_meta at={@line.at} unread?={@line.unread?} />
-      </div>
-    </li>
-    """
-  end
-
-  # ── One row of the reply inbox ──
-
-  # One reply, one row: who wrote, where (the member's post it answers), two
-  # lines of the words, and what the member already did about it: the status
-  # (new, read, answered), their answer, their like. A pointer resting on the
-  # row shows the whole post (`ReplyPreview` hook, `reply_preview/1`); "Show
-  # context" folds the conversation open under it.
-  attr(:row, :map, required: true)
-  attr(:current_user, :any, required: true)
-  attr(:quote_lines, :integer, required: true)
-  attr(:parent, :any, default: nil)
-  attr(:expanded, :boolean, required: true)
-  attr(:context, :any, required: true, doc: ":closed, nil (nothing to show) or the context")
-  attr(:preview, :any, required: true)
-
-  defp inbox_row(assigns) do
-    item = assigns.row.item
-
-    assigns =
-      assigns
-      |> assign(:item, item)
-      |> assign(:kind, line_kind(assigns.row))
-      |> assign(:status, reply_status(assigns.row))
-      |> assign(:teaser, item[:teaser])
-      |> assign(:context_open?, assigns.context != :closed)
-      |> assign(:preview_open?, preview_for?(assigns.preview, assigns.row.id))
-
-    ~H"""
-    <li
-      id={"inbox-#{@row.id}"}
-      data-inbox-row
-      data-notification-event
-      data-event-kind={@kind}
-      data-status={@status}
-      data-unread={@row.unread? && "true"}
-      phx-hook="ReplyPreview"
-      data-preview-id={@row.id}
-      class={[
-        "relative flex gap-3 px-4 py-3 first:rounded-t-2xl last:rounded-b-2xl sm:px-5",
-        @status == "new" && "bg-brand-50/60 dark:bg-brand-800/25"
-      ]}
-    >
-      <.row_visual group={@row} />
-      <div class="min-w-0 flex-1">
-        <div class="flex items-baseline gap-2">
-          <p class="mb-0 min-w-0 flex-1 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-            <span class="sr-only">{kind_label(@kind)}:</span>
-            <.actor_links group={@row} current_user={@current_user} named={1} />
-            {line_text(@row)}
-          </p>
-          <.row_time at={@row.at} />
-        </div>
-
-        <p
-          :if={@parent}
-          data-inbox-parent
-          class="mb-0 truncate text-xs text-slate-500 dark:text-slate-400"
-        >
-          <.link
-            href={Posts.path(@parent.post)}
-            class="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            {parent_label(@parent)}
-          </.link>
-        </p>
-
-        <.reply_words
-          line={@row}
-          teaser={@teaser}
-          expanded={@expanded}
-          current_user={@current_user}
-          quote_lines={@quote_lines}
-        />
-
-        <.link
-          :if={@item[:answer]}
-          href={Posts.path(@item.answer)}
-          data-my-answer
-          class="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-emerald-800 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-200"
-        >
-          <span aria-hidden="true">↩︎</span>
-          <span class="truncate">
-            <span class="font-semibold">{gettext("Your reply:")}</span>
-            {answer_teaser(@item.answer)}
-          </span>
-        </.link>
-
-        <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span data-status-pill class={status_pill_class(@status)}>{status_label(@status)}</span>
-          <button
-            type="button"
-            phx-click="like_reply"
-            phx-value-id={@row.id}
-            data-like-reply
-            aria-pressed={to_string(@item[:liked?] == true)}
-            class={[
-              "inline-flex min-h-9 items-center gap-1 text-sm font-medium",
-              like_class(@item[:liked?] == true)
-            ]}
-          >
-            <span aria-hidden="true">{if @item[:liked?], do: "♥", else: "♡"}</span>
-            {if @item[:liked?], do: gettext("You like this"), else: gettext("Like")}
-          </button>
-          <button
-            type="button"
-            phx-click="context"
-            phx-value-id={@row.id}
-            data-context-toggle
-            aria-expanded={to_string(@context_open?)}
-            class="inline-flex min-h-9 items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-          >
-            {if @context_open?, do: gettext("Hide context"), else: gettext("Show context")}
-          </button>
-          <.link
-            :if={@status != "answered"}
-            href={inbox_reply_target(@row, @current_user)}
-            data-inbox-reply
-            class="ml-auto inline-flex min-h-9 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-          >
-            {gettext("Reply")} ›
-          </.link>
-        </div>
-
-        <.reply_context
-          :if={@context_open?}
-          id={"context-#{@row.id}"}
-          context={@context}
-          href={inbox_reply_target(@row, @current_user)}
-        />
-      </div>
-
-      <.reply_preview :if={@preview_open?} id={"preview-#{@row.id}"} content={@preview.content} />
-    </li>
-    """
-  end
-
-  # The whole post, over the rows below, while a pointer rests on its row.
-  # Mouse only: the hook never asks for it on a touch screen, where a tap on
-  # the teaser unfolds the words in place instead. Not `role="tooltip"`, which
-  # must not hold links; a plain region that the row's own controls repeat.
-  attr(:id, :string, required: true)
-  attr(:content, :map, required: true)
-
-  defp reply_preview(assigns) do
-    ~H"""
-    <div
-      id={@id}
-      data-preview
-      class="absolute left-4 right-4 top-full z-30 -mt-2 max-h-96 overflow-y-auto rounded-2xl bg-white p-4 shadow-xl ring-1 ring-slate-300 sm:left-16 dark:bg-slate-900 dark:ring-slate-700"
-    >
-      <div
-        :if={@content[:html]}
-        class="markdown markdown--post text-sm text-slate-800 dark:text-slate-100"
-      >
-        {@content.html}
-      </div>
-      <p
-        :if={@content[:text]}
-        class="mb-0 whitespace-pre-line text-sm text-slate-800 dark:text-slate-100"
-      >{@content.text}</p>
-      <div
-        :if={@content[:images] not in [nil, []]}
-        data-preview-images
-        class="mt-3 flex flex-wrap gap-2"
-      >
-        <span :for={{image, index} <- Enum.with_index(@content.images)} class="relative block">
-          <img
-            src={ReplyInbox.image_url(image)}
-            alt={PostComponents.photo_alt(image)}
-            loading="lazy"
-            class="h-24 w-24 rounded-lg object-cover"
-          />
-          <span
-            :if={@content.more_images > 0 and index == length(@content.images) - 1}
-            class="absolute bottom-1 right-1 rounded-md bg-slate-900/70 px-1 text-xs font-semibold text-white"
-          >
-            +{compact_count(@content.more_images)}
-          </span>
-        </span>
-      </div>
-    </div>
-    """
-  end
-
-  # The conversation around a reply, oldest first: the member's own posts
-  # tinted, the reply the row is about marked, and the way to the whole
-  # thread under it.
-  attr(:id, :string, required: true)
-  attr(:context, :any, required: true)
-  attr(:href, :string, default: nil)
-
-  defp reply_context(assigns) do
-    ~H"""
-    <div
-      id={@id}
-      data-context
-      class="mt-2 rounded-xl p-2 ring-1 ring-slate-200 dark:ring-slate-800"
-    >
-      <p :if={!@context} class="mb-0 p-2 text-sm italic text-slate-500 dark:text-slate-400">
-        {gettext("The post is no longer available.")}
-      </p>
-      <ol :if={@context} class="space-y-1">
-        <li
-          :for={entry <- @context.entries}
-          data-context-entry
-          data-context-current={entry.current? && "true"}
-          data-context-mine={entry.mine? && "true"}
-          class={["rounded-lg border-l-2 px-3 py-2 text-sm", context_entry_class(entry)]}
-        >
-          <div class="flex items-baseline gap-2">
-            <span class="font-semibold text-slate-900 dark:text-white">
-              {if entry.mine?, do: pgettext("reply inbox", "You"), else: entry.name}
-            </span>
-            <span
-              :if={entry.current?}
-              class="text-xs font-semibold text-amber-800 dark:text-amber-300"
-            >
-              {gettext("This reply")}
-            </span>
-            <.row_time :if={entry.at} at={entry.at} />
-          </div>
-          <.link
-            :if={entry.path}
-            href={entry.path}
-            class={[
-              "block whitespace-pre-line text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white",
-              !entry.current? && "line-clamp-2"
-            ]}
-          >{entry.text}</.link>
-          <p
-            :if={!entry.path}
-            class="mb-0 whitespace-pre-line text-slate-700 dark:text-slate-300"
-          >{entry.text}</p>
-        </li>
-      </ol>
-      <.link
-        :if={@context && @href}
-        href={@href}
-        class="mt-1 inline-flex min-h-9 items-center px-2 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >
-        {conversation_link_label(@context)} ›
-      </.link>
-    </div>
-    """
-  end
-
-  defp preview_for?(%{id: id}, row_id), do: id == row_id
-  defp preview_for?(_preview, _row_id), do: false
-
-  defp like_class(true), do: "text-rose-700 dark:text-rose-300"
-
-  defp like_class(false),
-    do: "text-slate-600 hover:text-rose-700 dark:text-slate-400 dark:hover:text-rose-300"
-
-  defp context_entry_class(%{current?: true}),
-    do: "border-amber-400 bg-amber-50 dark:bg-amber-900/20"
-
-  defp context_entry_class(%{mine?: true}),
-    do: "border-brand-400 bg-brand-50 dark:bg-brand-800/25"
-
-  defp context_entry_class(_entry), do: "border-slate-200 dark:border-slate-700"
-
-  defp conversation_link_label(%{more?: true}), do: gettext("Open the whole conversation")
-  defp conversation_link_label(_context), do: gettext("Open the conversation")
-
-  # new: arrived since the last visit and nothing done about it yet; answered:
-  # the member wrote a post under it; read: everything else.
-  defp reply_status(%{item: %{answer: %Post{}}}), do: "answered"
-  defp reply_status(%{unread?: true}), do: "new"
-  defp reply_status(_row), do: "read"
-
-  defp status_label("new"), do: pgettext("reply status", "New")
-  defp status_label("read"), do: pgettext("reply status", "Read")
-  defp status_label("answered"), do: pgettext("reply status", "Answered")
-
-  defp status_pill_class(status),
-    do: [
-      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
-      status_pill_colors(status)
-    ]
-
-  defp status_pill_colors("new"),
-    do: "bg-orange-50 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200"
-
-  defp status_pill_colors("read"),
-    do: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-
-  defp status_pill_colors("answered"),
-    do: "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200"
-
-  # The member's post a row's reply is about, from the page's post cards. A
-  # mention has none: the post that named the member is the words themselves.
-  defp parent_card(%{item: %{kind: "mention"}}, _post_cards), do: nil
-
-  defp parent_card(%{item: item}, post_cards),
-    do: Map.get(post_cards, Groups.post_id_of(item))
-
-  defp parent_label(%{text: ""}), do: gettext("on your post without text")
-  defp parent_label(%{text: text}), do: gettext("on “%{post}”", post: text)
-
-  defp answer_teaser(post), do: PostTeaser.plain_line(post, length: 160)
-
-  # Where a row's Reply goes: under the reply itself, so the answer lands in
-  # the right place in the thread.
-  defp inbox_reply_target(%{item: %{subject_path: path}}, _viewer) when is_binary(path),
-    do: path
-
-  defp inbox_reply_target(row, viewer), do: reply_target(row, viewer)
-
-  # A reply's words on a line or an inbox row. Folded: two lines of them, as
-  # the button that opens the rest. Unfolded: the quote formatted like a feed
-  # post (or the remote reply's plain text), the Reply link to where an answer
-  # is written, and the way back. On a phone this tap is the only way to the
-  # whole text, since nothing there can hover.
-  attr(:line, :map, required: true)
-  attr(:teaser, :string, default: nil)
-  attr(:expanded, :boolean, required: true)
-  attr(:current_user, :any, required: true)
-  attr(:quote_lines, :integer, required: true)
-
-  defp reply_words(assigns) do
-    ~H"""
-    <%!-- Folded: the reply's words, two lines of them, as the button that
-    opens the rest. A private reply from another network (issue #1071)
-    says so right here, since the member has to know that before they
-    answer, not after they unfold it. --%>
-    <button
-      :if={@teaser && !@expanded}
-      type="button"
-      phx-click="toggle_line"
-      phx-value-id={@line.id}
-      data-line-toggle
-      aria-expanded="false"
-      class="mt-0.5 block w-full text-left text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-    >
-      <span :if={remote_private?(@line.item)} data-remote-private aria-hidden="true">🔒</span>
-      <span data-reply-teaser class="line-clamp-2 whitespace-pre-line">{@teaser}</span>
-    </button>
-
-    <%!-- Unfolded: the quote formatted like a feed post (or the remote
-    reply's plain text), the Reply link to where an answer is written,
-    and the way back. --%>
-    <div :if={@expanded} class="mt-1.5 space-y-1.5">
-      <.quoted_post
-        :if={quotes_local_post?(@line) and @line.item[:reply_preview]}
-        id={"quote-#{@line.id}"}
-        data-reply-preview="true"
-        href={Posts.path(@line.item.reply_preview.post)}
-        html={@line.item.reply_preview.html}
-        quote_lines={@quote_lines}
-      />
-      <.remote_reply
-        :if={@line.verb == :remote_reply and @line.item[:note_text]}
-        id={"quote-remote-#{@line.id}"}
-        n={@line.item}
-        current_user={@current_user}
-        quote_lines={@quote_lines}
-      />
-      <div class="flex flex-wrap items-center gap-x-4">
-        <.link
-          href={reply_target(@line, @current_user)}
-          data-reply-link
-          class="inline-flex min-h-10 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-        >
-          {gettext("Reply")} ›
-        </.link>
-        <button
-          type="button"
-          phx-click="toggle_line"
-          phx-value-id={@line.id}
-          data-line-toggle
-          aria-expanded="true"
-          class="inline-flex min-h-10 items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-        >
-          {gettext("Less")}
-        </button>
-      </div>
-    </div>
-    """
-  end
-
-  # The post a line quotes, formatted exactly the way /feed formats a post: the
-  # rendered Markdown in the `.markdown markdown--post` body recipe (headings
-  # flattened to bold, @mentions and #hashtags linked), clipped by `.notif-clamp`
-  # to the reader's line budget.
-  #
-  # It is a block with a *stretched* permalink link rather than one big `<a>`,
-  # because a formatted body carries links of its own and an `<a>` inside an
-  # `<a>` is invalid: the prose falls through to the stretched link, so a click
-  # anywhere still opens the post, while a mention/hashtag/URL keeps its own
-  # target. The feed's "Suggested posts" rail is arranged the same way.
-  # `id` is what lets the clamp measurement re-run after a patch: the block is
-  # marked `data-post-preview` and the body `data-clamp-body`, the same pair the
-  # feed's post previews use, so app.js measures the quote and sets `is-clamped`
-  # on the wrapper — which is what paints the "…" that says the quote goes on
-  # (see the excerpt-clamp block in components.css). Whether the reader's line
-  # budget was enough depends on column width and font, so only the browser can
-  # decide it.
-  attr(:id, :string, required: true)
-  attr(:href, :string, required: true)
-  attr(:html, :any, required: true)
-  attr(:quote_lines, :integer, required: true)
-  attr(:class, :string, default: nil)
-  attr(:rest, :global)
-
-  defp quoted_post(assigns) do
-    ~H"""
-    <div
-      id={@id}
-      phx-hook="PostPreviewClamp"
-      data-post-preview
-      class={[
-        "relative border-l-2 border-slate-200 pl-2.5 transition-colors hover:border-brand-400",
-        "dark:border-slate-700 dark:hover:border-brand-500",
-        @class
-      ]}
-      {@rest}
-    >
-      <.link href={@href} aria-label={gettext("View post")} class="absolute inset-0 z-10"></.link>
-      <%!-- The type size and line height come from `.notif-clamp` itself: the
-      reader's line budget is a box height counted in them, so a `text-*` here
-      would cut the quote mid-letter. --%>
-      <div
-        data-clamp-body
-        class="markdown markdown--post notif-clamp text-slate-600 dark:text-slate-400 [&_a]:relative [&_a]:z-20"
-        {clamp_attrs(@quote_lines)}
-      >
-        {@html}
-      </div>
-    </div>
-    """
-  end
-
-  # A reply written on another network (issue #1069). Plain text, clamped like
-  # the other quotes and deliberately NOT run through the Markdown renderer: a
-  # stranger's words must not be able to mint links, least of all @mention links
-  # into local profiles. A private reply (issue #1071) says so, since the member
-  # has to know that before they answer.
-  #
-  # The same solid quote rail the local reply quotes wear — the line above it
-  # already says it came from another network, so the quote needs no dashed
-  # variant of its own. Marked for the clamp measurement like those quotes too,
-  # so a remote reply that runs past the reader's line budget also ends in a "…".
-  #
-  # And it is a link, on the same stretched-overlay arrangement as
-  # <.quoted_post>: a readable block of somebody's words is what the reader
-  # reaches for, so a quote that does nothing on tap reads as a broken line,
-  # whichever network the words came from. It goes where the line's own sentence
-  # already goes (the reader's post, not the stranger's server, which the card
-  # over there links to) and carries the note's anchor, so a post that collected
-  # several replies opens on this one. No `[&_a]:relative` escape hatch is needed
-  # inside: unlike a local quote's Markdown, this text is deliberately never
-  # linkified, so there is no inner link for the overlay to swallow.
-  attr(:id, :string, required: true)
-  attr(:n, :map, required: true)
-  attr(:current_user, :any, required: true)
-  attr(:quote_lines, :integer, required: true)
-
-  defp remote_reply(assigns) do
-    ~H"""
-    <div class="space-y-1">
-      <p
-        :if={remote_private?(@n)}
-        data-remote-private
-        class="mb-0 text-xs font-medium text-slate-600 dark:text-slate-400"
-      >
-        <span aria-hidden="true">🔒</span> {gettext("Sent to you only, visible to nobody else")}
-      </p>
-      <div
-        id={@id}
-        phx-hook="PostPreviewClamp"
-        data-post-preview
-        data-remote-reply-preview="true"
-        class={[
-          "relative border-l-2 border-slate-200 pl-2.5 transition-colors hover:border-brand-400",
-          "dark:border-slate-700 dark:hover:border-brand-500"
-        ]}
-      >
-        <.link
-          href={remote_reply_target(@n, @current_user)}
-          aria-label={gettext("View the conversation")}
-          class="absolute inset-0 z-10"
-        >
-        </.link>
-        <%!-- No `text-*` / `leading-*` here: `.notif-clamp` owns the type size
-        and line height, since its box height is counted in them. --%>
-        <p
-          data-clamp-body
-          class="notif-clamp mb-0 whitespace-pre-line text-slate-600 dark:text-slate-400"
-          {clamp_attrs(@quote_lines)}
-        >{@n.note_text}</p>
-      </div>
-    </div>
-    """
-  end
-
-  defp remote_private?(n), do: is_binary(n[:note_audience]) and n.note_audience != "public"
-
-  # The row's left visual (the single rows): the lead (newest) actor's avatar
-  # with a small kind badge riding its corner - or, for a picture-less lead
-  # actor and the actor-less kinds (moderation, image review), the colored kind
-  # glyph circle. Either way a present actor gets the online-presence dot via
-  # <.presence_wrap> (the dot sits bottom-right, the kind badge bottom-left).
-  attr(:group, :map, required: true)
-
-  defp row_visual(assigns) do
-    assigns = assign(assigns, :lead, List.first(assigns.group.actors))
-
-    ~H"""
-    <%= if @lead && @lead.avatar do %>
-      <.link href={@lead.param && ~p"/#{@lead.param}"} class="relative mt-0.5 shrink-0 self-start">
-        <.presence_wrap id={@lead.id} size="sm">
-          <.avatar src={@lead.avatar} size="sm" alt={"Avatar of #{@lead.name}"} />
-        </.presence_wrap>
-        <.kind_badge kind={@group.kind} />
       </.link>
     <% else %>
-      <.presence_wrap id={@lead && @lead.id} size="sm">
-        <span class={[
-          "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-          kind_classes(@group.kind)
-        ]}>
-          {kind_glyph(@group.kind)}
-          <span class="sr-only">{kind_label(@group.kind)}</span>
-        </span>
-      </.presence_wrap>
+      <span class={[
+        "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+        kind_classes(@kind)
+      ]}>
+        {kind_glyph(@kind)}
+        <span class="sr-only">{kind_label(@kind)}</span>
+      </span>
     <% end %>
     """
   end
 
-  attr(:kind, :string, required: true)
-
-  defp kind_badge(assigns) do
-    ~H"""
-    <span
-      class={[
-        "absolute -bottom-1 -left-1 z-20 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-white dark:ring-slate-900",
-        kind_classes(@kind)
-      ]}
-      title={kind_label(@kind)}
-    >
-      {kind_glyph(@kind)}
-      <span class="sr-only">{kind_label(@kind)}</span>
-    </span>
-    """
-  end
-
-  # The sentence's subject: up to `named` linked actor names, the rest folded
-  # into "and N more" - which links to the recipient's own followers /
-  # connections list where that is the natural place to see everyone.
-  attr(:group, :map, required: true)
-  attr(:current_user, :any, required: true)
-  attr(:named, :integer, default: nil, doc: "nil: the page's default from Groups")
-
-  defp actor_links(assigns) do
-    named = Enum.take(assigns.group.actors, assigns.named || Groups.named_actors())
-    overflow = assigns.group.actor_count - length(named)
-
-    assigns =
-      assigns
-      |> assign(:named, named)
-      |> assign(:overflow, overflow)
-      |> assign(:overflow_href, overflow_href(assigns.group.kind, assigns.current_user))
-
-    ~H"""
-    <span :for={{actor, index} <- Enum.with_index(@named)}>{separator(index, length(@named), @overflow)}<.actor_link actor={actor} /></span>
-    <span :if={@overflow > 0}>
-      <%= if @overflow_href do %>
-        <.link
-          href={@overflow_href}
-          class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
-        >{gettext("and %{count} more", count: compact_count(@overflow))}</.link>
-      <% else %>
-        <span class="font-semibold">{gettext("and %{count} more", count: compact_count(@overflow))}</span>
-      <% end %>
-    </span>
-    """
-  end
-
-  # One actor's name, linked. Three shapes: a member or a page
-  # (`actor_path/1`, never `~p"/#{@actor.param}"` — a page's param is a slug
-  # under /organizations/:slug, and the root belongs to member handles, issue
-  # #1336); somebody on another network (issue #1069) — no vutuv profile behind
-  # the name, so a press opens the account card over it, the same card their
-  # handle opens on a post card (`remote_actor_link/3`), with the `@handle@host`
-  # beside the name saying which network answered and the `href` out there
-  # still what a middle click takes; and a bare name for a payload with neither.
-  #
-  # Deliberately ONE line of markup: the pieces sit inside a sentence, and any
-  # newline between them is whitespace the browser renders — which is how the
-  # old `cond` put a space before every comma ("Anna , Ben und 3 weitere").
+  # One actor's name, linked: a member or a page to their page here, somebody
+  # on another network to their account card, anybody else as a bare name.
+  # One line of markup on purpose: it sits inside a sentence.
   attr(:actor, :map, required: true)
 
   defp actor_link(assigns) do
@@ -1802,7 +1014,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> assign(:bare?, is_nil(assigns.actor.param) and not is_binary(assigns.actor[:url]))
 
     ~H"""
-    <.link :if={@actor.param} href={actor_path(@actor)} class={actor_name_class()}>{@actor.name}</.link><.link :if={@remote?} {remote_actor_link(nil, @actor.url, @actor[:handle])} class={actor_name_class()}>{@actor.name}</.link><span :if={@remote? and @actor[:handle] && @actor.handle != @actor.name} class="text-xs font-normal text-slate-600 dark:text-slate-400"> {@actor.handle}</span><span :if={@bare?} class="font-semibold">{@actor.name}</span>
+    <.link :if={@actor.param} href={actor_target(%{actor_kind: @actor.kind, actor_param: @actor.param})} class={actor_name_class()}>{@actor.name}</.link><.link :if={@remote?} {remote_actor_link(nil, @actor.url, @actor[:handle])} class={actor_name_class()}>{@actor.name}</.link><span :if={@bare?} class="font-semibold">{@actor.name}</span>
     """
   end
 
@@ -1810,26 +1022,10 @@ defmodule VutuvWeb.NotificationLive.Index do
     do:
       "font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
 
-  # The welcome note is the one row that is NOT one big link: the handle points
-  # at the member's own profile and the two URLs at the pages they name, so
-  # every destination is reachable and the rest of the sentence stays plain
-  # text. The three `{markers}` are split out of the translation (split_marker/2,
-  # total by design, so a botched .po can never raise here) and each piece
-  # rendered in its own place — which is also how German and English each get
-  # their natural word order.
-  #
-  # It greets first and explains second. It used to open with "Your
-  # automatically assigned vutuv username is …", which leads with a machine
-  # detail on the first thing a new member ever reads from us. The import offer
-  # rides along because this is the one moment somebody arriving from LinkedIn
-  # still has that profile in mind, and the page is otherwise buried in
-  # /settings.
-  #
-  # NEITHER language may end a sentence on a URL: the full stop then sits
-  # flush against the address, and a reader cannot tell whether it belongs to
-  # the link (reported 2026-08-04). Both {url} and {import_url} are therefore
-  # followed by a space and at least one word. Keep that property when
-  # rewording, in the .po files too.
+  # The welcome note: the handle, the settings page and the import page are
+  # each a link of their own, split out of one translation (split_marker/2,
+  # which cannot raise on a botched .po). Neither language may end a sentence
+  # on a URL.
   attr(:handle, :string, required: true)
 
   defp username_line(assigns) do
@@ -1863,87 +1059,8 @@ defmodule VutuvWeb.NotificationLive.Index do
     do:
       "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
 
-  # "A and B liked" / "A, B and 3 more liked": the separator *before* the
-  # name at `index`. The joining word only appears when B is the last named
-  # actor and nothing overflows (the overflow chunk brings its own "and").
-  defp separator(0, _named, _overflow), do: ""
-  defp separator(_index, _named, overflow) when overflow > 0, do: ", "
-  defp separator(index, named, _overflow) when index == named - 1, do: " #{gettext("and")} "
-  defp separator(_index, _named, _overflow), do: ", "
-
-  # Where "and N more" leads: the recipient's own people lists for the
-  # people kinds; nowhere for a like line (there is no public likers list).
-  defp overflow_href("follower", viewer), do: ~p"/#{viewer}/followers"
-  defp overflow_href("connection", viewer), do: ~p"/#{viewer}/connections"
-  defp overflow_href(_kind, _viewer), do: nil
-
-  # ── Header bits ──
-
-  defp filter_options do
-    [
-      {"replies", gettext("Replies")},
-      {"reactions", gettext("Reactions")},
-      {"people", gettext("People")},
-      {"other", gettext("More")},
-      {"all", gettext("All")}
-    ]
-  end
-
-  defp filter_path(@default_filter), do: ~p"/notifications"
-  defp filter_path(value), do: ~p"/notifications?filter=#{value}"
-
-  defp answer_options(counts) do
-    [
-      {:open, pgettext("reply status", "Open"), counts.open},
-      {:answered, pgettext("reply status", "Answered"), counts.answered},
-      {nil, gettext("All replies"), counts.all}
-    ]
-  end
-
-  defp answer_path(nil), do: ~p"/notifications"
-  defp answer_path(answer), do: ~p"/notifications?answer=#{answer}"
-
-  # The active chip reads as a raised white pill, the rest as quiet muted text
-  # - the segmented-control treatment of the post-type filter tabs.
-  defp filter_tab_class(true),
-    do:
-      "inline-flex min-h-9 items-center whitespace-nowrap rounded-md bg-white px-3 py-1 font-semibold text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100"
-
-  defp filter_tab_class(false),
-    do:
-      "inline-flex min-h-9 items-center whitespace-nowrap rounded-md px-3 py-1 font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-
-  # A chip's badge: the count of what is new under it, nothing at zero.
-  defp unread_badge(counts, filter) do
-    case Map.get(counts, filter) do
-      count when is_integer(count) and count > 0 -> count
-      _ -> nil
-    end
-  end
-
-  defp new_count_label(count) do
-    ngettext("%{formatted} new notification", "%{formatted} new notifications", count,
-      formatted: compact_count(count)
-    )
-  end
-
-  defp day_label(day, today) do
-    cond do
-      day == today ->
-        gettext("Today")
-
-      day == Date.add(today, -1) ->
-        gettext("Yesterday")
-
-      true ->
-        long_date(day)
-    end
-  end
-
-  # The line's clock time: sections are the reader's calendar days, so the
-  # visible time is their own wall clock in their own region (like post
-  # stamps); the <time> keeps an unambiguous ISO-8601 UTC datetime for
-  # machines. Server-rendered final - deliberately no data-localtime rewrite.
+  # The row's clock time in the reader's zone; the <time> keeps the UTC instant
+  # for machines.
   attr(:at, :any, required: true)
 
   defp row_time(assigns) do
@@ -1959,514 +1076,73 @@ defmodule VutuvWeb.NotificationLive.Index do
     <time
       datetime={@datetime}
       title={@title}
-      class="text-xs tabular-nums text-slate-500 dark:text-slate-400"
+      class="shrink-0 pt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400"
     >
       {@clock}
     </time>
     """
   end
 
-  # ── The 30-day summary line ──
+  # ── Words ──
 
-  # "Last 30 days: 163 likes · 68 replies · 47 followers …", zero parts
-  # dropped. Every part is its own complete translatable phrase — the line is a
-  # list of facts, not a sentence assembled from pieces.
-  defp summary_line(summary) do
-    parts =
-      [
-        likes_label(summary.likes),
-        replies_label(summary.replies),
-        count_label(
-          summary.followers,
-          &ngettext("%{formatted} follower", "%{formatted} followers", &1, &2)
-        ),
-        count_label(
-          summary.connections,
-          &ngettext("%{formatted} connection", "%{formatted} connections", &1, &2)
-        ),
-        endorsements_label(summary.endorsements)
-      ]
-      |> Enum.reject(&is_nil/1)
+  defp day_label(day) do
+    today = ViewerClock.today()
 
-    gettext("Last 30 days: %{parts}", parts: Enum.join(parts, " · "))
-  end
-
-  # ── A card line's vocabulary ──
-
-  # The verbs whose kind string is the verb's own name.
-  @named_verbs [:reply, :thread, :mention, :follower, :connection, :endorsement]
-
-  # The two verbs that quote a member's post: a folded line carries its
-  # teaser, an unfolded one the formatted quote. A mention is deliberately not
-  # one of them — the card's head already IS the naming post — and a remote
-  # reply quotes a note rather than a post.
-  @local_reply_verbs [:reply, :thread]
-
-  # The one kind string a card line wears — for its glyph, colour and label
-  # AND for its `data-event-kind`, so what the line looks like and what a test
-  # or a stylesheet keys on can never say two different things. The verb
-  # decides, not the newest item's kind: a merged like line may have a
-  # favourite from another network as its newest member and is still "like".
-  defp line_kind(%{verb: :like}), do: "like"
-  defp line_kind(%{verb: :share}), do: "share"
-  defp line_kind(%{verb: :reaction}), do: "fediverse_reaction"
-  defp line_kind(%{verb: :remote_reply}), do: "fediverse_reply"
-  defp line_kind(%{verb: verb}) when verb in @named_verbs, do: Atom.to_string(verb)
-  defp line_kind(%{kind: kind}), do: kind
-
-  # Whether an unfolded line quotes a post written here: a reply, a thread
-  # answer, or (on the reply inbox, where there is no card head to be it) the
-  # post that named the member.
-  defp quotes_local_post?(%{verb: verb}), do: verb in [:mention | @local_reply_verbs]
-
-  # A like or re-share line names three before folding; the people lines and
-  # the single rows keep the page's default of two.
-  defp named_actors(%{verb: verb}) when verb in [:like, :share, :reaction], do: 3
-  defp named_actors(_line), do: Groups.named_actors()
-
-  # The sentence after the actor names. The card's head already named the post,
-  # so a line says only what was done. German conjugates the verb across the
-  # count where English conjugates it the other way round ("likes this" is the
-  # singular), so those are count-branched msgids rather than one string with a
-  # number in it.
-  defp line_text(%{verb: :like, actor_count: count}),
-    do: ngettext("likes this.", "like this.", count)
-
-  defp line_text(%{verb: :share, actor_count: count}),
-    do: ngettext("shared this.", "shared this.", count)
-
-  defp line_text(%{verb: :reaction, actor_count: count}),
-    do: ngettext("reacted to this.", "reacted to this.", count)
-
-  defp line_text(%{verb: verb}) when verb in [:reply, :remote_reply], do: gettext("replied.")
-  defp line_text(%{verb: :thread}), do: gettext("replied in the thread.")
-  defp line_text(%{verb: :mention}), do: gettext("mentioned you.")
-  defp line_text(line), do: group_text(line)
-
-  # The reply's words on the folded line: the local reply's teaser, or the
-  # remote note's text folded to one line. Nothing for a like, a share or a
-  # reply the reader may not see.
-  defp line_teaser(%{verb: verb, item: item}) when verb in [:remote_reply | @local_reply_verbs],
-    do: item[:teaser]
-
-  defp line_teaser(_line), do: nil
-
-  # Where a line's Reply link leads: the reply itself, so the answer is written
-  # under the words it answers; a remote reply to the conversation anchored at
-  # that note; anything else to what the notification itself opens.
-  defp reply_target(%{verb: verb, item: %{reply_preview: %{post: post}}}, _viewer)
-       when verb in @local_reply_verbs,
-       do: Posts.path(post)
-
-  defp reply_target(%{verb: :remote_reply, item: item}, viewer),
-    do: remote_reply_target(item, viewer)
-
-  defp reply_target(%{item: item}, viewer), do: notification_target(item, viewer)
-
-  # The grouped sentence tail after the actor names, for the people lines and
-  # the single rows. Only the forms that differ from the single-actor one are
-  # spelled here - German conjugates the follower/connection verbs across the
-  # count where English does not, hence the count-branched msgids. Everything
-  # else falls through to VutuvWeb.NotificationLine, which the browser
-  # notification shares, so one event cannot read differently in the two places
-  # (issue #1249).
-  defp group_text(%{kind: "follower", actor_count: count}) when count > 1,
-    do: gettext("are now following you.")
-
-  defp group_text(%{kind: "connection", actor_count: count}) when count > 1,
-    do: gettext("are now connected with you.")
-
-  defp group_text(%{kind: "endorsement", tags: [tag]}),
-    do: notification_text(%{kind: "endorsement", tag: tag})
-
-  defp group_text(%{kind: "endorsement", tags: [_ | _] = tags}),
-    do: gettext("endorsed you for %{tags}.", tags: join_names(tags))
-
-  defp group_text(%{item: item}), do: notification_text(item)
-
-  # ── The card heads ──
-
-  # Whose post a card is about. The reader's own for a like, a reply, a thread
-  # they rooted; somebody else's for a mention or a thread they wrote in — the
-  # thread wording says why a stranger's post is on the reader's page at all.
-  # Nothing when the post itself is out of reach: the head says so in words.
-  defp card_eyebrow(nil, _group, _viewer), do: nil
-
-  defp card_eyebrow(%{post: post}, group, viewer) do
     cond do
-      Posts.self_vote?(post, viewer) ->
-        gettext("Your post")
-
-      Enum.any?(group.events, &(&1.verb == :thread)) ->
-        gettext("Thread by %{name}", name: PostTeaser.author_of(post).name)
-
-      true ->
-        gettext("Post by %{name}", name: PostTeaser.author_of(post).name)
+      day == today -> gettext("Today")
+      day == Date.add(today, -1) -> gettext("Yesterday")
+      true -> long_date(day)
     end
   end
 
-  # What the card's head counts: likes and re-shares by distinct actor, and
-  # every line that carries words — a reply, a thread answer, a mention, one
-  # from another network. Each fragment is its own complete translatable
-  # phrase — the line is a list of facts, not a sentence assembled from pieces.
-  defp card_counts(events) do
-    likes = actor_sum(events, :like)
-    shares = actor_sum(events, :share)
-    replies = Enum.count(events, &Groups.reply_verb?/1)
-
-    [likes_label(likes), shares_label(shares), replies_label(replies)]
-    |> Enum.reject(&is_nil/1)
+  defp fresh_label(count, since) do
+    ngettext(
+      "%{formatted} new since your visit at %{time}",
+      "%{formatted} new since your visit at %{time}",
+      count,
+      formatted: compact_count(count),
+      time: ViewerClock.format(since, :time)
+    )
   end
 
-  defp actor_sum(events, verb) do
-    events
-    |> Enum.filter(&(&1.verb == verb))
-    |> Enum.map(& &1.actor_count)
-    |> Enum.sum()
-  end
+  defp context_label(%{kind: "thread"}), do: gettext("Reply in the thread on")
+  defp context_label(%{kind: "mention"}), do: gettext("Mentions you")
+  defp context_label(_item), do: gettext("Reply to your post")
 
-  # The people card's title: the day's tally, each part its own phrase.
-  defp people_title(%{events: events}) do
+  # "3 likes, 1 repost": each part its own complete phrase.
+  defp reaction_counts(row) do
     [
-      count_label(
-        actor_sum(events, :connection),
-        &ngettext("%{formatted} new connection", "%{formatted} new connections", &1, &2)
-      ),
-      count_label(
-        actor_sum(events, :follower),
-        &ngettext("%{formatted} new follower", "%{formatted} new followers", &1, &2)
-      ),
-      endorsements_label(Enum.count(events, &(&1.verb == :endorsement)))
-    ]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" · ")
-  end
-
-  # `ngettext/3` binds `%{count}` to the raw integer and a `count:` binding does
-  # not override it, so the formatted number rides a placeholder of its own.
-  defp count_label(0, _phrase), do: nil
-  defp count_label(count, phrase), do: phrase.(count, formatted: compact_count(count))
-
-  # One phrase per noun, shared by the card head's counts, the people tally
-  # and the 30-day line, so the same fact is never worded twice.
-  defp likes_label(n),
-    do: count_label(n, &ngettext("%{formatted} like", "%{formatted} likes", &1, &2))
-
-  defp shares_label(n),
-    do: count_label(n, &ngettext("%{formatted} share", "%{formatted} shares", &1, &2))
-
-  defp replies_label(n),
-    do: count_label(n, &ngettext("%{formatted} reply", "%{formatted} replies", &1, &2))
-
-  defp endorsements_label(n),
-    do: count_label(n, &ngettext("%{formatted} endorsement", "%{formatted} endorsements", &1, &2))
-
-  # "Elixir, Phoenix and Rails" - all but the last joined by commas, the last
-  # by the localized joining word.
-  defp join_names([single]), do: single
-
-  defp join_names(names) do
-    {front, [last]} = Enum.split(names, -1)
-    Enum.join(front, ", ") <> " " <> gettext("and") <> " " <> last
-  end
-
-  # Where the quoted remote reply itself goes: the same conversation the line's
-  # sentence opens, plus the anchor of this note (`Fediverse.reply_anchor/1`),
-  # so a post that collected several replies lands on the one being quoted
-  # rather than at the top. The anchor is dropped when the line somehow carries
-  # no note id, which leaves the plain conversation link rather than a dead "#".
-  defp remote_reply_target(n, viewer) do
-    target = notification_target(n, viewer)
-
-    case n[:note_id] do
-      id when is_binary(id) and is_binary(target) -> target <> "#" <> Fediverse.reply_anchor(id)
-      _ -> target
-    end
-  end
-
-  # The same decision for the grouped-actor shape, whose keys are `kind` /
-  # `param` rather than the row's `actor_*`. One function per shape, both
-  # branching on the kind, so neither can be the one that forgets.
-  defp actor_path(%{kind: "organization", param: slug}) when is_binary(slug),
-    do: ~p"/organizations/#{slug}"
-
-  defp actor_path(%{param: param}), do: ~p"/#{param}"
-
-  # How many of a group's entries are not in the shown list.
-  defp cv_entries_more(n), do: (n[:entry_count] || 0) - length(n[:entries] || [])
-
-  # ── Post previews ──
-
-  # Reply and thread notifications carry the reply's post id (`:reply_post_id`);
-  # every post-bound kind carries the post the card is about (`:post_id`, or a
-  # thread's `:root_post_id`); a handle change lists rewritten posts. Look every
-  # referenced post up in one batched, visibility-scoped query and attach what
-  # the folded lines show: the two-line `:teaser` of a reply, a mention or a
-  # remote note, and the permalink a Reply opens (`:subject_path`). The formatted
-  # quote waits for the unfold (`with_reply_preview/3`). A post the viewer may
-  # not see is absent from `posts`, so such an entry passes through unchanged
-  # and its line shows the sentence alone.
-  # Returns `{entries, posts}` — the looked-up posts come back out so the post
-  # cards can be built from the same batch instead of asking for them again.
-  defp with_post_previews(entries, viewer) do
-    posts =
-      entries
-      |> Enum.flat_map(
-        &[&1[:post_id], &1[:reply_post_id], &1[:root_post_id] | List.wrap(&1[:post_ids])]
-      )
-      |> then(&Posts.visible_posts_by_ids(viewer, &1))
-
-    lines = User.notification_post_lines(viewer)
-
-    entries =
-      Enum.map(entries, fn entry ->
-        entry
-        |> put_teaser(posts)
-        |> put_subject_path(posts)
-        |> put_change_previews(posts, lines)
-      end)
-
-    {entries, posts}
-  end
-
-  # The formatted quote a line shows once unfolded (`toggle_line`), rendered
-  # then and not before: one full Markdown pass, for the one reply somebody
-  # opened. A line that already carries its quote keeps it.
-  defp with_reply_preview(%{reply_preview: %{}} = item, _viewer, _lines), do: item
-
-  defp with_reply_preview(item, viewer, lines) do
-    case ReplyStatus.subject(item, :post) do
-      id when is_binary(id) ->
-        put_preview(
-          item,
-          :reply_preview,
-          id,
-          Posts.visible_posts_by_ids(viewer, [id]),
-          lines,
-          :html
+      row.likes > 0 &&
+        ngettext("%{formatted} like", "%{formatted} likes", row.likes,
+          formatted: compact_count(row.likes)
+        ),
+      row.shares > 0 &&
+        ngettext("%{formatted} repost", "%{formatted} reposts", row.shares,
+          formatted: compact_count(row.shares)
         )
-
-      nil ->
-        item
-    end
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(", ")
   end
 
-  # The permalink of the post a reply inbox row would answer, when the member
-  # may see it: the Reply link opens the thread right there.
-  defp put_subject_path(entry, posts) do
-    case Map.get(posts, ReplyStatus.subject(entry, :post) || :none) do
-      %Post{} = post -> Map.put(entry, :subject_path, Posts.path(post))
-      nil -> entry
-    end
+  # A handle change names the newest of the member's own posts it rewrote.
+  defp change_posts(%{post_ids: ids}, posts) when is_list(ids) do
+    ids
+    |> Enum.sort(:desc)
+    |> Enum.take(@change_preview_limit)
+    |> Enum.map(&Map.get(posts, &1))
+    |> Enum.filter(&match?(%Post{}, &1))
   end
 
-  # ── The head of a post card ──
+  defp change_posts(_item, _posts), do: []
 
-  # How many of a post's photos ride its card before the rest become a count.
-  # Two, so the card says "there are pictures, and here are the first of them"
-  # without letting its right edge move with the picture count.
-  @card_images 2
+  # How many rewritten posts are beyond the ones named; a post the member can
+  # no longer see still counts, it was rewritten all the same.
+  defp change_posts_more(%{post_ids: ids}) when is_list(ids),
+    do: max(length(ids) - @change_preview_limit, 0)
 
-  # The card head clamps its teaser to two lines, so it asks `char_budget/1`
-  # for two lines' worth of characters rather than keeping a second constant.
-  @card_teaser_lines 2
+  defp change_posts_more(_item), do: 0
 
-  # The card heads for one page, as `%{post_id => card}`: the post itself, its
-  # two-line teaser, its released photos and — for a link post with no photos
-  # — its ready link screenshot.
-  #
-  # One entry per *post*, not per event — a post that collected a favourite, a
-  # re-share and a reply is one card, and hanging that card off each raw item
-  # instead would copy it as many times as there were reactions. That is not
-  # free even though the copies share a reference in the process: the page
-  # payload crosses `MountHandoff`'s ETS table, and ETS does not preserve
-  # sharing (measured: 30 entries sharing one card cost 15 KB in-process and
-  # 437 KB after an ETS round trip).
-  #
-  # `known` are the cards the page already holds, so a live push only looks up
-  # a post that is not on the page yet.
-  #
-  # The teaser is `PostTeaser`, the app's shared one line, so the card skips a
-  # quote post's `RE: <url>` opener and an image-only line exactly as the feed's
-  # ticker does — which is also what leaves a photo post's head text-less, the
-  # case `post_card_head/1` names in words.
-  defp post_cards(entries, posts, known \\ %{}) do
-    # Only ids the viewer may actually see reach the image query: `posts` is
-    # already visibility-scoped, so a hidden or deleted post costs nothing here.
-    ids =
-      for entry <- entries,
-          id = Groups.post_id_of(entry),
-          is_map_key(posts, id),
-          not is_map_key(known, id),
-          uniq: true,
-          do: id
-
-    images = Posts.released_images_by_ids(ids)
-
-    # Only a post with no photos shows its link screenshot, so only those ask.
-    screenshots =
-      ids
-      |> Enum.filter(&(Map.get(images, &1, []) == []))
-      |> Screenshots.ready_by_post_ids()
-
-    for id <- ids, into: %{} do
-      post = Map.fetch!(posts, id)
-      photos = Map.get(images, id, [])
-
-      {id,
-       %{
-         post: post,
-         text: PostTeaser.plain_line(post, length: char_budget(@card_teaser_lines)),
-         images: Enum.take(photos, @card_images),
-         more_images: max(length(photos) - @card_images, 0),
-         screenshot: if(photos == [], do: Map.get(screenshots, id))
-       }}
-    end
-  end
-
-  # A handle-change entry links the recipient's own posts that were rewritten:
-  # the newest few as excerpt lines, with `handle_change_more/1` counting the
-  # rest. `post_ids` are UUID v7, so a descending sort is newest-first.
-  @change_preview_limit 5
-
-  defp put_change_previews(%{kind: "handle_change", post_ids: post_ids} = entry, posts, lines)
-       when is_list(post_ids) do
-    previews =
-      post_ids
-      |> Enum.sort(:desc)
-      |> Enum.take(@change_preview_limit)
-      |> Enum.map(&Map.get(posts, &1))
-      |> Enum.filter(&match?(%Post{}, &1))
-      |> Enum.map(&change_preview(&1, lines))
-
-    Map.put(entry, :change_posts, previews)
-  end
-
-  defp put_change_previews(entry, _posts, _lines), do: entry
-
-  defp change_preview(post, lines) do
-    case quoted_excerpt(post, lines, :text) do
-      %{} = excerpt -> Map.put(excerpt, :post, post)
-      _ -> %{post: post, text: ""}
-    end
-  end
-
-  # How many affected posts are not shown in the capped preview list.
-  defp handle_change_more(%{post_ids: post_ids} = n) when is_list(post_ids),
-    do: length(post_ids) - length(n[:change_posts] || [])
-
-  defp handle_change_more(_), do: 0
-
-  defp put_preview(entry, key, post_id, posts, lines, form) do
-    with true <- is_binary(post_id),
-         %Post{} = post <- Map.get(posts, post_id),
-         %{} = excerpt <- quoted_excerpt(post, lines, form) do
-      Map.put(entry, key, Map.put(excerpt, :post, post))
-    else
-      _ -> entry
-    end
-  end
-
-  # The folded line's words, from the post `quote_source/1` picks for this
-  # page and the bell's preview alike. A card line folds a reply's teaser (a
-  # like or a mention sits under a card head that already names its post);
-  # the reply inbox also shows a mention's, since there it has no card head.
-  defp put_teaser(%{kind: kind} = entry, posts)
-       when kind in ~w(reply thread mention fediverse_reply) do
-    case teaser_lines(entry, posts) do
-      "" -> entry
-      text -> Map.put(entry, :teaser, text)
-    end
-  end
-
-  defp put_teaser(entry, _posts), do: entry
-
-  # The opening of the words, blank lines dropped, so the row's two clamped
-  # lines are two lines of text rather than a line and a gap.
-  defp teaser_lines(entry, posts) do
-    opts = [length: char_budget(@teaser_lines)]
-
-    case quote_source(entry) do
-      {:post, id} when is_map_key(posts, id) -> PostTeaser.opening_lines(posts[id], opts)
-      {:note, text} -> PostTeaser.opening_lines(%Note{content_text: text}, opts)
-      _nothing -> ""
-    end
-  end
-
-  # The one-line form is the app's shared post teaser, so this page skips a
-  # quote post's `RE: <url>` opener and an image-only first line exactly as the
-  # feed's ticker and the RSS description do; the reader's line budget only
-  # decides how many characters may ride the row. The formatted multi-line
-  # quote is this page's own, and stays here.
-  defp quoted_excerpt(post, lines, :text) do
-    case PostTeaser.plain_line(post, length: char_budget(lines)) do
-      "" -> nil
-      text -> %{text: text}
-    end
-  end
-
-  defp quoted_excerpt(post, lines, :html), do: preview_excerpt(post.body, lines)
-
-  # How many characters one kept line may contribute. A source line wraps to
-  # several rendered ones, so the character budget scales with the reader's
-  # line count and keeps one very long line from shipping a whole essay into
-  # the row.
-  @preview_chars_per_line 100
-
-  # An inline image reference (`![alt](url)`) in the Markdown source. The quote
-  # is text-only, so it is dropped before the line budget is spent - otherwise a
-  # picture nobody sees would eat a line of it, and a post that is nothing but a
-  # picture would quote an empty box.
-  @inline_image ~r/!\[[^\]]*\]\([^)]*\)/
-
-  # The excerpt an unfolded reply line shows: the post's first `lines`
-  # non-empty lines (the reader's `:notification_post_lines` preference), cut
-  # server-side (not only by the CSS clamp) so the rest of a quoted body never
-  # reaches the DOM. Returns nil for a body with no text left to show.
-  defp preview_excerpt(body, lines) do
-    source =
-      @inline_image
-      |> Regex.replace(body, "")
-      |> String.split("\n")
-      |> take_source_lines(lines)
-
-    case String.trim(source) do
-      "" -> nil
-      trimmed -> render_excerpt(trimmed, lines)
-    end
-  end
-
-  # Keeps lines until `budget` non-empty ones are in, carrying the blank lines
-  # between them along: they separate the Markdown blocks, and dropping them
-  # would glue a list onto the paragraph above it.
-  defp take_source_lines(source_lines, budget) do
-    source_lines
-    |> Enum.reduce_while({[], budget}, fn line, {kept, left} ->
-      cond do
-        String.trim(line) == "" -> {:cont, {[line | kept], left}}
-        left > 1 -> {:cont, {[line | kept], left - 1}}
-        true -> {:halt, {[line | kept], 0}}
-      end
-    end)
-    |> then(fn {kept, _left} -> kept |> Enum.reverse() |> Enum.join("\n") end)
-  end
-
-  # The formatted rendering /feed gives a post, block-cut at the character
-  # budget so one essay-long line still ships a small DOM. Images are
-  # deliberately not passed: a quote is text.
-  defp render_excerpt(source, lines) do
-    {html, _truncated?} = Markdown.render_preview(source, [], limit: char_budget(lines))
-    %{html: html}
-  end
-
-  defp char_budget(lines), do: lines * @preview_chars_per_line
-
-  # The reader's line budget as an inline CSS custom property for `.notif-clamp`
-  # — splatted, so a reader on the shipped default (what the stylesheet's own
-  # fallback says) adds no attribute at all and the DOM stays clean.
-  defp clamp_attrs(lines) do
-    if lines == User.notification_post_lines_default(),
-      do: [],
-      else: [style: "--notif-clamp:#{lines}"]
-  end
+  # How many of a CV update's entries are not in the list it carries.
+  defp cv_entries_more(n), do: (n[:entry_count] || 0) - length(n[:entries] || [])
 end

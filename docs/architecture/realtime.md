@@ -372,7 +372,8 @@ then carries links of its own, the quote is a block with the permalink as a
 Inline image references are dropped before the quote is cut: the quote is text,
 so a picture must not eat a line of the budget.
 
-**How long a quote is, is the reader's own setting**: `:notification_post_lines`
+**How long a quote is was the reader's own setting** (the 2026-09 timeline shows
+the feed's cards instead, so nothing reads it now): `:notification_post_lines`
 (`Vutuv.Prefs`, shipped default 5 lines, an installation default an admin can
 change at `/admin/preferences`, a member's own value on `/settings/preferences`).
 It cuts the quote twice over — server-side to that many source lines (blank
@@ -595,102 +596,63 @@ already gone — a push in flight dies with the socket the navigation tears down
 A modified click (a second tab) leaves the panel standing under the pointer, so
 that one is left to the close as before.
 
-### The notifications page (2026-09 cards)
+### The notifications page (2026-09 timeline)
 
-`VutuvWeb.NotificationLive.Index` renders the derived feed as **cards under
-calendar-day sections** (`VutuvWeb.NotificationLive.Groups`, a pure function
-over the item list; the days are the **reader's**, like post stamps). The
-grouping key is the **subject**, not the verb — measured on the real feed
-before the change, 39 events on one day were about 11 posts, and the busiest
-post showed up three times as verb-keyed rows (a like row, a fediverse card, a
-reply row), every reply repeating its "Your post" breadcrumb.
+`VutuvWeb.NotificationLive.Index` renders the derived feed as **one timeline
+with the member's own looks drawn as lines**. It replaced the filter chips,
+the reply inbox and the cards grouped by post, because none of them answered
+the question the page is for: a member who looked at 14:00, had no time to act
+and came back at 18:00 found everything marked read. The read marker
+(`users.notifications_read_at`) remembers only the last look, and every look
+(the page, the bell's preview, an event arriving while the page is open) moves
+it.
 
-* A **post card** (`kind: "post"`) holds everything about one post: likes,
-  replies, mentions, answers deeper in its thread (keyed on the thread's
-  `root_post_id`) and whatever another network sent back. Its head is an
-  eyebrow saying whose post it is ("Your post", "Post by Anna", "Thread by
-  Anna"), the post's two-line teaser (`VutuvWeb.PostTeaser`, linked to the
-  permalink), a count of what came back, and on the right the post's first
-  two released photos or — for a photo-less link post — its ready link
-  screenshot (`Vutuv.Posts.Screenshots.ready_by_post_ids/1`). Under it one
-  line per verb: every reply keeps a line of its own carrying its words (the
-  teaser, two lines, as a button), the likes merge into one line — a member's
-  like and a favourite from another network are the same verb, the globe on a
-  name says where it came from — the re-shares into another. Replies lead,
-  then likes, then shares; a card shows four lines and folds the rest behind
-  "Show N more" (`unfold`). Tapping a reply line (`toggle_line`) unfolds the
-  reply formatted like a feed post (cut to `:notification_post_lines`) plus a
-  Reply link to its permalink; both are socket round trips, so the dead render
-  is exactly what the connected one starts from.
-* A **people card** (`kind: "people"`), one per day: an avatar row, a tally
-  ("2 new connections · 1 new follower · 1 endorsement") and one line per
-  verb — followers merged ("Anna, Ben and 111 more are now following you.",
-  the overflow linking to the member's followers list), connections merged,
-  one endorser's endorsements merged ("endorsed you for Elixir and Phoenix.").
-  A same-day mutual follow suppresses the redundant follower line.
-* The rarer kinds (moderation, CV updates, handle changes, the welcome note,
-  ...) stay one row per event.
-
-Within a day the cards with an **unanswered reply** come first, then the rest
-of what is new since the last visit, then what the reader has seen; the page
-draws a "Seen before" rule at that transition (`with_seen_rule/1`). Because
-grouping is pure, every change — a page, a live push, the DayClock midnight
-rollover, a line unfolding — recomputes the sections wholesale; there is no
-LiveView stream to patch, and a live-pushed like merges into the derived card
-for its post/day. The card heads are built once per **post**, not per event
-(`post_cards/3`): the page payload crosses `MountHandoff`'s ETS table, which
-does not preserve sharing, so one card per raw item would multiply it.
-
-Around the list:
-
-* **Numbered pages** (`?page=`, the shared `<.pager>`), not an endless list:
-  the page rides the URL beside the filter, so a page can be linked to, the
-  back button works, and both are patched over the socket (`path=` makes the
-  pager's links `patch` navigation). `Activity.notifications_page/2`'s `page:`
-  option walks the merged feed by offset (`Vutuv.FeedPage.paginate_offset/3` —
-  every source fetched from the top, so the cost grows with the depth) and
-  `notifications_count/2` gives the pager its total **under the same filter**.
-  A `?page=` past the end falls back to page 1, like every browse page. The
-  endless "Load more" cursor stays the newsfeed's and the API's way of walking
-  the same sources.
-* **Live events only reach page 1.** An older page is a fixed window into the
-  past, so a pushed event that arrives while the reader is on page 3 only
-  bumps the pager's total; page 1 merges it into its group as before and drops
-  its own overflow item so the page stays one page long.
-
-* **Unread highlighting**: events newer than the previous visit's read marker
-  get a tint + coral dot (card and line) and a "N new notifications" header
-  line; the visit itself still advances `users.notifications_read_at` and
-  clears the bell. A line whose post the reader already engaged with is exempt
-  (see the read-state section above) — it is listed, plain.
-* **The reply inbox** is what `/notifications` opens on (`?filter=replies`,
-  the default): every reply, thread answer, mention and reply from another
-  network as a row of its own (`Groups.inbox_sections/2`), newest first under
-  the day headings, never merged under its post. A row names the post it
-  answers, two lines of its words (`PostTeaser.opening_lines/2`, blank lines
-  dropped) and what the member already did about it: a status pill (new,
-  read, answered), their own answer, their like. Answered and liked are read
-  at request time by `Vutuv.Activity.ReplyStatus` (a post of theirs directly
-  under the reply, a `post_likes` / `fediverse_note_likes` row), so nothing is
-  stored for them. A second row of chips (`?answer=open|answered`) narrows
-  the list in SQL through `notifications_page/2`'s `answer:` option, whose
-  `NOT IN` lists drop their NULLs on purpose. A resting mouse pointer shows
-  the whole post with its pictures (the `ReplyPreview` hook pushes `preview`
-  after 350 ms, only where `(hover: hover)`); "Show context" folds a
-  `Posts.thread_window/3` of the conversation open under the row. Both load
-  for one row on demand (`VutuvWeb.NotificationLive.ReplyInbox`). On a phone
-  a tap on the teaser unfolds the words, as on a card line.
-* **Filter chips** (replies / reactions / people / more / all) restrict the
-  feed server-side via `Activity.notifications_page/2`'s `kinds:` option (only
-  the matching source queries run, so pagination stays exact) and live in the
-  URL (`?filter=`), patched without a reload. Each chip carries the count of
-  what is new under it (`Activity.unread_notification_count/2`, per chip one
-  query, and only when the whole-feed count is not zero).
-* **Last 30 days** is one line under the title (`Activity.activity_summary/2`,
-  one round trip of scalar subqueries). **The rail** (right column on md+,
-  below the list on phones), loaded on the connected mount only, keeps
-  **Follow back** — `Social.followers_to_follow_back/2`, recent followers not
-  yet followed back, followed reload-free via the shared `<.user_row live?>`.
+* **Looks are rows.** `Activity.record_notification_visit/2` writes one to
+  `notification_visits` when the page's socket connects (`"page"`) and when
+  the bell's preview closes (`"bell"`). Looks within 15 minutes are one
+  sitting: the row moves forward instead of adding another, so a reload or a
+  second tab draws no second line. Rows older than 180 days are dropped as new
+  ones are written.
+* **"New"** is measured from `Activity.previous_notification_visit/1`, the
+  look before the current sitting, so a reconnect inside the sitting does not
+  swallow what the first look marked new (the read marker is the fallback for
+  a member with no looks yet). A row the member already dealt with (`:seen?`,
+  see the read-state section) is never new.
+* **`VutuvWeb.NotificationLive.Timeline`** (pure) cuts the events into
+  sections, one per reader's day and gap between two looks, and emits day
+  headings, one "N new since your visit at 14:02" line, and one "You were here
+  · 14:02" line per look (adjacent looks with nothing between them share one).
+  Inside a section: every reply, thread answer, mention and reply from another
+  network is a row of its own; likes and re-shares of one post are one row
+  counted per person; followers and connections are one row, a follower and
+  the connection that followed a moment later being one person; everything
+  rarer is one row per event. Every kind in the registry lands in a row
+  (`notification_timeline_test.exs` checks `Activity.kinds/0`).
+* **Words are the feed's own cards.** A reply is `post_card/1` (flat, no reply
+  banner, the preview clamp), a reply from another network
+  `remote_reply_card/1`, headed by a line naming what it answers and followed
+  by the member's own answer (`ReplyStatus`, teased by `PostTeaser`, which
+  skips a quoted opening). The card's Reply opens the composer under it: the
+  `InlineReply` hook catches the link in the capture phase and pushes
+  `compose`, and the `Composer` runs with `host: :inline_reply`, which stays on
+  the page and reports `{:composer_answered, id, post}`. Without JavaScript the
+  link still leads to the reply page.
+* **Time travel.** `?at=<look>` shows the list as it stood at that look:
+  nothing newer, "new" measured from the look before it, an amber banner with
+  the way back. `?day=<date>` opens a day plus the one before it (the present
+  shows today and yesterday). The feed's month calendar
+  (`VutuvWeb.PostLive.FeedCalendar`, `metric="notifications"`, no switch) is
+  shaded by `Activity.notification_counts_by_day/2`; beside it the looks of the
+  shown day are links. Both render twice, above the list on a phone and in the
+  rail on md+.
+* **Windows, not pages.** Every notification source honours the cursor's
+  `since` as well as its `at` (`Vutuv.FeedPage`'s contract), so a two-day
+  window or a month's counts read only that span. A window past 300 events
+  offers the shared "Load more" inside it; "Earlier days" steps back two days.
+* **Only words to me** (`?only=words`) keeps the cards alone.
+* **Live**: the present view rebuilds (debounced a second) when an event
+  arrives and keeps the badge at zero; a day or a look in the past is a fixed
+  window. The DayClock tick turns "Today" into "Yesterday".
 
 Row times are the reader's own wall clock in their own date region (like post
 stamps), server-rendered final with an ISO-8601 UTC `datetime` for machines.

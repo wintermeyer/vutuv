@@ -6799,6 +6799,23 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  `get_note/1` for many ids in one read, as `%{id => note}`: the replies from
+  other networks one page of /notifications draws as cards. Ids that are not
+  UUIDs or name nothing are simply absent.
+  """
+  def get_notes(ids) when is_list(ids) do
+    case ids |> Enum.map(&UUIDv7.cast_or_nil/1) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] ->
+        %{}
+
+      uuids ->
+        from(n in notes_with_account(), where: n.id in ^uuids)
+        |> Repo.all()
+        |> Map.new(&{&1.id, &1})
+    end
+  end
+
+  @doc """
   Whoever may act as the post's author takes a reply off it. Deletes it at once
   and records the takedown in `Vutuv.Fediverse.NoteEvent`.
 

@@ -143,6 +143,18 @@ defmodule VutuvWeb.ShellBellPreviewTest do
     assert Activity.unread_notification_count(user.id) == 0
   end
 
+  test "looking at the panel is a visit /notifications draws as a line", %{conn: conn} do
+    user = insert(:user)
+    follower_event(user, ~N[2024-03-01 12:00:00])
+
+    {:ok, view, _html} = shell(conn, user)
+    render_hook(view, "bell:preview", %{})
+    render_hook(view, "bell:preview_close", %{})
+
+    assert [%{source: "bell"}] =
+             Repo.all(from(v in Vutuv.Activity.NotificationVisit, where: v.user_id == ^user.id))
+  end
+
   test "an event arriving while the panel is open is back in the badge on close", %{conn: conn} do
     user = insert(:user)
     follower_event(user, ~N[2024-03-01 12:00:00])
@@ -174,6 +186,7 @@ defmodule VutuvWeb.ShellBellPreviewTest do
     follower_event(user, ~N[2024-03-01 12:00:00])
 
     assert Activity.unread_notification_count(user.id) == 1
+    refute Repo.exists?(from(v in Vutuv.Activity.NotificationVisit, where: v.user_id == ^user.id))
   end
 
   test "the panel caps its list and says how many it is holding back", %{conn: conn} do

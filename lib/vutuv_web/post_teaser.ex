@@ -30,6 +30,9 @@ defmodule VutuvWeb.PostTeaser do
     * **A line that is nothing but hashtags** — the filing a post opens or
       closes with (`#Solarpunk #klimakrise #klimawandel …`). It says which
       shelf the post belongs on, never what it says.
+    * **A quoted line** (`> …`) — the passage an answer opens with when its
+      author quoted what they answer. Those are the other person's words, so
+      /notifications headed "Your answer:" with the sentence being answered.
 
   A post that is *nothing but* skippable lines keeps the best line it has, and
   they are not equally bad: hashtags are words a reader can read, a quoted URL
@@ -91,7 +94,8 @@ defmodule VutuvWeb.PostTeaser do
     ~r{\ARE:\s*<?https?://\S+>?\z}i,
     ~r/\A(?:-{3,}|\*{3,}|_{3,})\z/,
     ~r/\A(?:```|~~~)/,
-    ~r/\A(?:!\[[^\]]*\]\([^)]*\)\s*)+\z/
+    ~r/\A(?:!\[[^\]]*\]\([^)]*\)\s*)+\z/,
+    ~r/\A>/
   ]
 
   # A line of nothing but hashtags — skipped like the rest, but the one that
