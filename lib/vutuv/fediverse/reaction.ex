@@ -40,6 +40,8 @@ defmodule Vutuv.Fediverse.Reaction do
     field(:handle, :string)
     field(:kind, :string)
     field(:received_at, :utc_datetime)
+    # Same as `Vutuv.Posts.PostLike`'s: arrived without ringing the bell.
+    field(:quiet, :boolean, default: false)
 
     belongs_to(:post, Vutuv.Posts.Post)
   end

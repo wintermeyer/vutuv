@@ -1013,6 +1013,11 @@ defmodule VutuvWeb.Router do
     put("/posts/:id/pin", PostController, :pin)
     delete("/posts/:id/pin", PostController, :unpin)
 
+    # The author mutes notifications about one post of theirs (its ⋯ menu).
+    # Owner-only (checked in the controller), idempotent like the pin.
+    put("/posts/:id/notifications_mute", PostController, :mute_notifications)
+    delete("/posts/:id/notifications_mute", PostController, :unmute_notifications)
+
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
 
@@ -1831,6 +1836,7 @@ defmodule VutuvWeb.Router do
     put("/browser_tab", SettingsController, :update_browser_tab)
     patch("/browser_tab", SettingsController, :update_browser_tab)
     post("/browser_tab/reset", SettingsController, :reset_browser_tab)
+    post("/like_notifications/reset", SettingsController, :reset_like_notifications)
     put("/feed_page_size", SettingsController, :update_feed_page_size)
     patch("/feed_page_size", SettingsController, :update_feed_page_size)
     post("/feed_page_size/reset", SettingsController, :reset_feed_page_size)

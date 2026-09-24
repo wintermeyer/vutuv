@@ -354,6 +354,39 @@ defmodule VutuvWeb.PostController do
     end
   end
 
+  # Mute or unmute the notifications about one's own post (its ⋯ menu), then
+  # land on the post, where the menu now offers the opposite.
+  def mute_notifications(conn, %{"id" => id}),
+    do:
+      set_notifications_muted(
+        conn,
+        id,
+        true,
+        gettext("You will no longer be notified about this post.")
+      )
+
+  def unmute_notifications(conn, %{"id" => id}),
+    do:
+      set_notifications_muted(
+        conn,
+        id,
+        false,
+        gettext("You will be notified about this post again.")
+      )
+
+  defp set_notifications_muted(conn, id, muted?, flash) do
+    current_user = conn.assigns[:current_user]
+
+    with %Post{} = post <- Posts.get_post(id),
+         {:ok, post} <- Posts.mute_notifications(current_user, post, muted?) do
+      conn
+      |> put_flash(:info, flash)
+      |> redirect(to: Posts.path(%{post | user: current_user}))
+    else
+      _ -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
   defp pin_flash(true),
     do:
       gettext(

@@ -67,6 +67,13 @@ defmodule Vutuv.Posts.Post do
     # per rendered card; `Vutuv.Posts.refresh_images_pending/1` owns it and it
     # is never cast from params.
     field(:images_pending?, :boolean, default: false)
+    # Set when the author muted notifications about this post (its ⋯ menu):
+    # likes, replies and reactions still land, they just no longer ring the
+    # bell. Written by `Vutuv.Posts.mute_notifications/2`, never cast.
+    field(:notifications_muted_at, :utc_datetime)
+    # The highest like milestone already announced to the author
+    # (`Vutuv.Activity.LikeThrottle`), so none rings twice. Never cast.
+    field(:like_milestone_announced, :integer, default: 0)
     # Postgres-generated tsvector over body (see the migration); referenced
     # only by search_public/2's fragments, never loaded or written by Ecto.
     field(:search_tsv, :string, load_in_query: false)

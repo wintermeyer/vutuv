@@ -66,8 +66,9 @@ defmodule Vutuv.FediverseReactionsTest do
       assert row.received_at
       # The whole schema: an account address in two notations, and what they
       # did. Still no display name, no avatar, no text about a third party.
+      # `quiet` says only whether it rang the author's bell, nothing about them.
       assert Reaction.__schema__(:fields) ==
-               [:id, :actor_uri, :handle, :kind, :received_at, :post_id]
+               [:id, :actor_uri, :handle, :kind, :received_at, :quiet, :post_id]
     end
 
     test "keeps the handle the inbox already fetched, so the post can name them", %{

@@ -5759,7 +5759,7 @@ defmodule VutuvWeb.UI do
            hint: gettext("Which emails we send, and what the bell tells you"),
            terms:
              gettext(
-               "email mail unsubscribe newsletter bell alert quiet fewer browser desktop popup push benachrichtigung"
+               "email mail unsubscribe newsletter bell alert quiet fewer browser desktop popup push benachrichtigung like likes limit mute"
              )
          ),
          row(:filters, gettext("Muted words & tags"), ~p"/settings/filters",

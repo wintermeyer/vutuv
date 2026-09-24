@@ -4838,6 +4838,18 @@ defmodule VutuvWeb.PostComponents do
                 >
                   {gettext("Unpin from profile")}
                 </:item>
+                <%!-- Spares the author the bell for this one post. The likes
+                already go quiet on their own past the member's cap; this is
+                for the post whose replies keep coming too. --%>
+                <:item
+                  :if={!@organization_author?}
+                  href={~p"/posts/#{@post.id}/notifications_mute"}
+                  method={if(@post.notifications_muted_at, do: "delete", else: "put")}
+                >
+                  {if @post.notifications_muted_at,
+                    do: gettext("Unmute notifications"),
+                    else: gettext("Mute notifications")}
+                </:item>
                 <:item
                   href={~p"/posts/#{@post.id}"}
                   method="delete"

@@ -915,6 +915,16 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  def reset_like_notifications(conn, _params) do
+    reset_prefs(
+      conn,
+      :like_notifications,
+      gettext("Like notifications reset to the site default."),
+      event: "notifications_changed",
+      redirect_to: ~p"/settings/notifications"
+    )
+  end
+
   def reset_browser_tab(conn, _params) do
     reset_prefs(conn, :browser_tab, gettext("Browser tab settings reset to the site defaults."))
   end

@@ -77,6 +77,19 @@ defmodule Vutuv.Prefs do
     # same card. An installation that wants the opposite posture flips this one
     # default at /admin/preferences and every untouched member follows.
     %Pref{key: :like_attribution?, type: :boolean, default: true, group: :privacy},
+    # How many likes of one post may still interrupt its author: the first ten
+    # one by one, then the jumps up to this cap, which closes with a notice
+    # (`Vutuv.Activity.LikeThrottle`). A select rather than a free integer
+    # because every value must be a jump or the final notice would fire between
+    # two of them; "none" keeps the jumps going without an end. Its own group so
+    # the reset link on /settings/notifications clears only this.
+    %Pref{
+      key: :like_notification_cap,
+      type: :select,
+      default: "50",
+      values: ~w(25 50 100 250 500 1000 none),
+      group: :like_notifications
+    },
     # What the feed does with posts outside the member's chosen languages
     # (issue #1461): show the original (shipped default), auto-translate into
     # the UI language, or hide them. The chosen-languages list itself is a
@@ -211,6 +224,9 @@ defmodule Vutuv.Prefs do
   def label(:feed_page_size),
     do: Gettext.gettext(VutuvWeb.Gettext, "Posts loaded at once")
 
+  def label(:like_notification_cap),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Announce likes of one post up to")
+
   def label(:low_bandwidth?), do: Gettext.gettext(VutuvWeb.Gettext, "Low-bandwidth mode")
 
   def label(:browser_tab_teaser?),
@@ -227,6 +243,13 @@ defmodule Vutuv.Prefs do
       Gettext.gettext(
         VutuvWeb.Gettext,
         "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
+      )
+
+  def hint(:like_notification_cap),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "The first 10 likes of a post each get a notification, after that only 25, 50, 100 and so on. At this number you get a last notification, and further likes of that post stay quiet. They still show on the post and on your notifications page."
       )
 
   def hint(:feed_page_size),
@@ -300,6 +323,7 @@ defmodule Vutuv.Prefs do
   def group_label(:feed), do: Gettext.gettext(VutuvWeb.Gettext, "Feed")
   def group_label(:feed_size), do: Gettext.gettext(VutuvWeb.Gettext, "Feed length")
   def group_label(:browser_tab), do: Gettext.gettext(VutuvWeb.Gettext, "Browser tab")
+  def group_label(:like_notifications), do: Gettext.gettext(VutuvWeb.Gettext, "Likes")
   def group_label(:bandwidth), do: Gettext.gettext(VutuvWeb.Gettext, "Bandwidth")
   def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
   def group_label(:region), do: Gettext.gettext(VutuvWeb.Gettext, "Date & time")
@@ -325,6 +349,15 @@ defmodule Vutuv.Prefs do
   # nesting one inside another reads as a typo.
   def value_label(%Pref{key: :date_region}, value),
     do: Vutuv.DateRegions.example(value) <> " · " <> Vutuv.DateRegions.label(value)
+
+  def value_label(%Pref{key: :like_notification_cap}, "none"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "No limit")
+
+  def value_label(%Pref{key: :like_notification_cap}, value),
+    do:
+      Gettext.gettext(VutuvWeb.Gettext, "%{count} likes",
+        count: VutuvWeb.UI.delimited_count(String.to_integer(value))
+      )
 
   def value_label(%Pref{key: :feed_foreign_posts}, "original"),
     do: Gettext.gettext(VutuvWeb.Gettext, "Show the original")
@@ -523,6 +556,17 @@ defmodule Vutuv.Prefs do
   composer's inline-image handler) and the key should be written down once.
   """
   def low_bandwidth?(user), do: get(user, :low_bandwidth?)
+
+  @doc """
+  The member's cap on announced likes per post, as `Vutuv.Activity.LikeThrottle`
+  takes it: an integer, or nil for no cap.
+  """
+  def like_notification_cap(user) do
+    case get(user, :like_notification_cap) do
+      "none" -> nil
+      value -> String.to_integer(value)
+    end
+  end
 
   @doc """
   How many posts one page of this member's feed holds.
