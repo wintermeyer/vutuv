@@ -1,36 +1,36 @@
 <% founder_quote = founder_quote() %>
-<.auth_layout title={founder_quote}>
+<.auth_layout title={founder_quote} compact>
   <:headline>
     <% founder_name = "Stefan Wintermeyer" %>
-    <% founder_role = gettext("Founder of vutuv") %>
     <%!-- Founder hero: the whole quote in one heading at a single size, then a
-          right-aligned signature with the name above the role, set snug. The
-          three claims below come from the :hero slot. --%>
+          one-line signature. On a phone everything in this panel is set
+          smaller and tighter than from `md` up, so the teaser video and the
+          top of the sign-up form both fit on the first screen. --%>
     <div>
-      <h1 class="text-2xl font-bold leading-tight md:text-3xl">
+      <h1 class="text-xl font-bold leading-tight md:text-3xl">
         <.quote_sentences text={founder_quote} />
       </h1>
-      <div class="mt-6 text-right">
-        <%!-- The link comes from `:landing_example_profile_url`, the key whose own
-              comment names this page — hardcoding it sent a third-party
-              installation's start page to a profile on vutuv.de, and left the
-              line standing for an operator who had cleared the key (the 404
-              page already honoured it). An installation that cleared it gets
-              the name as plain text rather than a link into somebody else's
-              site. The *name* stays written here: it is an attribution, not a
-              setting. --%>
-        <p class="font-serif text-2xl leading-none text-white">
-          <a
-            :if={example_profile_url()}
-            href={example_profile_url()}
-            class="text-white underline decoration-brand-200 underline-offset-4 hover:decoration-white"
-          >
-            {founder_name}
-          </a>
-          <span :if={is_nil(example_profile_url())}>{founder_name}</span>
-        </p>
-        <p class="-mt-2 text-sm text-brand-100">{founder_role}</p>
-      </div>
+      <%!-- The link comes from `:landing_example_profile_url`, the key whose own
+            comment names this page — hardcoding it sent a third-party
+            installation's start page to a profile on vutuv.de, and left the
+            line standing for an operator who had cleared the key (the 404
+            page already honoured it). An installation that cleared it gets
+            the name as plain text rather than a link into somebody else's
+            site. The *name* stays written here: it is an attribution, not a
+            setting. --%>
+      <p class="mt-1 text-right text-xs text-brand-100 md:mt-2 md:text-sm">
+        <a
+          :if={example_profile_url()}
+          href={example_profile_url()}
+          class="font-semibold text-white underline decoration-brand-200 underline-offset-4 hover:decoration-white"
+        >
+          {founder_name}
+        </a>
+        <span :if={is_nil(example_profile_url())} class="font-semibold text-white">
+          {founder_name}
+        </span>
+        <span aria-hidden="true">·</span> {gettext("Founder of vutuv")}
+      </p>
     </div>
   </:headline>
   <:hero>
@@ -39,6 +39,9 @@
           they have to retype, and what it will cost them later. The strings
           live in `hero_points/1`. --%>
     <.hero_points />
+    <%!-- The teaser: a silent film of one member's morning on vutuv. It plays
+          only on a click, so the page still loads nothing heavy. --%>
+    <.teaser_video :if={teaser_video?()} class="mt-4 md:mt-6" />
   </:hero>
   <%!-- The sign-up form is three steps now (name and address, the settings, the
         topics), so it holds state between them and is a LiveView

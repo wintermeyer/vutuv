@@ -1,12 +1,12 @@
 defmodule VutuvWeb.LandingConfigurationTest do
   @moduledoc """
   The landing page's per-installation switches: which profile it offers as
-  "try it out", where it says the data lives, and whether it mentions the
-  Fediverse at all.
+  "try it out", where it says the data lives, whether it mentions the
+  Fediverse at all, and whether it shows the teaser video.
 
   Keys flipped here, and who else reads them (the rule below wants this named,
   so a widened blast radius is visible at a glance): `:landing_example_profile_url`
-  and `:data_location` are read only by `VutuvWeb.PageHTML`; `:ads_enabled` by
+  `:data_location` and `:landing_teaser_video` are read only by `VutuvWeb.PageHTML`; `:ads_enabled` by
   `VutuvWeb.AdServing` and the `/system/ads` routes; `:fediverse_enabled` by
   `Vutuv.Fediverse.enabled?/0`, which the tag timeline, the feed source tabs and
   the sign-up form all consult.
@@ -252,6 +252,18 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
       # Installation-wide, so it survives a cleared example profile.
       assert html =~ ~s(href="/llms.txt")
+    end
+
+    # An installation that does not want the vutuv.de teaser on its start page
+    # switches it off, and the hero keeps its three claims without it.
+    test "drops the teaser video where the installation switched it off", %{conn: conn} do
+      put_config(:landing_teaser_video, true)
+      assert conn |> get(~p"/") |> html_response(200) =~ "landing-teaser"
+
+      put_config(:landing_teaser_video, false)
+      html = build_conn() |> get(~p"/") |> html_response(200)
+      refute html =~ "landing-teaser"
+      assert html =~ "data-hero-points"
     end
   end
 end

@@ -1,14 +1,24 @@
 #!/bin/sh
 # Produces the teaser video for one language, start to finish.
 #
-#   scripts/teaser/run.sh de        # or: en
-#   scripts/teaser/run.sh de feed   # re-record only some scenes, then re-render
+#   scripts/teaser/run.sh de                   # or: en; the 16:9 desktop cut
+#   scripts/teaser/run.sh de --portrait        # the 9:16 phone cut
+#   scripts/teaser/run.sh de feed              # re-record only some scenes, then re-render
+#   scripts/teaser/run.sh de --portrait feed
 #
-# Result: _build/teaser/<lang>/vutuv-teaser-<lang>.mp4 and ...-poster.png
+# Result: _build/teaser/<lang>/vutuv-teaser-<lang>.mp4 and ...-poster.png, the
+# phone cut under _build/teaser/<lang>/portrait/ (vutuv-teaser-<lang>-portrait.*).
 # See scripts/teaser/README.md for the storyboard and what each step does.
 set -eu
-LANG_CODE=${1:?usage: run.sh <de|en> [scene ...]}
+LANG_CODE=${1:?usage: run.sh <de|en> [--portrait] [scene ...]}
 shift
+RECORDER=record.mjs
+RENDER_FLAG=""
+if [ "${1:-}" = "--portrait" ]; then
+  RECORDER=record_portrait.mjs
+  RENDER_FLAG=--portrait
+  shift
+fi
 cd "$(dirname "$0")/../.."
 OUT=_build/teaser/$LANG_CODE
 PORT=${TEASER_PORT:-4077}
@@ -40,11 +50,11 @@ node scripts/teaser/login.mjs miriam.kessler@example.com "$OUT/state-miriam.json
 node scripts/teaser/login.mjs anna.berger@example.com "$OUT/state-anna.json"
 
 echo "== record"
-node scripts/teaser/record.mjs "$LANG_CODE" "$@"
+node "scripts/teaser/$RECORDER" "$LANG_CODE" "$@"
 
 kill $SERVER 2>/dev/null || true
 trap - EXIT
 
 echo "== render"
-python3 scripts/teaser/render.py "$LANG_CODE"
+python3 scripts/teaser/render.py "$LANG_CODE" $RENDER_FLAG
 echo "stub hits (fediverse requests that never left this machine): $(grep -c FEDI_STUB "$OUT/server.log" || true)"

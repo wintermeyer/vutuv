@@ -19,7 +19,6 @@ defmodule VutuvWeb.LowBandwidthTest do
   import Phoenix.LiveViewTest
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.User
   alias Vutuv.Posts
   alias Vutuv.Prefs
 
@@ -340,9 +339,5 @@ defmodule VutuvWeb.LowBandwidthTest do
     conn
     |> get_resp_header("set-cookie")
     |> Enum.find(&String.starts_with?(&1, Vutuv.LowBandwidth.cookie_name() <> "="))
-  end
-
-  defp registered(%{"emails" => %{"0" => %{"value" => email}}}) do
-    Repo.one!(from(u in User, join: e in assoc(u, :emails), where: e.value == ^email))
   end
 end

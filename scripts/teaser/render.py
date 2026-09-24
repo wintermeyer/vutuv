@@ -1,11 +1,15 @@
 """Cuts the recorded scenes into the finished teaser.
 
-    python3 scripts/teaser/render.py <lang>
+    python3 scripts/teaser/render.py <lang>              # 1920x1080, the desktop cut
+    python3 scripts/teaser/render.py <lang> --portrait   # 1080x1920, the phone cut
 
 Reads  _build/teaser/<lang>/rec/<scene>/ (record.mjs), screens/ and ids.json,
+       _build/teaser/<lang>/portrait/rec/ and screens/ (record_portrait.mjs),
        _build/teaser/assets/ (assets.py, render_assets.mjs)
 Writes _build/teaser/<lang>/master.mp4 (near-lossless) and, via export,
-       _build/teaser/<lang>/vutuv-teaser-<lang>.mp4 plus a poster PNG.
+       _build/teaser/<lang>/vutuv-teaser-<lang>.mp4 plus a poster PNG;
+       the portrait cut the same under _build/teaser/<lang>/portrait/, named
+       vutuv-teaser-<lang>-portrait.*
 
 The storyboard lives in SHOTS below; README.md explains each shot.
 """
@@ -22,12 +26,15 @@ sys.path.insert(0, os.path.dirname(__file__))
 from fediverse import Fediverse  # noqa: E402
 from savepdf import SavePdf  # noqa: E402
 
-LANG = sys.argv[1] if len(sys.argv) > 1 else "de"
+ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+PORTRAIT = "--portrait" in sys.argv
+LANG = ARGS[0] if ARGS else "de"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(ROOT, "_build", "teaser", LANG)
+OUT = os.path.join(ROOT, "_build", "teaser", LANG, *(["portrait"] if PORTRAIT else []))
+NAME = f"vutuv-teaser-{LANG}" + ("-portrait" if PORTRAIT else "")
 ASSETS = os.path.join(ROOT, "_build", "teaser", "assets")
 CONTENT = json.load(open(os.path.join(os.path.dirname(__file__), f"content.{LANG}.json")))
-W, H, FPS = 1920, 1080, 30
+W, H, FPS = (1080, 1920, 30) if PORTRAIT else (1920, 1080, 30)
 BLUE_A, BLUE_B = (29, 66, 180), (37, 92, 225)
 
 
@@ -135,15 +142,17 @@ LOGO = LOGO.crop(LOGO.getbbox())
 
 def endcard(u):
     f = BG.copy()
-    lw = int(760 * lerp(0.9, 1.0, ease_out(u * 3.4)))
+    lw = int(min(760, W * 0.68) * lerp(0.9, 1.0, ease_out(u * 3.4)))
     lh = int(LOGO.height * lw / LOGO.width)
     lg = LOGO.resize((lw, lh), Image.Resampling.LANCZOS)
     f.paste(lg, ((W - lw) // 2, (H - lh) // 2), lg)
     return f
 
 
-PH_H = 900
+# the opening's phones: three side by side, as large as the frame's width allows
+PH_H = 640 if PORTRAIT else 900
 PH_W = round(PH_H * 390 / 844)
+SPREAD = 350 if PORTRAIT else 520  # how far the outer two sit from the middle one
 
 
 def rounded_mask(w, h, r):
@@ -164,19 +173,23 @@ class PhoneMorph:
     def __init__(self, desk, T):
         self.T = T
         self.shots = {n: Image.open(os.path.join(OUT, "screens", f"{n}.png")).convert("RGB") for n in ("mA", "mB", "mC")}
+        # the outer two only ever show at phone size: resize them once, not per frame
+        self.small = {n: self.shots[n].resize((PH_W, PH_H), Image.Resampling.LANCZOS) for n in ("mA", "mC")}
         self.desk = desk
         self.page_bg = desk.getpixel((40, 600))
 
     def __call__(self, u):
         t = u * self.T
         f = BG.copy()
-        arrive = ease_out(min(1, 0.35 + t / 1.1))  # frame 0 already reads well as a poster
-        leave = ease((t - 3.4) / 0.9)
-        grow = ease((t - 3.7) / 1.6)
-        for name, cx, dy, dx in [("mA", W / 2 - 520, 140, -1), ("mC", W / 2 + 520, 300, 1)]:
+        # Something moves from the first frame on and the phones hold only half
+        # a second: a long still opening read as "nothing is going to happen".
+        arrive = ease_out(min(1, t / 0.7))
+        leave = ease((t - 1.2) / 0.8)
+        grow = ease((t - 1.4) / 1.4)
+        for name, cx, dy, dx in [("mA", W / 2 - SPREAD, 140, -1), ("mC", W / 2 + SPREAD, 300, 1)]:
             if leave >= 1:
                 continue
-            scr = self.shots[name].resize((PH_W, PH_H), Image.Resampling.LANCZOS)
+            scr = self.small[name]
             x = int(cx - PH_W / 2 + dx * leave * 700)
             y = int((H - PH_H) / 2 + dy * (1 - arrive))
             layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -203,11 +216,19 @@ class PhoneMorph:
 
 
 # ---------------------------------------------------------------- the storyboard
-FEED_T0 = 3.6  # the desktop feed has finished building itself here
+# the feed has built itself here; the pointer comes in right after
+FEED_T0 = 1.6 if PORTRAIT else 4.0
+
+
+def screens_json(name):
+    return json.load(open(os.path.join(OUT, "screens", name)))
+
 
 feed = Live("feed", FEED_T0, 0.3)
 feed_last = feed.last()
-fedi = Fediverse(feed_last, ASSETS, duration=5.0)
+# the phone's post card and a narrower world, to fill more of the tall frame
+fedi_geometry = {"card": tuple(screens_json("card.json")), "end_span": 300} if PORTRAIT else {}
+fedi = Fediverse(feed_last, ASSETS, duration=5.0, size=(W, H), **fedi_geometry)
 post = Live("post", 0.3, 0.1, fade_from=lambda: fedi(1.0), fade=0.45)
 chat = Live("chat", 0.3, 0.2)
 job = Live("job", 0.3, 0.1, fade_from=lambda: chat.last(), fade=0.35)
@@ -215,9 +236,11 @@ jobs = Live("jobs", 0.2, 0.1, fade_from=lambda: job.last(), fade=0.35)
 owner = Live("owner", 0.3, 0.1, fade_from=lambda: jobs.last(), fade=0.35)
 cv = Live("cv", 0.2, 0.1, fade_from=lambda: owner.last(), fade=0.4)
 printv = Live("print", 0.2, 0.1, fade_from=lambda: cv.last(), fade=0.35)
-save = SavePdf(os.path.join(OUT, "screens", "cv_sheet.png"), CONTENT["pdf_name"])
+# where the printed sheet sits in the phone's print view (measured when recording)
+sheet_geometry = dict(zip(("sheet_x0", "sheet_w"), screens_json("sheet.json")), file_w=460) if PORTRAIT else {}
+save = SavePdf(os.path.join(OUT, "screens", "cv_sheet.png"), CONTENT["pdf_name"], size=(W, H), **sheet_geometry)
 print_last = printv.last()
-morph = PhoneMorph(frame_at(feed.path, FEED_T0), 5.8)
+morph = PhoneMorph(frame_at(feed.path, FEED_T0), 3.0)
 
 
 def speed(live, factor):
@@ -226,7 +249,7 @@ def speed(live, factor):
 
 
 SHOTS = [
-    (morph.T, morph),                             # three phones, the middle one becomes the desktop
+    (morph.T, morph),                             # three phones, the middle one becomes the feed
     speed(feed, 1.25),                            # like + repost the news, write, bold, tag, post
     (fedi.T, fedi),                               # the post flies out to the fediverse
     speed(post, 1.07),                            # likes, Anna's reply, a DM arrives
@@ -260,8 +283,8 @@ if __name__ == "__main__":
     print(f"master: {total / FPS:.1f} s -> {master}")
 
     # delivery: H.264 1080p (plays everywhere) and the poster (the three phones)
-    final = os.path.join(OUT, f"vutuv-teaser-{LANG}.mp4")
+    final = os.path.join(OUT, f"{NAME}.mp4")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", master, "-an", "-c:v", "libx264", "-preset", "veryslow", "-tune", "animation",
                     "-crf", "24", "-pix_fmt", "yuv420p", "-movflags", "+faststart", final], check=True)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "2.5", "-i", master, "-frames:v", "1", os.path.join(OUT, f"vutuv-teaser-{LANG}-poster.png")], check=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "0.9", "-i", master, "-frames:v", "1", os.path.join(OUT, f"{NAME}-poster.png")], check=True)
     print(f"final: {final}")

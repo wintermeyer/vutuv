@@ -6,6 +6,8 @@ W, H = 1920, 1080
 BLUE_A, BLUE_B = (29, 66, 180), (37, 92, 225)
 PAGE_BG = (240, 243, 249)
 SHEET_X0 = 390  # where the sheet sits in the print-view frame (1920 wide)
+SHEET_W = 1140  # and how wide it is there
+
 
 
 def lerp(a, b, t):
@@ -31,7 +33,7 @@ def back_out(t, s=1.9):
     return t * t * ((s + 1) * t + s) + 1
 
 
-def gradient():
+def gradient(W=W, H=H):
     g = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(g)
     for y in range(H):
@@ -47,8 +49,10 @@ def font(size, bold=False):
 
 
 class SavePdf:
-    def __init__(self, sheet_path, name, duration=4.8):
+    def __init__(self, sheet_path, name, duration=4.8, sheet_x0=SHEET_X0, sheet_w=SHEET_W, file_w=360, size=(W, H)):
+        self.W, self.H = size
         self.T = duration
+        self.x0, self.sw, self.file_w = sheet_x0, sheet_w, file_w
         self.sheet = Image.open(sheet_path).convert("RGB")
         # an A4 page: crop the sheet to 1:1.414
         sw = self.sheet.width
@@ -57,7 +61,7 @@ class SavePdf:
             p = Image.new("RGB", (sw, int(sw * 1.414)), "white")
             p.paste(self.page, (0, 0))
             self.page = p
-        self.bg = gradient()
+        self.bg = gradient(self.W, self.H)
         self.name = name
         self.f_name = font(30, bold=True)
         self.f_badge = font(34, bold=True)
@@ -119,19 +123,19 @@ class SavePdf:
         bg_k = ease((t - 0.1) / 0.9)
         # the lifted sheet replaces the one in the print view, so the view underneath is left empty
         under = first_frame.convert("RGB").copy()
-        ImageDraw.Draw(under).rectangle((SHEET_X0, 0, SHEET_X0 + 1140, H), fill=PAGE_BG)
+        ImageDraw.Draw(under).rectangle((self.x0, 0, self.x0 + self.sw, self.H), fill=PAGE_BG)
         f = Image.blend(under, self.bg, bg_k) if bg_k < 1 else self.bg.copy()
 
         lift = ease((t - 0.1) / 1.1)
         # the sheet starts at its print-view size (1140 wide, top at y=0) and becomes a 360-wide file
-        w_start, w_file = 1140, 360
+        w_start, w_file = self.sw, self.file_w
         # 2.3 - 3.2: the file shrinks into the folder
         drop = ease((t - 2.4) / 0.9)
         w = int(lerp(lerp(w_start, w_file, lift), 120, drop))
         h = int(w * 1.414)
-        cx = lerp(lerp(SHEET_X0 + w_start / 2, W / 2, lift), W / 2, drop)
-        top_file = (H - int(w_file * 1.414)) / 2 - 40
-        folder_y = H - 330
+        cx = lerp(lerp(self.x0 + w_start / 2, self.W / 2, lift), self.W / 2, drop)
+        top_file = (self.H - int(w_file * 1.414)) / 2 - 40
+        folder_y = self.H - 330
         cy_top = lerp(lerp(0, top_file, lift), folder_y + 20, drop)
 
         # folder rises in from below at 1.9
@@ -141,10 +145,10 @@ class SavePdf:
             bounce = math.sin(clamp((t - 3.25) / 0.45) * math.pi) * 18
         # once saved, the folder settles in the middle of the frame
         settle = ease((t - 3.9) / 0.6)
-        folder_y_now = lerp(folder_y, (H - self.folder.height) / 2, settle)
+        folder_y_now = lerp(folder_y, (self.H - self.folder.height) / 2, settle)
         if fold_in > 0:
-            fx = int(W / 2 - self.folder.width / 2)
-            fy = int(lerp(H + 20, folder_y_now, fold_in) + bounce)
+            fx = int(self.W / 2 - self.folder.width / 2)
+            fy = int(lerp(self.H + 20, folder_y_now, fold_in) + bounce)
             f.paste(self.folder, (fx, fy), self.folder)
 
         if drop < 0.98:
@@ -160,11 +164,11 @@ class SavePdf:
         # file name under the file while it is large
         name_k = ease((t - 1.4) / 0.4) * (1 - ease((t - 2.3) / 0.3))
         if name_k > 0.01:
-            layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            layer = Image.new("RGBA", (self.W, self.H), (0, 0, 0, 0))
             d = ImageDraw.Draw(layer)
             tw = d.textlength(self.name, font=self.f_name)
             y = top_file + int(w_file * 1.414) + 26
-            d.text(((W - tw) / 2, y), self.name, font=self.f_name, fill=(255, 255, 255, int(255 * name_k)))
+            d.text(((self.W - tw) / 2, y), self.name, font=self.f_name, fill=(255, 255, 255, int(255 * name_k)))
             f.paste(layer, (0, 0), layer)
 
         # saved: a green check on the folder
@@ -172,7 +176,7 @@ class SavePdf:
         if t > 3.4:
             r = int(46 * ok)
             if r > 3:
-                fx = W / 2 + self.folder.width / 2 - 30
+                fx = self.W / 2 + self.folder.width / 2 - 30
                 fy = folder_y_now + 30 + bounce
                 d = ImageDraw.Draw(f)
                 d.ellipse((fx - r, fy - r, fx + r, fy + r), fill=(22, 163, 74))

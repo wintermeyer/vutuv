@@ -12,6 +12,7 @@ BLUE_A, BLUE_B = (29, 66, 180), (37, 92, 225)
 ORIGIN = (7.6, 50.36)  # Koblenz
 CARD = (128, 190, 1216, 500)  # the new post in the feed frame (1920x1080)
 
+
 DESTS = [  # lon, lat, badge; sorted nearest first below so they appear while the camera pulls out
     (-3.7, 40.4, "lemmy"),        # Madrid
     (24.9, 60.2, "mastodon"),     # Helsinki
@@ -110,7 +111,7 @@ def land_dots(assets, spacing=1.15):
     return dots
 
 
-def gradient():
+def gradient(W=W, H=H):
     g = Image.new("RGB", (W, H))
     dr = ImageDraw.Draw(g)
     for yy in range(H):
@@ -126,11 +127,14 @@ def glow_sprite(r, color=(255, 255, 255), strength=200):
 
 
 class Fediverse:
-    def __init__(self, feed_frame, assets, duration=5.0):
+    def __init__(self, feed_frame, assets, duration=5.0, card=CARD, end_span=312, size=(W, H)):
+        self.W, self.H = size
         self.T = duration
         self.feed = feed_frame.convert("RGB")
-        self.card = self.feed.crop(CARD)
-        self.bg = gradient()
+        self.card_box = card
+        self.end_span = end_span  # degrees of longitude across the frame once zoomed out
+        self.card = self.feed.crop(card)
+        self.bg = gradient(self.W, self.H)
         self.dots = land_dots(assets)
         self.badges = {n: Image.open(f"{assets}/badges/{n}.png").convert("RGBA") for n in {d[2] for d in DESTS}}
         self.glow = glow_sprite(26)
@@ -141,15 +145,15 @@ class Fediverse:
     # camera: center (lon, lat) and horizontal span in degrees; zoom is log-interpolated
     def camera(self, t):
         z = ease((t - 0.35) / 2.1)
-        span = math.exp(lerp(math.log(60), math.log(312), z))
+        span = math.exp(lerp(math.log(60), math.log(self.end_span), z))
         span *= lerp(1.0, 0.96, ease((t - 3.2) / 1.8))
         clon = lerp(ORIGIN[0], 16.0, z)
         clat = lerp(ORIGIN[1], 12.0, z)
-        return clon, clat, W / span
+        return clon, clat, self.W / span
 
     def to_screen(self, lon, lat, cam):
         clon, clat, ppd = cam
-        return (W / 2 + (lon - clon) * ppd, H / 2 - (lat - clat) * ppd)
+        return (self.W / 2 + (lon - clon) * ppd, self.H / 2 - (lat - clat) * ppd)
 
     def arc_point(self, p0, p1, u):
         mx, my = (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2
@@ -165,7 +169,7 @@ class Fediverse:
         cam = self.camera(t)
         frame = self.bg.copy()
 
-        ov = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
+        ov = Image.new("RGBA", (self.W * SS, self.H * SS), (0, 0, 0, 0))
         d = ImageDraw.Draw(ov)
         map_alpha = ease_out((t - 0.1) / 0.8)
         # dots
@@ -174,7 +178,7 @@ class Fediverse:
         a = int(62 * map_alpha)
         for lon, lat in self.dots:
             x, y = self.to_screen(lon, lat, cam)
-            if -30 < x < W + 30 and -30 < y < H + 30:
+            if -30 < x < self.W + 30 and -30 < y < self.H + 30:
                 d.ellipse((x * SS - r, y * SS - r, x * SS + r, y * SS + r), fill=(255, 255, 255, a))
         # arcs
         o = self.to_screen(*ORIGIN, cam)
@@ -195,7 +199,7 @@ class Fediverse:
                 d.ellipse((hx * SS - rr, hy * SS - rr, hx * SS + rr, hy * SS + rr), fill=(255, 255, 255, 255))
             else:
                 arrivals.append((i, p1, k - 1.0, name))
-        ov = ov.resize((W, H), Image.Resampling.LANCZOS)
+        ov = ov.resize((self.W, self.H), Image.Resampling.LANCZOS)
         frame.paste(ov, (0, 0), ov)
 
         # feed frame fading out, card shrinking into Koblenz
@@ -204,7 +208,7 @@ class Fediverse:
             if ff > 0:
                 frame = Image.blend(frame, self.feed, ff)
             k = ease(t / 0.95)
-            cx0, cy0 = (CARD[0] + CARD[2]) / 2, (CARD[1] + CARD[3]) / 2
+            cx0, cy0 = (self.card_box[0] + self.card_box[2]) / 2, (self.card_box[1] + self.card_box[3]) / 2
             cx, cy = lerp(cx0, o[0], k), lerp(cy0, o[1], k)
             s = lerp(1.0, 0.02, k)
             cw, ch = max(2, int(self.card.width * s)), max(2, int(self.card.height * s))
@@ -227,7 +231,7 @@ class Fediverse:
         for i, p1, since, name in arrivals:
             if since < 0.6:
                 rr = lerp(10, 60, ease_out(since / 0.6))
-                ring = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                ring = Image.new("RGBA", (self.W, self.H), (0, 0, 0, 0))
                 ImageDraw.Draw(ring).ellipse((p1[0] - rr, p1[1] - rr, p1[0] + rr, p1[1] + rr), outline=(255, 255, 255, int(200 * (1 - since / 0.6))), width=3)
                 frame.paste(ring, (0, 0), ring)
             sc = back_out(since / 0.45)

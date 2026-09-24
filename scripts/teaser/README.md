@@ -1,38 +1,59 @@
 # The vutuv teaser
 
-A 110-second film, silent and without captions, recorded from a local dev
+A 108-second film, silent and without captions, recorded from a local dev
 server. It follows Miriam Kessler, a fictional Elixir developer from Koblenz,
 from her morning feed to a job offer and a CV saved as PDF. The same pipeline
-makes the German and the English cut.
+makes it in German and English, and in two formats: 16:9 for the desktop and
+9:16 for the phone, the phone one recorded on a real phone layout.
 
 ```sh
-scripts/teaser/run.sh de    # -> _build/teaser/de/vutuv-teaser-de.mp4 (+ -poster.png)
-scripts/teaser/run.sh en    # -> _build/teaser/en/vutuv-teaser-en.mp4 (+ -poster.png)
+scripts/teaser/all.sh                 # everything below, then web.sh (about an hour)
+scripts/teaser/run.sh de              # -> _build/teaser/de/vutuv-teaser-de.mp4 (+ -poster.png)
+scripts/teaser/run.sh de --portrait   # -> _build/teaser/de/portrait/vutuv-teaser-de-portrait.mp4
+scripts/teaser/run.sh en              # the same in English
+scripts/teaser/run.sh en --portrait
+scripts/teaser/web.sh                 # the start page's copies, see below
 ```
 
 One run takes about 15 minutes: roughly 3 recording and 10 rendering.
+
+The start page plays smaller copies, each AV1 with an H.264 fallback: the
+desktop 960×540 (the full 1920×1080 behind an HD toggle), a phone the portrait
+cut at 720×1280, full screen. Both show the same poster, the desktop one.
+`scripts/teaser/web.sh` makes them in `priv/static/images/teaser/`.
 
 ## Storyboard
 
 | # | Time | Shot | What happens | Recorder scene |
 |---|------|------|--------------|----------------|
-| 0 | 0:00 | Phones | Three light phone screens slide in: Miriam's profile, her feed, her CV. The outer two leave, the middle one grows into the desktop feed. Frame 0 doubles as the poster. | `phones` |
-| 1 | 0:06 | Feed | The feed builds itself. Miriam likes and reposts the top news item, opens the composer, types two lines, selects the second line with the mouse, clicks **B**, adds three tags, clicks "Post". The composer folds away and her post lands on top. | `feed` |
-| 2 | 0:25 | Fediverse | The post shrinks into a dot over Koblenz; arcs fly to 15 servers worldwide, each pops a network badge. | drawn (`fediverse.py`) |
-| 3 | 0:30 | Resonance | Her post page: three likes pop in, Anna's reply arrives, the bell counts up, then the envelope gets a badge and the pointer clicks it. | `post` |
-| 4 | 0:39 | DM | "Anna is typing…", then Anna's message: a link to the job, "have a look at the job board", "send me your CV as a PDF by email. **But without a photo!**". Miriam answers and clicks the link. | `chat` |
-| 5 | 0:55 | Posting | The job posting builds itself and scrolls through its long description to the tags; back up, click "Jobs". | `job` |
-| 6 | 1:04 | Job board | Search "Elixir", city "Koblenz", radius 50 km: the list narrows to the Koblenz area. Then "Profile". | `jobs` |
-| 7 | 1:18 | Her profile | Her own profile builds itself in full: header, contact, profiles, GitHub card, social posts, tags, CV, education, languages, links. Then "Open CV". | `owner` |
-| 8 | 1:32 | CV | Untick "Photo" (it greys out), click "Print / Save as PDF". | `cv` |
-| 9 | 1:39 | Print view | The printed CV, without photo, builds itself line by line. | `print` |
-| 10 | 1:43 | Saved | The sheet lifts off, becomes a PDF file (`pdf_name`), drops into a download folder, a green check. | drawn (`savepdf.py`), uses `sheet` |
-| 11 | 1:48 | Logo | The white vutuv logo on blue. | drawn |
+| 0 | 0:00 | Phones | Three light phone screens slide in: Miriam's profile, her feed, her CV. Something moves from the first frame; after half a second the outer two leave and the middle one grows into the desktop feed. The poster is the frame at 0.9 s. | `phones` |
+| 1 | 0:03 | Feed | The feed builds itself. Miriam likes and reposts the top news item, opens the composer, types two lines, selects the second line with the mouse, clicks **B**, adds three tags, clicks "Post". The composer folds away and her post lands on top. | `feed` |
+| 2 | 0:22 | Fediverse | The post shrinks into a dot over Koblenz; arcs fly to 15 servers worldwide, each pops a network badge. | drawn (`fediverse.py`) |
+| 3 | 0:27 | Resonance | Her post page: three likes pop in, Anna's reply arrives, the bell counts up, then the envelope gets a badge and the pointer clicks it. | `post` |
+| 4 | 0:36 | DM | "Anna is typing…", then Anna's message: a link to the job, "have a look at the job board", "send me your CV as a PDF by email. **But without a photo!**". Miriam answers and clicks the link. | `chat` |
+| 5 | 0:52 | Posting | The job posting builds itself and scrolls through its long description to the tags; back up, click "Jobs". | `job` |
+| 6 | 1:01 | Job board | Search "Elixir", city "Koblenz", radius 50 km: the list narrows to the Koblenz area. Then "Profile". | `jobs` |
+| 7 | 1:15 | Her profile | Her own profile builds itself in full: header, contact, profiles, GitHub card, social posts, tags, CV, education, languages, links. Then "Open CV". | `owner` |
+| 8 | 1:29 | CV | Untick "Photo" (it greys out), click "Print / Save as PDF". | `cv` |
+| 9 | 1:36 | Print view | The printed CV, without photo, builds itself line by line. | `print` |
+| 10 | 1:40 | Saved | The sheet lifts off, becomes a PDF file (`pdf_name`), drops into a download folder, a green check. | drawn (`savepdf.py`), uses `sheet` |
+| 11 | 1:45 | Logo | The white vutuv logo on blue. | drawn |
 
 The cut order and each shot's speed live in `SHOTS` at the end of
 `render.py`. A shot plays a stretch of its recording faster than real time
 (`speed(feed, 1.25)` = 25 % faster); change the factor to lengthen or shorten
 it.
+
+### The phone cut
+
+Same story, same texts, same order. `record_portrait.mjs` plays it on a
+390×693 phone screen (recorded at 1080×1920) with a fingertip instead of a
+pointer, and takes the phone's own way where the navigation differs: writing
+starts from the tab bar's "Write" button, the envelope and the bell light up
+in the tab bar, "Jobs" is in the footer, "Profile" sits in the avatar's menu,
+and the one-column profile scrolls from the header down to the CV card.
+`render.py --portrait` cuts it with the same shots; the phones, the map and
+the save animation are drawn for the tall frame.
 
 ## Changing something
 
@@ -40,8 +61,8 @@ it.
 |---|---|---|
 | Any text: post, reply, DM, CV, jobs, links, social posts, fake websites, PDF name | `content.<lang>.json` | `run.sh <lang>` |
 | Which news items head the feed | `news` in `content.<lang>.json` (text snippets of posts in the DB copy, plus the accounts Miriam follows) | `run.sh <lang>` |
-| Speed or order of shots | `SHOTS` in `render.py` | `python3 scripts/teaser/render.py <lang>` (no re-recording) |
-| One scene's choreography | its block in `record.mjs` | `run.sh <lang> <scene>` (seeds again, records only that scene, renders) |
+| Speed or order of shots | `SHOTS` in `render.py` | `python3 scripts/teaser/render.py <lang> [--portrait]` (no re-recording) |
+| One scene's choreography | its block in `record.mjs` (phone: `record_portrait.mjs`) | `run.sh <lang> [--portrait] <scene>` (seeds again, records only that scene, renders) |
 | Miriam's photos | the two Unsplash URLs in `assets.py`; delete `_build/teaser/assets/raw_*.jpg` | `run.sh <lang>` |
 | The fediverse map or the save animation | `fediverse.py`, `savepdf.py` | `render.py <lang>` |
 
@@ -75,7 +96,10 @@ unseeded database starts from the wrong state.
 6. **`record.mjs <lang> [scene …]`** drives Chrome (Playwright) scene by
    scene and records each with the Chrome DevTools screencast. Pages "build
    themselves" because the recorder hides their parts and fades them in with
-   CSS; the pointer is a drawn cursor moved by real mouse events. Clicks that
+   CSS; the pointer is a drawn cursor moved by real mouse events. Chrome is
+   launched with `--force-device-scale-factor`: without it, headless Chrome
+   hands the screencast over in CSS pixels (1280×720, or 390 wide on the
+   phone), and the film comes out soft. Clicks that
    would navigate away are shown but not performed; the edit cuts instead.
 7. **`render.py <lang>`** turns each recording into a 30 fps clip, cuts them
    with cross-fades, draws the phone morph, the fediverse map, the save-as-PDF

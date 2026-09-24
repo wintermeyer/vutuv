@@ -7,6 +7,7 @@ defmodule VutuvWeb.PageHTML do
   alias Vutuv.Fediverse
   alias Vutuv.SourceRepo
   alias VutuvWeb.Feeds
+  alias VutuvWeb.VideoComponents
 
   embed_templates("../templates/page/*")
 
@@ -83,8 +84,13 @@ defmodule VutuvWeb.PageHTML do
     assigns = assign(assigns, :points, hero_point_list())
 
     ~H"""
-    <ul data-hero-points class="mt-8 space-y-2.5">
-      <li :for={claim <- @points} class="flex gap-2.5 text-sm leading-snug">
+    <%!-- On a phone the three run on as one wrapped line, so the panel stays
+          short enough for the sign-up form to show below it. --%>
+    <ul
+      data-hero-points
+      class="mt-3 flex flex-wrap gap-x-4 gap-y-1 md:mt-8 md:block md:space-y-2.5"
+    >
+      <li :for={claim <- @points} class="flex gap-1.5 text-xs leading-snug md:gap-2.5 md:text-sm">
         <span aria-hidden="true" class="shrink-0 font-bold text-brand-200">✓</span>
         <span class="font-semibold text-white">{claim}</span>
       </li>
@@ -382,5 +388,132 @@ defmodule VutuvWeb.PageHTML do
       {render_slot(@inner_block)}
     </li>
     """
+  end
+
+  @doc """
+  Whether the start page shows the teaser video (`:landing_teaser_video`,
+  on by default). An installation that does not want vutuv.de's film on its
+  own start page switches it off, and the hero keeps its three claims.
+  """
+  def teaser_video?, do: Application.get_env(:vutuv, :landing_teaser_video, true)
+
+  @doc """
+  The teaser video, German for German readers and English for everybody else.
+
+  The hero is too narrow to watch a film in, so it shows the poster as a play
+  button, and the video sits in a dialog that button opens, as large as the
+  screen allows. The dialog starts it on opening and stops it on closing.
+
+  Two sources in order of preference: AV1 first, H.264 for every browser that
+  cannot play it (a browser takes the first `<source>` it supports, and Safari
+  claims AV1 only where the hardware decodes it). Both are 960×540, half the
+  master; the quality choice under the film swaps both for the full 1920×1080
+  and carries on where the film was. A phone gets the portrait cut instead
+  (9:16, 720×1280, recorded on a phone screen), which it plays full screen.
+  Nothing but the poster loads before a click, since the page promises "Fast."
+  and is the most requested one in the app. The files come from
+  `scripts/teaser/web.sh`.
+  """
+  attr(:class, :string, default: nil)
+
+  # Below `md`: where the 9:16 cut plays, and plays full screen.
+  @phone "(max-width: 767px)"
+
+  def teaser_video(assigns) do
+    lang = if Gettext.get_locale(VutuvWeb.Gettext) == "de", do: "de", else: "en"
+
+    assigns =
+      assigns
+      |> assign(:base, "/images/teaser/vutuv-teaser-#{lang}")
+      |> assign(:phone, @phone)
+
+    ~H"""
+    <button
+      type="button"
+      data-modal-open="landing-teaser-dialog"
+      aria-label={gettext("Play the video")}
+      class={[
+        "group relative block aspect-video w-full overflow-hidden rounded-xl bg-slate-900 shadow-lg ring-1 ring-black/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
+        @class
+      ]}
+    >
+      <img src={@base <> ".avif"} alt="" class="h-full w-full object-cover" />
+      <span
+        aria-hidden="true"
+        class="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-900/75 text-white transition group-hover:scale-110 group-hover:bg-brand-600"
+      >
+        <VideoComponents.play_icon class="ml-1 h-7 w-7" />
+      </span>
+    </button>
+    <.modal_dialog id="landing-teaser-dialog" size="video" aria-label={gettext("Play the video")}>
+      <video
+        id="landing-teaser"
+        data-play-on-open
+        data-fullscreen-below={@phone}
+        poster={@base <> ".avif"}
+        preload="none"
+        muted
+        playsinline
+        controls
+        class="block aspect-video max-h-[calc(90vh-3.5rem)] w-full object-contain"
+      >
+        <%!-- A phone below `md` plays the 9:16 cut, full screen; a browser
+              takes the first source whose `media` matches and whose type it
+              can play, so a rotated phone gets the 16:9 one. --%>
+        <source
+          src={@base <> "-portrait.av1.mp4"}
+          type="video/mp4; codecs=av01.0.05M.08"
+          media={@phone}
+        />
+        <source src={@base <> "-portrait.mp4"} type="video/mp4" media={@phone} />
+        <source
+          src={@base <> ".av1.mp4"}
+          type="video/mp4; codecs=av01.0.04M.08"
+          data-hd-src={@base <> ".hd.av1.mp4"}
+          data-hd-type="video/mp4; codecs=av01.0.08M.08"
+        />
+        <source src={@base <> ".mp4"} type="video/mp4" data-hd-src={@base <> ".hd.mp4"} />
+      </video>
+      <%!-- The controls sit in a bar under the film, never on it: a lone "HD"
+            on the picture read as a badge, not a switch. So both choices are
+            named and the chosen one is pressed. A phone plays full screen and
+            never shows this bar. --%>
+      <div data-video-bar class="flex items-center justify-between gap-3 bg-slate-950 px-3 py-2 text-sm text-slate-300">
+        <div role="group" aria-labelledby="landing-teaser-quality" class="flex items-center gap-2">
+          <span id="landing-teaser-quality">{pgettext("video quality", "Quality")}</span>
+          <div class="flex rounded-full bg-white/10 p-0.5">
+            <button
+              :for={{quality, label, title} <- quality_choices()}
+              type="button"
+              data-video-quality="landing-teaser"
+              data-quality={quality}
+              aria-pressed={to_string(quality == "sd")}
+              title={title}
+              class="h-9 rounded-full px-3 font-semibold text-slate-300 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white aria-pressed:bg-white aria-pressed:text-slate-900"
+            >
+              {label}
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          data-modal-close
+          aria-label={gettext("Close")}
+          class="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+    </.modal_dialog>
+    """
+  end
+
+  defp quality_choices do
+    [
+      {"sd", pgettext("video quality", "Standard"), nil},
+      {"hd", "HD", gettext("Full resolution")}
+    ]
   end
 end
