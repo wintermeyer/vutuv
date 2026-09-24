@@ -437,6 +437,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.headline}",
       doc.description,
+      doc.videos != [] && "## #{gettext("The film")}",
+      doc.videos != [] && doc.film_note,
+      doc.videos != [] && Enum.map_join(doc.videos, "\n", &"- #{&1.label}: #{&1.url}"),
       "## #{gettext("Where we are")}",
       Enum.map_join(InvestorsDoc.figure_rows(doc.figures), "\n", fn {label, value} ->
         "- #{label}: #{value}"

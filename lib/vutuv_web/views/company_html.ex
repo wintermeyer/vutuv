@@ -15,6 +15,7 @@ defmodule VutuvWeb.CompanyHTML do
   alias Vutuv.PeopleHistory.Snapshot
   alias Vutuv.ViewerClock
   alias VutuvWeb.AgentDocs.InvestorsDoc
+  alias VutuvWeb.Teaser
 
   embed_templates("../templates/company/*")
 

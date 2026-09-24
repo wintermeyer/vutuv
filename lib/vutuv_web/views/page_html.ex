@@ -7,6 +7,7 @@ defmodule VutuvWeb.PageHTML do
   alias Vutuv.Fediverse
   alias Vutuv.SourceRepo
   alias VutuvWeb.Feeds
+  alias VutuvWeb.Teaser
   alias VutuvWeb.VideoComponents
 
   embed_templates("../templates/page/*")
@@ -391,41 +392,21 @@ defmodule VutuvWeb.PageHTML do
   end
 
   @doc """
-  Whether the start page shows the teaser video (`:landing_teaser_video`,
-  on by default). An installation that does not want vutuv.de's film on its
-  own start page switches it off, and the hero keeps its three claims.
-  """
-  def teaser_video?, do: Application.get_env(:vutuv, :landing_teaser_video, true)
-
-  @doc """
   The teaser video, German for German readers and English for everybody else.
 
   The hero is too narrow to watch a film in, so it shows the poster as a play
   button, and the video sits in a dialog that button opens, as large as the
   screen allows. The dialog starts it on opening and stops it on closing.
 
-  Two sources in order of preference: AV1 first, H.264 for every browser that
-  cannot play it (a browser takes the first `<source>` it supports, and Safari
-  claims AV1 only where the hardware decodes it). Both are 960×540, half the
-  master; the quality choice under the film swaps both for the full 1920×1080
-  and carries on where the film was. A phone gets the portrait cut instead
-  (9:16, 720×1280, recorded on a phone screen), which it plays full screen.
-  Nothing but the poster loads before a click, since the page promises "Fast."
-  and is the most requested one in the app. The files come from
-  `scripts/teaser/web.sh`.
+  The sources are `VutuvWeb.Teaser`'s: the 16:9 cut at 960×540, which the
+  quality choice under the film swaps for 1920×1080 and back, and the 9:16 cut
+  a phone plays full screen. Nothing but the poster loads before a click,
+  since the page promises "Fast." and is the most requested one in the app.
   """
   attr(:class, :string, default: nil)
 
-  # Below `md`: where the 9:16 cut plays, and plays full screen.
-  @phone "(max-width: 767px)"
-
   def teaser_video(assigns) do
-    lang = if Gettext.get_locale(VutuvWeb.Gettext) == "de", do: "de", else: "en"
-
-    assigns =
-      assigns
-      |> assign(:base, "/images/teaser/vutuv-teaser-#{lang}")
-      |> assign(:phone, @phone)
+    assigns = assign(assigns, lang: Teaser.lang(), phone: Teaser.phone())
 
     ~H"""
     <button
@@ -437,7 +418,7 @@ defmodule VutuvWeb.PageHTML do
         @class
       ]}
     >
-      <img src={@base <> ".avif"} alt="" class="h-full w-full object-cover" />
+      <img src={Teaser.poster(@lang)} alt="" class="h-full w-full object-cover" />
       <span
         aria-hidden="true"
         class="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-900/75 text-white transition group-hover:scale-110 group-hover:bg-brand-600"
@@ -450,29 +431,14 @@ defmodule VutuvWeb.PageHTML do
         id="landing-teaser"
         data-play-on-open
         data-fullscreen-below={@phone}
-        poster={@base <> ".avif"}
+        poster={Teaser.poster(@lang)}
         preload="none"
         muted
         playsinline
         controls
         class="block aspect-video max-h-[calc(90vh-3.5rem)] w-full object-contain"
       >
-        <%!-- A phone below `md` plays the 9:16 cut, full screen; a browser
-              takes the first source whose `media` matches and whose type it
-              can play, so a rotated phone gets the 16:9 one. --%>
-        <source
-          src={@base <> "-portrait.av1.mp4"}
-          type="video/mp4; codecs=av01.0.05M.08"
-          media={@phone}
-        />
-        <source src={@base <> "-portrait.mp4"} type="video/mp4" media={@phone} />
-        <source
-          src={@base <> ".av1.mp4"}
-          type="video/mp4; codecs=av01.0.04M.08"
-          data-hd-src={@base <> ".hd.av1.mp4"}
-          data-hd-type="video/mp4; codecs=av01.0.08M.08"
-        />
-        <source src={@base <> ".mp4"} type="video/mp4" data-hd-src={@base <> ".hd.mp4"} />
+        <Teaser.sources lang={@lang} />
       </video>
       <%!-- The controls sit in a bar under the film, never on it: a lone "HD"
             on the picture read as a badge, not a switch. So both choices are

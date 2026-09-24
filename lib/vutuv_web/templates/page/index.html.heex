@@ -41,7 +41,7 @@
     <.hero_points />
     <%!-- The teaser: a silent film of one member's morning on vutuv. It plays
           only on a click, so the page still loads nothing heavy. --%>
-    <.teaser_video :if={teaser_video?()} class="mt-4 md:mt-6" />
+    <.teaser_video :if={Teaser.enabled?()} class="mt-4 md:mt-6" />
   </:hero>
   <%!-- The sign-up form is three steps now (name and address, the settings, the
         topics), so it holds state between them and is a LiveView

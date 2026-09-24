@@ -274,9 +274,9 @@ A few rarely-changed switches are compile-time settings in
 saw 90 days after the last sighting; on by default),
 `:signup_trap_report` (the weekly report of scripted sign-ups, see
 [Scripted sign-ups](#scripted-sign-ups); on by default),
-`:landing_teaser_video` (the silent teaser film in the start page's hero,
-German for German readers and English for everybody else; loads only on a
-click; on by default), `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
+`:landing_teaser_video` (the silent teaser film in the start page's hero and
+on `/system/investors`, which also hands out its addresses; German for German
+readers and English for everybody else; loads only on a click; on by default), `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_friendica_posts`, `:fetch_bluesky_posts`, `:fetch_bookwyrm_posts` (the profile's "Book reviews"
 card for a listed BookWyrm account), `:fetch_code_stats` (the profile "Code" card's

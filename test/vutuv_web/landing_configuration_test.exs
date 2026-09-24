@@ -6,7 +6,8 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
   Keys flipped here, and who else reads them (the rule below wants this named,
   so a widened blast radius is visible at a glance): `:landing_example_profile_url`
-  `:data_location` and `:landing_teaser_video` are read only by `VutuvWeb.PageHTML`; `:ads_enabled` by
+  and `:data_location` are read only by `VutuvWeb.PageHTML`; `:landing_teaser_video` by
+  `VutuvWeb.Teaser` (the start page and the investor page); `:ads_enabled` by
   `VutuvWeb.AdServing` and the `/system/ads` routes; `:fediverse_enabled` by
   `Vutuv.Fediverse.enabled?/0`, which the tag timeline, the feed source tabs and
   the sign-up form all consult.
@@ -264,6 +265,17 @@ defmodule VutuvWeb.LandingConfigurationTest do
       html = build_conn() |> get(~p"/") |> html_response(200)
       refute html =~ "landing-teaser"
       assert html =~ "data-hero-points"
+    end
+
+    # The investor page shows and hands out the same films, so the same switch
+    # takes them off there too, from the page and from its agent formats.
+    test "drops the teaser from the investor page where it is switched off", %{conn: conn} do
+      put_config(:landing_teaser_video, false)
+
+      refute conn |> get(~p"/system/investors") |> html_response(200) =~ "investors-teaser"
+
+      refute build_conn() |> get(~p"/system/investors" <> ".md") |> response(200) =~
+               "vutuv-teaser-"
     end
   end
 end

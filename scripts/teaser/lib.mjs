@@ -81,16 +81,26 @@ export const launch = (chromium, screen) =>
 
 export async function newContext(browser, lang, state, extra = {}) {
   const c = loadContent(lang);
-  return browser.newContext({
+  const ctx = await browser.newContext({
     ...(state ? { storageState: state } : {}),
     locale: lang === "de" ? "de-DE" : "en-GB",
     extraHTTPHeaders: { "Accept-Language": c.accept_language },
     ...DESKTOP,
     ...extra,
   });
+  ctx.teaserLang = lang;
+  return ctx;
 }
 
 export async function dress(page) {
+  // A member's own pages speak the member's language, not the browser's. A take
+  // recorded after a seed for the other language (seed.exs sets the locale)
+  // would film the wrong one without a word, so it stops here instead.
+  const want = page.context().teaserLang;
+  const have = await page.evaluate(() => document.documentElement.lang);
+  if (want && !have.startsWith(want)) {
+    throw new Error(`${page.url()} is in "${have}", this take is "${want}": run seed.exs ${want} first (run.sh does)`);
+  }
   await page.addStyleTag({ content: CSS });
   await page.evaluate(HELPERS);
 }

@@ -12,6 +12,39 @@
     </p>
   </.card>
 
+  <%!-- The film right after the claim: two minutes that show what the page
+        then argues. Played in the card (a phone gets the 9:16 cut), and handed
+        out below it as addresses to copy, since an investor passes a film on
+        rather than a page. The sentence and the addresses come from
+        InvestorsDoc, like every other one here. --%>
+  <.card :if={Teaser.enabled?()} id="investors-teaser">
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">{gettext("The film")}</h2>
+    <p class="mt-3 max-w-2xl text-slate-700 dark:text-slate-300">{InvestorsDoc.film_note()}</p>
+    <video
+      preload="none"
+      controls
+      playsinline
+      poster={Teaser.poster(Teaser.lang())}
+      class="mt-4 block aspect-[9/16] w-full rounded-xl bg-slate-900 object-contain md:aspect-video"
+    >
+      <Teaser.sources lang={Teaser.lang()} />
+    </video>
+    <h3 class="mt-6 font-semibold text-slate-900 dark:text-white">{gettext("To pass on")}</h3>
+    <ul class="mt-2 grid gap-3 md:grid-cols-2">
+      <li :for={video <- InvestorsDoc.videos()}>
+        <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">{video.label}</p>
+        <.copy_field
+          id={"teaser-url-#{video.language}-#{String.replace(video.format, ":", "-")}"}
+          copy_text={video.url}
+          wrap="anywhere"
+          class="mt-1"
+        >
+          {video.url}
+        </.copy_field>
+      </li>
+    </ul>
+  </.card>
+
   <%!-- The figures come before the argument: they are the one thing on this
         page nobody has to take our word for, and a reader who does not believe
         the numbers will not read the reasoning either. --%>
