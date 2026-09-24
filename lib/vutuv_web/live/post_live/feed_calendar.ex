@@ -36,7 +36,7 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [month_name: 1, weekday_initials: 0]
+  import VutuvWeb.UI, only: [delimited_count: 1, month_name: 1, weekday_initials: 0]
 
   alias VutuvWeb.Live.FeedTimeTravel
 
@@ -59,6 +59,16 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
   attr(:month, :any, required: true, doc: "the shown month, a Date at its first day")
   attr(:day, :any, default: nil, doc: "the selected day, a Date, or nil")
   attr(:metric, :string, default: "feed")
+
+  attr(:switch?, :boolean,
+    default: true,
+    doc: """
+    Whether the Feed / My posts switch shows. /notifications borrows this
+    calendar with one reading of its own (`metric="notifications"`), so it has
+    nothing to switch between.
+    """
+  )
+
   attr(:counts, :map, default: %{})
 
   attr(:counts_pending?, :boolean,
@@ -236,7 +246,7 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
         </button>
       </div>
 
-      <div :if={@open?} class="mt-3 flex gap-1 rounded-full bg-slate-100 p-1 dark:bg-slate-800">
+      <div :if={@open? and @switch?} class="mt-3 flex gap-1 rounded-full bg-slate-100 p-1 dark:bg-slate-800">
         <button
           :for={m <- metrics()}
           type="button"
@@ -411,6 +421,17 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
     case metric do
       "own" ->
         ngettext("%{count} post on %{day}", "%{count} posts on %{day}", count, day: day)
+
+      # A separate placeholder for the number: `ngettext/3` binds `%{count}` to
+      # the raw integer, and a busy month's day can pass a thousand.
+      "notifications" ->
+        ngettext(
+          "%{formatted} notification on %{day}",
+          "%{formatted} notifications on %{day}",
+          count,
+          formatted: delimited_count(count),
+          day: day
+        )
 
       _feed ->
         ngettext("%{count} entry on %{day}", "%{count} entries on %{day}", count, day: day)

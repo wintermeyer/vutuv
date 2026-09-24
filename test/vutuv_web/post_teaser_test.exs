@@ -106,6 +106,22 @@ defmodule VutuvWeb.PostTeaserTest do
       assert PostTeaser.line(%Post{body: "![](a.jpg) ![](b.jpg)\n\nDer Rest"}) == "Der Rest"
     end
 
+    test "skips the passage a reply quotes and shows what its author wrote" do
+      # "Quote this passage" opens an answer with the words it answers, so the
+      # first line was the other person's: /notifications showed "Your answer:"
+      # followed by the sentence being answered.
+      post = %Post{
+        body: "> Logo einbinden wollte ich gerade machen.\n\nKrass wie schnell das geht."
+      }
+
+      assert PostTeaser.line(post) == "Krass wie schnell das geht."
+      assert PostTeaser.plain_line(post) == "Krass wie schnell das geht."
+    end
+
+    test "keeps the quote when it is all the post has" do
+      assert PostTeaser.plain_line(%Post{body: "> Nur ein Zitat"}) == "Nur ein Zitat"
+    end
+
     test "skips a line that is nothing but hashtags" do
       post = %Post{body: "#Solarpunk #klimakrise #noafd\n\nDas Dach ist fertig."}
 

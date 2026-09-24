@@ -35,11 +35,6 @@ defmodule VutuvWeb.LineClampCssTest do
       label: ~s(the "Who to follow" post teaser),
       class: "teaser-clamp",
       source: Path.expand("../../lib/vutuv_web/views/user_html.ex", __DIR__)
-    },
-    %{
-      label: "the /notifications post quote",
-      class: "notif-clamp",
-      source: Path.expand("../../lib/vutuv_web/live/notification_live/index.ex", __DIR__)
     }
   ]
 
@@ -190,7 +185,7 @@ defmodule VutuvWeb.LineClampCssTest do
              "on a tile or a notification row whose background changes with hover, " <>
              "unread state and dark mode"
 
-    for surface <- [".teaser-tile", "[data-notification-row]"] do
+    for surface <- [".teaser-tile"] do
       assert Enum.any?(rules(), fn {sel, decls} ->
                Enum.any?(selectors(sel), &String.starts_with?(&1, surface)) and
                  decls =~ "#{bg_var}:"

@@ -478,6 +478,52 @@ defmodule Vutuv.ActivityTest do
   end
 
   describe "notifications_page/2" do
+    test "a cursor's since keeps every source inside the window, not just the merge" do
+      # /notifications reads one day (and the calendar one month) through a
+      # cursor with a lower edge. A source that honoured only the upper one
+      # would hand back history below the window, so the limit is generous on
+      # purpose: nothing but the window may come back even when it could.
+      me = insert(:user)
+      old = ~N[2024-01-01 12:00:00]
+      inside = ~N[2024-03-01 12:00:00]
+
+      old_follow = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(old_follow, old)
+      new_follow = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(new_follow, inside)
+
+      old_post = insert(:post, user: me)
+      :ok = Vutuv.Posts.like_post(insert(:user), old_post)
+      backdate_like(old_post, old)
+      new_post = insert(:post, user: me)
+      :ok = Vutuv.Posts.like_post(insert(:user), new_post)
+      backdate_like(new_post, inside)
+
+      tag = insert(:tag)
+      user_tag = insert(:user_tag, user: me, tag: tag)
+      old_endorsement = insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
+      backdate_endorsement(old_endorsement, old)
+
+      cursor = %{at: ~N[2024-06-01 00:00:00], ids: [], since: ~N[2024-02-01 00:00:00]}
+      page = Activity.notifications_page(me.id, limit: 50, cursor: cursor)
+
+      assert Enum.sort(Enum.map(page.entries, & &1.kind)) == ["follower", "like"]
+      assert Enum.all?(page.entries, &(NaiveDateTime.compare(&1.at, inside) == :eq))
+    end
+
+    test "notification_counts_by_day/2 counts one month's events per day" do
+      me = insert(:user)
+      march = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(march, ~N[2024-03-05 12:00:00])
+      also_march = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(also_march, ~N[2024-03-05 13:00:00])
+      april = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(april, ~N[2024-04-02 12:00:00])
+
+      assert {%{~D[2024-03-05] => 2}, false} =
+               Activity.notification_counts_by_day(me.id, ~D[2024-03-20])
+    end
+
     test "reports more? and hands out a cursor only when older events exist" do
       me = insert(:user)
 

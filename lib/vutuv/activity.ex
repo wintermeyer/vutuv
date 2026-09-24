@@ -45,6 +45,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Activity.LikeThrottle
   alias Vutuv.Activity.NotificationDismissal
   alias Vutuv.Activity.NotificationPostRead
+  alias Vutuv.Activity.NotificationVisit
   alias Vutuv.Engagement
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.Reaction
@@ -70,6 +71,15 @@ defmodule Vutuv.Activity do
 
   @pubsub Vutuv.PubSub
   @default_limit 50
+
+  # Looks this close together are one sitting and one line on /notifications:
+  # a reload, a second tab or the bell a minute after the page moves the line
+  # forward instead of drawing another one right under it.
+  @visit_sitting_minutes 15
+
+  # How far back the lines reach. The calendar can open any day; older days
+  # simply show no lines, so the table stays a handful of rows per member.
+  @visit_retention_days 180
 
   # Struct callers get the one topic grammar (`Vutuv.Identity.topic/1`); the
   # bare-id clause spells the member topic again because most callers hold only
@@ -103,6 +113,93 @@ defmodule Vutuv.Activity do
     Repo.delete_all(from(d in NotificationDismissal, where: d.user_id == ^user_id))
 
     broadcast(user_id, :notifications_read)
+  end
+
+  @doc """
+  Records that the member looked at their notifications just now: `"page"`
+  when /notifications opened, `"bell"` when the bell's preview closed. Each
+  look is a line in the page's timeline, which is what lets a member who
+  glanced at 14:00 and came back at 18:00 see which is which; the read marker
+  above only remembers the last look.
+
+  A look within #{@visit_sitting_minutes} minutes of the previous one moves
+  that one forward instead of adding a row, and a sitting that included the
+  page stays a page visit. Rows older than #{@visit_retention_days} days are
+  dropped on the way.
+  """
+  def record_notification_visit(nil, _source), do: :ok
+
+  def record_notification_visit(user_id, source) when source in ["page", "bell"] do
+    now = DateTime.utc_now(:second)
+    visit = latest_visit(user_id)
+
+    if visit && DateTime.diff(now, visit.at, :minute) < @visit_sitting_minutes do
+      # A sitting that included the page stays a page visit.
+      source = if visit.source == "page", do: "page", else: source
+
+      Repo.update_all(from(v in NotificationVisit, where: v.id == ^visit.id),
+        set: [at: now, source: source]
+      )
+    else
+      insert_visit(user_id, source, now)
+    end
+
+    :ok
+  end
+
+  defp insert_visit(user_id, source, now) do
+    Repo.insert!(%NotificationVisit{user_id: user_id, source: source, at: now})
+    cutoff = DateTime.add(now, -@visit_retention_days, :day)
+    Repo.delete_all(from(v in NotificationVisit, where: v.user_id == ^user_id and v.at < ^cutoff))
+  end
+
+  defp latest_visit(user_id), do: user_id |> visits_newest_first() |> limit(1) |> Repo.one()
+
+  defp visits_newest_first(user_id),
+    do: from(v in NotificationVisit, where: v.user_id == ^user_id, order_by: [desc: v.at])
+
+  @doc """
+  The member's look before the current sitting (UTC naive, the feed's own
+  clock), or nil: what "new since your last visit" on /notifications measures
+  from. A look within the last #{@visit_sitting_minutes} minutes is the sitting
+  the member is in (a reload, a reconnect, the bell a moment ago), so the one
+  before it answers; otherwise the latest look does.
+  """
+  def previous_notification_visit(nil), do: nil
+
+  def previous_notification_visit(user_id) do
+    sitting_start = DateTime.add(DateTime.utc_now(:second), -@visit_sitting_minutes, :minute)
+
+    user_id
+    |> visits_newest_first()
+    |> limit(2)
+    |> select([v], v.at)
+    |> Repo.all()
+    |> case do
+      [latest | rest] ->
+        at = if DateTime.compare(latest, sitting_start) == :gt, do: List.first(rest), else: latest
+        at && DateTime.to_naive(at)
+
+      [] ->
+        nil
+    end
+  end
+
+  @doc """
+  The member's looks between two UTC naive instants, oldest first, as
+  `%{at: NaiveDateTime, source: "page" | "bell"}`.
+  """
+  def notification_visits(user_id, from, to) do
+    from = DateTime.from_naive!(from, "Etc/UTC")
+    to = DateTime.from_naive!(to, "Etc/UTC")
+
+    from(v in NotificationVisit,
+      where: v.user_id == ^user_id and v.at >= ^from and v.at <= ^to,
+      order_by: [asc: v.at],
+      select: %{at: v.at, source: v.source}
+    )
+    |> Repo.all()
+    |> Enum.map(&%{&1 | at: DateTime.to_naive(&1.at)})
   end
 
   @doc """
@@ -1168,6 +1265,31 @@ defmodule Vutuv.Activity do
       else: Vutuv.FeedPage.paginate(sources, limit, Keyword.get(opts, :cursor))
   end
 
+  # How many events one month's heatmap on /notifications reads before it says
+  # "at least": a busy member's busiest month was about 1,200 (2026-09).
+  @calendar_limit 3000
+
+  @doc """
+  How many notifications fell on each of the reader's days of `month` (any
+  date in it), for the calendar on /notifications: `{%{date => count},
+  capped?}`. Read through the same merged feed the page shows, windowed to the
+  month on every source, so a shade never promises a day the list does not
+  have. Days are the reader's (`Vutuv.ViewerClock`).
+  """
+  def notification_counts_by_day(user_id, %Date{} = month) do
+    {from, _} = Vutuv.ViewerClock.day_window(Date.beginning_of_month(month))
+    {_, to} = Vutuv.ViewerClock.day_window(Date.end_of_month(month))
+    to = Enum.min([to, NaiveDateTime.utc_now(:second)], NaiveDateTime)
+
+    %{entries: entries, more?: more?} =
+      notifications_page(user_id,
+        limit: @calendar_limit,
+        cursor: %{at: to, ids: [], since: from}
+      )
+
+    {Enum.frequencies_by(entries, &Vutuv.ViewerClock.date(&1.at)), more?}
+  end
+
   @doc """
   The notification kinds and the member preference each one answers to, as
   `%{kind => field | nil}`. Public so `Vutuv.Activity.Digest` and its test can
@@ -1679,6 +1801,16 @@ defmodule Vutuv.Activity do
           ),
         else: mutual
 
+    mutual =
+      if cursor[:since],
+        do:
+          where(
+            mutual,
+            [out, back],
+            fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at) >= ^cursor.since
+          ),
+        else: mutual
+
     # Same two-step shape as `follower_items/3`: the users join is kept out of
     # the ordered/limited half so it runs over `limit` rows, not every mutual
     # follow (measured 6.0 ms -> 0.8 ms).
@@ -1915,8 +2047,14 @@ defmodule Vutuv.Activity do
   # implicit cast.
   defp note_at_or_before(query, nil), do: query
 
-  defp note_at_or_before(query, %{at: at}),
-    do: where(query, [note: n], n.received_at <= ^to_utc(at))
+  defp note_at_or_before(query, %{at: at} = cursor) do
+    query = where(query, [note: n], n.received_at <= ^to_utc(at))
+
+    case cursor[:since] do
+      nil -> query
+      since -> where(query, [note: n], n.received_at >= ^to_utc(since))
+    end
+  end
 
   defp note_since(query, nil), do: query
   defp note_since(query, read_at), do: where(query, [note: n], n.received_at > ^to_utc(read_at))
@@ -2186,16 +2324,22 @@ defmodule Vutuv.Activity do
   # ordering uses, or a page boundary and a badge land in the wrong place.
   defp at_or_before_case_event(query, nil), do: query
 
-  defp at_or_before_case_event(query, %{at: at}),
-    do: where(query, [c], case_event_at(c) <= ^at)
+  defp at_or_before_case_event(query, %{at: at} = cursor) do
+    query = where(query, [c], case_event_at(c) <= ^at)
+
+    case cursor[:since] do
+      nil -> query
+      since -> where(query, [c], case_event_at(c) >= ^since)
+    end
+  end
 
   defp since_case_event(query, nil), do: query
   defp since_case_event(query, read_at), do: where(query, [c], case_event_at(c) > ^read_at)
 
   defp at_or_before_notified(query, nil), do: query
 
-  defp at_or_before_notified(query, %{at: at}),
-    do: where(query, [r], r.outcome_notified_at <= ^at)
+  defp at_or_before_notified(query, %{at: _at} = cursor),
+    do: window(query, :outcome_notified_at, cursor)
 
   # The reporter-protection entries: one when a report severed the
   # relationship to the reported member, a second when a rejected case
@@ -2285,7 +2429,7 @@ defmodule Vutuv.Activity do
   end
 
   defp restored_at_or_before(query, nil), do: query
-  defp restored_at_or_before(query, %{at: at}), do: where(query, [s], s.restored_at <= ^at)
+  defp restored_at_or_before(query, %{at: _at} = cursor), do: window(query, :restored_at, cursor)
 
   # "Your username is @handle" — the one welcome note a member gets when their
   # very first login PIN is accepted. vutuv generates the handle from their
@@ -2351,8 +2495,7 @@ defmodule Vutuv.Activity do
 
   defp at_or_before_finished(query, nil), do: query
 
-  defp at_or_before_finished(query, %{at: at}),
-    do: where(query, [c], c.finished_at <= ^at)
+  defp at_or_before_finished(query, %{at: _at} = cursor), do: window(query, :finished_at, cursor)
 
   defp username_items(user_id, limit, cursor) do
     from(u in User,
@@ -2371,11 +2514,25 @@ defmodule Vutuv.Activity do
   # its own cursor clause (at_or_before/2 filters on inserted_at).
   defp at_or_before_welcome(query, nil), do: query
 
-  defp at_or_before_welcome(query, %{at: at}),
-    do: where(query, [u], u.welcome_notified_at <= ^at)
+  defp at_or_before_welcome(query, %{at: _at} = cursor),
+    do: window(query, :welcome_notified_at, cursor)
 
   defp at_or_before(query, nil), do: query
-  defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
+  defp at_or_before(query, %{at: _at} = cursor), do: window(query, :inserted_at, cursor)
+
+  # A cursor's two edges on one column of the query's first binding: `at` is
+  # the upper one, `since` (a day or a month on /notifications) the lower one.
+  # A source that honoured only `at` would not crash on a window, it would
+  # silently read all of history under it, which is `Vutuv.FeedPage`'s
+  # contract for every source.
+  defp window(query, column, %{at: at} = cursor) do
+    query = where(query, [r], field(r, ^column) <= ^at)
+
+    case cursor[:since] do
+      nil -> query
+      since -> where(query, [r], field(r, ^column) >= ^since)
+    end
+  end
 
   defp actor_item(id, kind, at, actor) do
     Map.merge(actor_fields(actor), %{id: id, kind: kind, at: at})
@@ -2432,7 +2589,7 @@ defmodule Vutuv.Activity do
   #
   # `actor_url` also gives the grouping a stable identity: without it two
   # different strangers who share a display name would fold into one row
-  # (`VutuvWeb.NotificationLive.Groups.actor_key/1`).
+  # (`VutuvWeb.NotificationLive.Timeline`).
   defp remote_actor_fields(%Note{} = note) do
     %{
       actor_id: nil,

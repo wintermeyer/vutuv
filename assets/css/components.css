@@ -1649,18 +1649,15 @@ div.footnotes li:target {
   }
 }
 
-/* ---------- Excerpt clamps: one mechanism, two budgets ----------
-   Two places quote a post as a few lines of formatted Markdown and cut the
-   rest: the post a /notifications row quotes (`.notif-clamp`, cut to the
-   reader's `:notification_post_lines` preference, fed in as `--notif-clamp`
-   inline with the shipped default as the fallback here) and the post teasers
-   under a suggested profile in the "Who to follow" rail (`.teaser-clamp`, a
-   fixed three lines — a rail teases rather than quotes, so there is no
-   preference to feed in). Only the budget differs, so everything else is one
-   shared set of rules: they broke separately once and were fixed separately
-   twice, which is exactly the cost of keeping them apart.
+/* ---------- Excerpt clamp ----------
+   The post teasers under a suggested profile in the "Who to follow" rail
+   (`.teaser-clamp`) quote a post as three lines of formatted Markdown and cut
+   the rest. /notifications quoted posts the same way (`.notif-clamp`) until its
+   2026-09 rebuild showed the feed's cards instead; a second excerpt clamp
+   belongs in these same rules with a budget of its own, because the two broke
+   separately once and were fixed separately twice.
 
-   Both cut by HEIGHT rather than with `-webkit-line-clamp`, because a rendered
+   It cuts by HEIGHT rather than with `-webkit-line-clamp`, because a rendered
    post body is block content (paragraphs, lists, blockquotes) and a
    `-webkit-box` clamps block children unreliably. That makes the cut pure
    arithmetic — box height must be a whole number of line boxes — and the three
@@ -1676,7 +1673,6 @@ div.footnotes li:target {
    out as 72px in Safari against Chrome's intended 60px: three whole lines fit,
    and the extra 12px let a strip of the fourth peek in, sliced through the
    middle of its letters (reported 2026-07-30). */
-.notif-clamp,
 .teaser-clamp {
   --clamp-line: 1.25rem;
   display: flow-root;
@@ -1684,9 +1680,6 @@ div.footnotes li:target {
   line-height: var(--clamp-line);
   overflow: hidden;
   position: relative;
-}
-.notif-clamp {
-  max-height: calc(var(--notif-clamp, 5) * var(--clamp-line));
 }
 .teaser-clamp {
   max-height: calc(3 * var(--clamp-line));
@@ -1708,8 +1701,7 @@ div.footnotes li:target {
    size — it is a few lines of quoted text, not a document.
 
    The selectors name `.markdown` too, because `.markdown p` is class+element
-   and would otherwise outrank a bare `.notif-clamp *`. */
-.notif-clamp.markdown *,
+   and would otherwise outrank a bare `.teaser-clamp *`. */
 .teaser-clamp.markdown * {
   font-size: inherit;
   line-height: inherit;
@@ -1718,7 +1710,6 @@ div.footnotes li:target {
 }
 /* With that padding gone the code-block language chip would sit on top of the
    first line of code. An excerpt is not the place for it anyway. */
-.notif-clamp .codeblock::after,
 .teaser-clamp .codeblock::after {
   content: none;
 }
@@ -1734,9 +1725,7 @@ div.footnotes li:target {
    cannot know it, and an unconditional ellipsis would sit behind every short
    excerpt that was never cut — the shape of issue #880. The blend colour comes
    from `--clamp-bg`, which each surface sets for itself (see `.teaser-tile`
-   below and `[data-notification-row]`), because it changes with hover, with the
-   unread state and with dark mode. */
-.is-clamped .notif-clamp::after,
+   below), because it changes with hover and with dark mode. */
 .is-clamped .teaser-clamp::after {
   background: linear-gradient(to right, transparent, var(--clamp-bg, #fff) 1.25rem);
   bottom: 0;
@@ -1747,20 +1736,13 @@ div.footnotes li:target {
   right: 0;
 }
 
-/* The surfaces the two excerpts sit on, each naming the colour its ellipsis
-   blends into. A /notifications row is the card itself, tinted while unread;
+/* The surface the excerpt sits on, naming the colour its ellipsis blends into:
    the tile under a suggested profile carries its own tint and lifts on hover.
    The tile's dark values are the flattened result of what it used to be
    (slate-800 at 60% / brand-900 at 30% over the slate-900 card): a translucent
    surface would show through the ellipsis's own blend and paint a darker patch
    over the very text it covers. `position` on the tile is the containing block
    for the stretched permalink it carries. */
-[data-notification-row] {
-  --clamp-bg: #fff;
-}
-[data-notification-row][data-unread] {
-  --clamp-bg: #f5faff;
-}
 .teaser-tile {
   --clamp-bg: #f8fafc;
   background-color: var(--clamp-bg);
@@ -1822,7 +1804,7 @@ div.footnotes li:target {
    The two states share one selector list on purpose, here and for the height
    clamps below: they say the same thing, and this file's own history is that a
    clamp split across two rule sets breaks in one of them (the note above
-   `.notif-clamp`). `is-uncut` is not `.post-preview`-scoped — the fediverse
+   `.teaser-clamp`). `is-uncut` is not `.post-preview`-scoped — the fediverse
    account description and the mention card's bio wear it too. */
 .post-preview.is-expanded .post-clamp,
 .is-uncut .post-clamp {
@@ -3753,8 +3735,6 @@ html[data-no-pull-refresh] body {
      Opaque on purpose: these are the translucent tints flattened over the
      slate-900 card, so the blend does not stack a second layer of transparency
      over the very text it covers. */
-  [data-notification-row] { --clamp-bg: #0f172a; }
-  [data-notification-row][data-unread] { --clamp-bg: #101930; }
   .teaser-tile { --clamp-bg: #182234; }
   .teaser-tile:hover { --clamp-bg: #111b37; }
   /* Markdown bodies (light values above). */

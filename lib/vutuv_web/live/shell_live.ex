@@ -937,6 +937,10 @@ defmodule VutuvWeb.ShellLive do
       socket.assigns.bell_preview.read_up_to
     )
 
+    # A look like opening the page: /notifications draws it as a line, so a
+    # glance at the bell at 16:00 still says what was new before and after it.
+    Activity.record_notification_visit(socket.assigns.user_id, "bell")
+
     # No recount here: the marker's own `:notifications_changed` broadcast comes
     # back to this socket like every other change, so the badge is never set by
     # hand and cannot drift from the feed (the same reasoning `notify:seen`

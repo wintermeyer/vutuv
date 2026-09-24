@@ -57,7 +57,10 @@ defmodule VutuvWeb.PostLive.Composer do
   owner's profile one and the organization page's are the same shape: no post,
   no parent, nothing remote. `:feed` and `:profile` are the two their host keeps
   folded behind a "Write a post" button, so they get the ✕ and announce a draft;
-  the others render open and have nothing to fold.
+  the others render open and have nothing to fold. `:inline_reply` is an answer
+  written under the card it answers on /notifications: it stays on the page
+  after sending and tells its host `{:composer_answered, id, post}` instead of
+  navigating to the conversation.
   `surface` is the ordinary kit knob (`:card` or `:flat`, as on `post_card/1`),
   for a host that already owns the card around it. Neither is declared with
   `attr/3`: Phoenix validates those for function components, not for a
@@ -1570,6 +1573,13 @@ defmodule VutuvWeb.PostLive.Composer do
     cond do
       socket.assigns.post ->
         {:noreply, push_navigate(socket, to: Posts.path(post))}
+
+      # An answer written under the card it answers (/notifications): the
+      # member is working through a list, so they stay on it. The host hears
+      # about the answer and folds the composer away.
+      socket.assigns[:host] == :inline_reply ->
+        send(self(), {:composer_answered, socket.assigns.id, post})
+        {:noreply, reset_composer(socket)}
 
       socket.assigns[:remote_note] || socket.assigns[:remote_post] ->
         # An answer to a remote reply has no `parent` assign of its own, so its
