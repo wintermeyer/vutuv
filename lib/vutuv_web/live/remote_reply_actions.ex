@@ -17,14 +17,20 @@ defmodule VutuvWeb.Live.RemoteReplyActions do
   exists at its origin, so there is no case and no freezer. A report also goes
   out to that origin as a `Flag`.
 
-  What differs per surface is only how the answer is shown — the permalink
-  writes its own `:notice` assign, the feed a flash — and what to do with the
-  space the card leaves. So this returns the outcome and its sentence, and each
-  host says it its own way; sharing the sentences is the point, since they are
-  what drifts when the same act is spelled twice.
+  What differs per surface is only how the answer is shown and what to do with
+  the space the card leaves. The permalink writes its own `:notice` assign, so
+  it takes the outcome and its sentence from `remove/2` and `report/2`. Every
+  other host (the feed, the saved list, the answering page) says it with a
+  flash, so it hands `remove/3` and `report/3` the one step that differs: drop
+  the row, reload the list, or navigate away. Sharing the sentences is the
+  point, since they are what drifts when the same act is spelled twice. The
+  saved list and the answering page both drew the card without the handler
+  until the flash variant made it one line.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
+
+  import Phoenix.LiveView, only: [put_flash: 3]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
@@ -51,6 +57,26 @@ defmodule VutuvWeb.Live.RemoteReplyActions do
       gettext("Thank you. The reply was deleted right away.")
     )
   end
+
+  @doc """
+  `remove/2` for a host that answers with a flash: returns the `{:noreply,
+  socket}` its `handle_event/3` clause can return directly. `on_removed` takes
+  the socket and returns it, and runs once the reply is gone.
+  """
+  def remove(socket, note_id, on_removed) when is_function(on_removed, 1),
+    do: flashed(socket, remove(note_id, socket.assigns[:current_user]), on_removed)
+
+  @doc "`report/2` for a host that answers with a flash, as `remove/3`."
+  def report(socket, note_id, on_removed) when is_function(on_removed, 1),
+    do: flashed(socket, report(note_id, socket.assigns[:current_user]), on_removed)
+
+  defp flashed(socket, {:ok, done}, on_removed),
+    do: {:noreply, socket |> put_flash(:info, done) |> on_removed.()}
+
+  defp flashed(socket, {:error, nil}, _on_removed), do: {:noreply, socket}
+
+  defp flashed(socket, {:error, message}, _on_removed),
+    do: {:noreply, put_flash(socket, :error, message)}
 
   defp take_down(fun, note_id, %User{} = viewer, done) do
     case fun.(note_id, viewer) do

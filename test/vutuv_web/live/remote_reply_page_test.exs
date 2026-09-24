@@ -99,6 +99,23 @@ defmodule VutuvWeb.RemoteReplyPageTest do
       assert ref.note_id == note.id
       assert ref.inbox_uri == @inbox
     end
+
+    test "reporting the reply takes it down and goes back to the conversation", %{
+      conn: conn,
+      note: note,
+      post: post
+    } do
+      # The card's ⋯ menu offers Report here too, and this page had no handler
+      # for it: pressing it crashed the page instead of reporting.
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/reply/#{note.id}")
+
+      view
+      |> element(~s([phx-click="report-remote-reply"][phx-value-id="#{note.id}"]))
+      |> render_click()
+
+      assert_redirect(view, Posts.path(post))
+      refute Repo.get(Note, note.id)
+    end
   end
 
   describe "a member who has not switched federation on" do

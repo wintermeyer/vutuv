@@ -33,6 +33,7 @@ defmodule VutuvWeb.PostLive.Saved do
   alias Vutuv.ViewerClock
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.RemotePostActions
+  alias VutuvWeb.Live.RemoteReplyActions
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
@@ -234,14 +235,17 @@ defmodule VutuvWeb.PostLive.Saved do
     {:noreply, push_patch(socket, to: to)}
   end
 
-  # The People tab's inline Remove: un-save right here and drop the row. The
-  # context scopes the delete to (me, target). A non-UUID id is a genuine no-op
-  # (cast_or_nil) — building %User{id: id} from the raw phx-value used to raise
-  # an Ecto.CastError in the scoped delete despite the "harmless" comment.
   # The one act the ⋯ menu offers here (see the card above). Our copy goes for
   # everybody, so the list is re-read rather than the row nudged out of it.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
     RemotePostActions.report(socket, id, &reload_page/1)
+  end
+
+  # The same for a saved reply from another network: `remote_reply_card/1`
+  # offers Report to every signed-in reader, and without this clause the button
+  # took the page down instead of reporting anything.
+  def handle_event("report-remote-reply", %{"id" => id}, socket) do
+    RemoteReplyActions.report(socket, id, &reload_page/1)
   end
 
   # Muting is no longer gated on following the author, so the
@@ -260,6 +264,10 @@ defmodule VutuvWeb.PostLive.Saved do
     RemotePostActions.mute_reposts_of(socket, account_id, &reload_page/1)
   end
 
+  # The People tab's inline Remove: un-save right here and drop the row. The
+  # context scopes the delete to (me, target). A non-UUID id is a genuine no-op
+  # (cast_or_nil) — building %User{id: id} from the raw phx-value used to raise
+  # an Ecto.CastError in the scoped delete despite the "harmless" comment.
   def handle_event("unsave-person", %{"id" => id}, socket) do
     case Vutuv.UUIDv7.cast_or_nil(id) do
       nil ->
