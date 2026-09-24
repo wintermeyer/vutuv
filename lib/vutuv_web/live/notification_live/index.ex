@@ -314,7 +314,12 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
+  # An event that interrupts nobody (a throttled like, anything on a muted
+  # post, see `Vutuv.Activity.notify/2`) still belongs on this page.
   @impl true
+  def handle_info({:quiet_notification, notification}, socket),
+    do: handle_info({:new_notification, notification}, socket)
+
   def handle_info({:new_notification, notification}, socket) do
     # The user is watching the event arrive, so it is already read: advance
     # the read marker, which broadcasts :notifications_read and keeps the

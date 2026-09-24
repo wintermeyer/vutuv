@@ -100,6 +100,14 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext(
         "Only while you are looking at another tab, and only for a few seconds. The tab title also shows up in screenshots, in your window switcher and in a screen share."
       ),
+      # Vutuv.Prefs — the cap on announced likes per post. "Likes" itself is
+      # anchored by the notifications page, which uses the macro.
+      gettext("Announce likes of one post up to"),
+      gettext("No limit"),
+      gettext("%{count} likes"),
+      gettext(
+        "The first 10 likes of a post each get a notification, after that only 25, 50, 100 and so on. At this number you get a last notification, and further likes of that post stay quiet. They still show on the post and on your notifications page."
+      ),
       # Vutuv.Prefs - low-bandwidth mode. "Bandwidth" itself is anchored by the
       # settings card and the sign-up legend, which both use the macro.
       gettext("Low-bandwidth mode"),

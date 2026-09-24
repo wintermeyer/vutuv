@@ -41,7 +41,7 @@ defmodule VutuvWeb.NotificationLine do
     router: VutuvWeb.Router,
     statics: ~w(assets fonts images favicon.ico)
 
-  import VutuvWeb.UI, only: [compact_count: 1]
+  import VutuvWeb.UI, only: [compact_count: 1, delimited_count: 1]
 
   alias Vutuv.Fediverse.Note
   alias VutuvWeb.PostTeaser
@@ -77,6 +77,20 @@ defmodule VutuvWeb.NotificationLine do
   # branch) and very visible in a browser notification, which is one event by
   # definition. The grouped multi-actor forms stay where they are; the
   # single-actor ones live here and both pages share them.
+  # The like throttle's announcements (`Vutuv.Activity.LikeThrottle`) stand for
+  # a whole crowd, so they are whole sentences, not a phrase after one name.
+  def notification_text(%{kind: kind, milestone: count, final?: true})
+      when kind in ~w(like fediverse_reaction),
+      do:
+        gettext(
+          "Your post now has %{formatted} likes. We will not notify you about further likes of it.",
+          formatted: delimited_count(count)
+        )
+
+  def notification_text(%{kind: kind, milestone: count})
+      when kind in ~w(like fediverse_reaction),
+      do: gettext("Your post now has %{formatted} likes.", formatted: delimited_count(count))
+
   def notification_text(%{kind: "like"}), do: gettext("liked your post.")
 
   def notification_text(%{kind: "follower"}), do: gettext("started following you.")
@@ -366,6 +380,9 @@ defmodule VutuvWeb.NotificationLine do
   are whole sentences already, so the sentence IS the title and there is no
   body: a placeholder name over one line would say less, not more.
   """
+  # A like milestone speaks for a crowd, so its newest liker is not its title.
+  def title_and_body(%{milestone: _} = notification), do: {notification_text(notification), nil}
+
   def title_and_body(notification) do
     text = notification_text(notification)
 

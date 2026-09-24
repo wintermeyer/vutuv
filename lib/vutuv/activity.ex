@@ -42,6 +42,7 @@ defmodule Vutuv.Activity do
 
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.User
+  alias Vutuv.Activity.LikeThrottle
   alias Vutuv.Activity.NotificationDismissal
   alias Vutuv.Activity.NotificationPostRead
   alias Vutuv.Engagement
@@ -59,6 +60,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Posts.PostMention
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReply
+  alias Vutuv.Prefs
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.References.Check
   alias Vutuv.Repo
@@ -179,9 +181,10 @@ defmodule Vutuv.Activity do
   defp unread_notifications(user_id, limit, read_at, kinds) do
     %{entries: entries} = notifications_page(user_id, limit: limit, kinds: kinds)
     flagged = with_seen_flags(user_id, entries, dismissed_event_ids(user_id))
+    muted = muted_post_ids(user_id)
 
     %{
-      items: Enum.filter(flagged, &unread_item?(&1, read_at)),
+      items: Enum.filter(flagged, &(unread_item?(&1, read_at) and not silenced?(&1, muted))),
       # An item the panel really could have shown, deliberately rather than
       # `latest_event_at/1`: the two agree, and where they ever stopped
       # agreeing this is the one that cannot mark read something nobody saw.
@@ -210,6 +213,16 @@ defmodule Vutuv.Activity do
   defp unread_item?(item, read_at) do
     after?(item[:at], read_at) and item[:seen?] != true and item[:self_triggered?] != true
   end
+
+  # What `unless_muted/4` leaves out of the tally, over an item: a quiet like,
+  # or an event about one of the member's muted posts. A mention names somebody
+  # else's post, which is never in the member's muted set.
+  defp silenced?(item, muted) do
+    item[:quiet] == true or MapSet.member?(muted, own_post_id(item))
+  end
+
+  defp own_post_id(%{kind: "thread"} = item), do: item[:root_post_id]
+  defp own_post_id(item), do: item[:post_id]
 
   @doc """
   Flag each entry `:seen?` — the per-post (`mark_post_seen/2`) and per-event
@@ -648,9 +661,20 @@ defmodule Vutuv.Activity do
     # because the two kinds of client are subscribed differently — a
     # third-party phone client by its access token, this installation's own
     # installed app by the browser endpoint alone (issue #1729).
-    PushDispatcher.dispatch(user_id, notification)
-    WebPushDispatcher.dispatch(user_id, notification)
-    broadcast(user_id, {:new_notification, notification})
+    #
+    #
+    # A `quiet: true` event (a like past the author's single likes, anything on
+    # a muted post) interrupts nobody. It travels as a message of its own, so
+    # only an open notifications page, which lists it the moment it lands, has
+    # to know about it: the shell and the streaming API never see it, and no
+    # push goes out.
+    if notification[:quiet] do
+      broadcast(user_id, {:quiet_notification, notification})
+    else
+      PushDispatcher.dispatch(user_id, notification)
+      WebPushDispatcher.dispatch(user_id, notification)
+      broadcast(user_id, {:new_notification, notification})
+    end
   end
 
   # A live push and the feed row it will become are the same event, so they get
@@ -833,6 +857,7 @@ defmodule Vutuv.Activity do
         source_id: reply_ref_id,
         at: DateTime.utc_now()
       })
+      |> quiet_if_muted(parent_author_id, parent_post_id)
     )
   end
 
@@ -854,6 +879,7 @@ defmodule Vutuv.Activity do
         source_id: reply_ref_id,
         at: DateTime.utc_now()
       })
+      |> quiet_if_muted(user_id, root_post_id)
     )
   end
 
@@ -883,6 +909,7 @@ defmodule Vutuv.Activity do
         source_id: note.id,
         at: note.received_at
       })
+      |> quiet_if_muted(user.id, post.id)
     )
   end
 
@@ -901,8 +928,7 @@ defmodule Vutuv.Activity do
   a re-share are not the same news.
   """
   def notify_fediverse_reaction(%User{} = user, post, reaction) do
-    notify(
-      user.id,
+    notification =
       Map.merge(remote_actor_fields(reaction), %{
         kind: "fediverse_reaction",
         text: "reacted to your post from another network.",
@@ -912,7 +938,14 @@ defmodule Vutuv.Activity do
         reaction_kind: reaction.kind,
         at: reaction.received_at
       })
-    )
+
+    # A favourite is a like and shares the like's throttle; a re-share is rarer
+    # news and only a mute keeps it quiet.
+    if reaction.kind == "like" do
+      announce_like(user.id, post.id, {Reaction, reaction.id}, notification)
+    else
+      notify(user.id, quiet_if_muted(notification, user.id, post.id))
+    end
   end
 
   @doc ~S"""
@@ -944,8 +977,10 @@ defmodule Vutuv.Activity do
       "post_id" => post_id
     })
 
-    notify(
+    announce_like(
       author_id,
+      post_id,
+      {PostLike, like_id},
       Map.merge(actor_fields(liker), %{
         kind: "like",
         text: "liked your post.",
@@ -954,6 +989,81 @@ defmodule Vutuv.Activity do
         at: DateTime.utc_now()
       })
     )
+  end
+
+  # How loudly a like is announced (`Vutuv.Activity.LikeThrottle`): one by one,
+  # as a milestone, as the final notice, or quietly. A throttled like has its
+  # row stamped `quiet` before the broadcast, so the recount already leaves it
+  # out of the bell. A like on a muted post is not stamped: the tally filters a
+  # mute live (`unless_muted/4`), so unmuting brings it back.
+  defp announce_like(author_id, post_id, {schema, row_id}, notification)
+       when is_binary(author_id) and is_binary(post_id) do
+    case like_decision(author_id, post_id) do
+      :single ->
+        notify(author_id, notification)
+
+      {:milestone, count} ->
+        notify(author_id, Map.put(notification, :milestone, count))
+
+      {:final, count} ->
+        notify(author_id, Map.merge(notification, %{milestone: count, final?: true}))
+
+      :muted ->
+        notify(author_id, Map.put(notification, :quiet, true))
+
+      :quiet ->
+        Repo.update_all(from(r in schema, where: r.id == ^row_id), set: [quiet: true])
+        notify(author_id, Map.put(notification, :quiet, true))
+    end
+  end
+
+  defp announce_like(author_id, _post_id, _row, notification), do: notify(author_id, notification)
+
+  # The like count is the one the post itself shows (`Posts.shown_counts/1`),
+  # this like included, since the caller inserted it first.
+  defp like_decision(author_id, post_id) do
+    if muted_post?(author_id, post_id) do
+      :muted
+    else
+      count = post_id |> Posts.engagement_counts() |> Posts.shown_counts() |> Map.fetch!(:likes)
+
+      Repo.one(from(u in User, where: u.id == ^author_id, select: u.like_notification_cap))
+      |> then(&Prefs.like_notification_cap(%{like_notification_cap: &1}))
+      |> then(&LikeThrottle.decide(count, &1))
+      |> claim_milestone(post_id)
+    end
+  end
+
+  # A milestone is announced once per post: the marker only moves forward, and
+  # only the like that moves it rings. That keeps an unlike and a like again at
+  # 25 from sending the notice twice, and two likes landing at the same moment
+  # from both announcing it.
+  defp claim_milestone({kind, count} = decision, post_id) when kind in [:milestone, :final] do
+    {claimed, _} =
+      Repo.update_all(
+        from(p in Post, where: p.id == ^post_id and p.like_milestone_announced < ^count),
+        set: [like_milestone_announced: count]
+      )
+
+    if claimed == 1, do: decision, else: :quiet
+  end
+
+  defp claim_milestone(decision, _post_id), do: decision
+
+  # Whether `user_id` muted notifications about their own post `post_id`. A
+  # mute is the author's alone: somebody else writing in the same thread still
+  # hears about it. Nil-safe, since a reply can outlive the post it answered.
+  defp muted_post?(user_id, post_id) when is_binary(user_id) and is_binary(post_id),
+    do: Repo.exists?(where(muted_posts(user_id), [p], p.id == ^post_id))
+
+  defp muted_post?(_user_id, _post_id), do: false
+
+  # A muted post's events still reach an open notifications page, they just
+  # interrupt nobody (see `notify/2`).
+  defp quiet_if_muted(notification, user_id, post_id) do
+    if muted_post?(user_id, post_id),
+      do: Map.put(notification, :quiet, true),
+      else: notification
   end
 
   @doc ~S"""
@@ -1234,7 +1344,7 @@ defmodule Vutuv.Activity do
         email_pref: nil,
         max_arms: [fediverse_reply_max(user_id)],
         items: &fediverse_reply_items(user_id, &1, &2, answer),
-        counts: [count_fediverse_replies(user_id, read_at, answer)],
+        counts: [count_fediverse_replies(user_id, read_at, unread?, answer)],
         dismiss: [{"fediverse_reply", :id}]
       },
       %{
@@ -1242,7 +1352,7 @@ defmodule Vutuv.Activity do
         email_pref: nil,
         max_arms: [fediverse_reaction_max(user_id)],
         items: &fediverse_reaction_items(user_id, &1, &2),
-        counts: [count_fediverse_reactions(user_id, read_at)],
+        counts: [count_fediverse_reactions(user_id, read_at, unread?)],
         dismiss: [{"fediverse_reaction", :id}]
       },
       %{
@@ -1250,7 +1360,7 @@ defmodule Vutuv.Activity do
         email_pref: nil,
         max_arms: [like_max(user_id)],
         items: &like_items(user_id, &1, &2),
-        counts: [count_likes(user_id, read_at)],
+        counts: [count_likes(user_id, read_at, unread?)],
         dismiss: [{"like", :id}]
       },
       %{
@@ -1741,12 +1851,15 @@ defmodule Vutuv.Activity do
     )
   end
 
-  defp count_fediverse_replies(user_id, read_at, answer) do
+  defp count_fediverse_replies(user_id, read_at, unread?, answer) do
     user_id
     |> fediverse_reply_events()
     |> answered_scope(user_id, answer, :note)
     |> select([note: n], %{count: count()})
     |> note_since(read_at)
+    |> unless_muted(user_id, unread?, fn query, muted ->
+      where(query, [note: n], n.post_id not in subquery(muted))
+    end)
   end
 
   # Favourites and re-shares from other networks (issue #1068), sourced straight
@@ -1770,7 +1883,8 @@ defmodule Vutuv.Activity do
         at: DateTime.to_naive(reaction.received_at),
         post_id: reaction.post_id,
         reaction_id: reaction.id,
-        reaction_kind: reaction.kind
+        reaction_kind: reaction.kind,
+        quiet: reaction.quiet
       })
     end)
   end
@@ -1786,11 +1900,14 @@ defmodule Vutuv.Activity do
     )
   end
 
-  defp count_fediverse_reactions(user_id, read_at) do
+  defp count_fediverse_reactions(user_id, read_at, unread?) do
     user_id
     |> fediverse_reaction_events()
     |> select([note: r], %{count: count()})
     |> note_since(read_at)
+    |> unless_muted(user_id, unread?, fn query, muted ->
+      where(query, [note: r], not r.quiet and r.post_id not in subquery(muted))
+    end)
   end
 
   # `received_at` is a :utc_datetime while the feed's cursor and the read marker
@@ -1931,15 +2048,15 @@ defmodule Vutuv.Activity do
       where: p.user_id == ^user_id,
       order_by: [desc: l.inserted_at, desc: l.id],
       limit: ^limit,
-      select: {l.id, l.inserted_at, struct(liker, ^User.listing_fields()), page, p.id}
+      select: {l.id, l.inserted_at, struct(liker, ^User.listing_fields()), page, p.id, l.quiet}
     )
     |> at_or_before(cursor)
     |> Repo.all()
     |> preload_actor_avatars(2)
-    |> Enum.map(fn {id, at, liker, page, post_id} ->
+    |> Enum.map(fn {id, at, liker, page, post_id, quiet} ->
       event_id("like", id)
       |> actor_item("like", at, liker || page)
-      |> Map.put(:post_id, post_id)
+      |> Map.merge(%{post_id: post_id, quiet: quiet})
     end)
   end
 
@@ -2441,6 +2558,11 @@ defmodule Vutuv.Activity do
     |> answered_scope(user_id, answer, :post)
     |> since(read_at)
     |> unless_seen(user_id, unread?)
+    # A reply outlives the post it answered (`parent_post_id` nilifies), and a
+    # NULL on the left of `NOT IN` drops the row, so the orphan gets its own arm.
+    |> unless_muted(user_id, unread?, fn query, muted ->
+      where(query, [r], is_nil(r.parent_post_id) or r.parent_post_id not in subquery(muted))
+    end)
   end
 
   defp count_thread_replies(user_id, read_at, unread?, answer) do
@@ -2449,6 +2571,9 @@ defmodule Vutuv.Activity do
     |> select([thread_ref: r], %{count: count()})
     |> since(read_at)
     |> unless_seen(user_id, unread?)
+    |> unless_muted(user_id, unread?, fn query, muted ->
+      where(query, [thread_ref: r], r.root_post_id not in subquery(muted))
+    end)
   end
 
   defp count_mentions(user_id, read_at, unread?, answer) do
@@ -2506,6 +2631,27 @@ defmodule Vutuv.Activity do
     where(query, [event], event.post_id not in subquery(seen))
   end
 
+  # Drops what never rang the bell: a quiet like (`Vutuv.Activity.LikeThrottle`)
+  # and anything about a post the member muted. Like `unless_seen/3`, only the
+  # tally asks; the page keeps listing those events. `fun` names the column
+  # that holds the member's own post, because each source keeps it elsewhere;
+  # `own_post_id/1` is the same rule over items, so a new kind about the
+  # member's own post needs both.
+  defp unless_muted(query, _user_id, false, _fun), do: query
+  defp unless_muted(query, user_id, true, fun), do: fun.(query, muted_posts(user_id))
+
+  # The member's own posts they muted. `posts.id` is never NULL, so the list is
+  # safe on the right of a `NOT IN`.
+  defp muted_posts(user_id) do
+    from(p in Post,
+      where: p.user_id == ^user_id and not is_nil(p.notifications_muted_at),
+      select: p.id
+    )
+  end
+
+  # The same set for the bell's preview, which filters items rather than rows.
+  defp muted_post_ids(user_id), do: user_id |> muted_posts() |> Repo.all() |> MapSet.new()
+
   # Drops the one event the member acknowledged by clicking its browser
   # notification (`mark_notification_seen/3`). Same division of labour as
   # `unless_seen/3`: only the badge tally asks, the page keeps listing the row.
@@ -2539,13 +2685,16 @@ defmodule Vutuv.Activity do
 
   # No self-like filter: a member cannot like their own post (enforced in
   # Posts.like_post/2, issue #1030).
-  defp count_likes(user_id, read_at) do
+  defp count_likes(user_id, read_at, unread? \\ false) do
     from(l in PostLike,
       join: p in assoc(l, :post),
       where: p.user_id == ^user_id,
       select: %{count: count()}
     )
     |> since(read_at)
+    |> unless_muted(user_id, unread?, fn query, muted ->
+      where(query, [l, p], not l.quiet and p.id not in subquery(muted))
+    end)
   end
 
   defp count_organization_roles(user_id, read_at) do

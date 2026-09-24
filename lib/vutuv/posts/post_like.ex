@@ -12,6 +12,9 @@ defmodule Vutuv.Posts.PostLike do
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:organization, Vutuv.Organizations.Organization)
     belongs_to(:acting_user, Vutuv.Accounts.User)
+    # The like arrived without interrupting the author (`Vutuv.Activity.LikeThrottle`
+    # or a muted post), so the bell's tally leaves it out.
+    field(:quiet, :boolean, default: false)
 
     timestamps()
   end

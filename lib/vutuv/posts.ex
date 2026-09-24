@@ -5308,6 +5308,37 @@ defmodule Vutuv.Posts do
   def normalize_post_filter("replies"), do: :replies
   def normalize_post_filter(_type), do: :all
 
+  ## Muting a post's notifications
+
+  @doc """
+  Mutes (`true`) or unmutes (`false`) the notifications about `post` for its
+  author: likes, replies and reactions still land and still show on
+  /notifications, they just no longer push, pop up or count on the bell (see
+  `Vutuv.Activity.notify/2`). Only a member's own post, since the mute is the
+  author's alone; a page's post has no single member to spare.
+
+  The bell's tally leaves a muted post out entirely, so what was already
+  waiting about it leaves the badge at once, and unmuting brings it back.
+  """
+  def mute_notifications(
+        %User{id: author_id},
+        %Post{user_id: author_id, organization_id: nil} = post,
+        muted?
+      )
+      when is_boolean(muted?) do
+    muted_at = if muted?, do: DateTime.utc_now(:second)
+
+    {1, _} =
+      Repo.update_all(from(p in Post, where: p.id == ^post.id),
+        set: [notifications_muted_at: muted_at]
+      )
+
+    Vutuv.Activity.broadcast(author_id, :notifications_changed)
+    {:ok, %{post | notifications_muted_at: muted_at}}
+  end
+
+  def mute_notifications(%User{}, %Post{}, _muted?), do: {:error, :not_author}
+
   ## The pinned post (issue #1110)
 
   @doc """

@@ -505,6 +505,29 @@ item name the same row. Opening /notifications deletes the member's dismissals:
 the marker now covers them, so the table only ever holds the exceptions that
 still matter.
 
+### Quiet events: the like throttle and muted posts
+
+A post that takes off would otherwise ring its author's phone once per like.
+`Vutuv.Activity.LikeThrottle` decides how the n-th like is announced: the
+first 10 one by one, then only the jumps (25, 50, 100, 250, …) as "your post
+now has N likes", and at the member's cap (`:like_notification_cap`, a
+`Vutuv.Prefs` select, shipped default 50, "none" for no cap) a last notice
+that further likes stay quiet. A favourite from another network counts
+toward the same n; a re-share does not.
+
+The author can also mute one post from its ⋯ menu
+(`Posts.mute_notifications/3`, `posts.notifications_muted_at`): its likes,
+replies, thread answers and reactions go quiet for the author alone, while
+somebody else in the same thread still hears about it.
+
+Quiet means no interruption, never hidden. `notify/2` still broadcasts the
+event with `quiet: true` (an open /notifications page lists it), but skips
+both push fan-outs; the shell neither pops up nor recounts; the Mastodon
+streaming socket drops it. The tally leaves it out through `unless_muted/4`:
+a quiet like has `quiet` stamped on its `post_likes` / `fediverse_reactions`
+row, and every event about a muted post is filtered by post id. The bell's
+preview applies the same rule over items (`silenced?/2`).
+
 ### The bell's hover preview
 
 Most of what the bell counts is worth knowing and not worth a trip: two people
