@@ -22,7 +22,7 @@ defmodule VutuvWeb.EmbeddedFlashTest do
   # distinction is a judgement: a flash on the way to a `redirect/2` is printed
   # by the NEXT page's layout and needs no portal. The second test fails if a
   # third such helper appears, so neither list can go quietly stale.
-  @flashing_helpers [VutuvWeb.Live.RemotePostActions]
+  @flashing_helpers [VutuvWeb.Live.RemotePostActions, VutuvWeb.Live.RemoteReplyActions]
   @redirecting_helpers [VutuvWeb.Live.InitAssigns]
 
   test "a layoutless LiveView that can flash reaches the layout's tray" do

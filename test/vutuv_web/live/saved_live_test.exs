@@ -10,6 +10,8 @@ defmodule VutuvWeb.SavedLiveTest do
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
@@ -123,5 +125,27 @@ defmodule VutuvWeb.SavedLiveTest do
     _ = :sys.get_state(view.pid)
 
     assert has_element?(view, "#saved-people li", "Lively")
+  end
+
+  test "reporting a saved reply from another network takes it off the list", %{conn: conn} do
+    # The card's ⋯ menu offers Report to every signed-in reader, and this page
+    # had no handler for it: pressing it crashed the page instead of reporting.
+    # Reporting sends a `Flag`, which claims from the shared rate limiter.
+    Vutuv.RateLimiter.reset()
+    {conn, user} = create_and_login_user(conn)
+    note = insert(:note, content_text: "eine gemerkte Antwort von draussen")
+    {:ok, :bookmarked} = Fediverse.bookmark_note(user, note)
+
+    {:ok, view, html} = live(conn, ~p"/bookmarks?tab=networks")
+    assert html =~ "eine gemerkte Antwort von draussen"
+
+    view
+    |> element(~s([phx-click="report-remote-reply"][phx-value-id="#{note.id}"]))
+    |> render_click()
+
+    html = render(view)
+    refute html =~ "eine gemerkte Antwort von draussen"
+    assert html =~ "The reply was deleted right away."
+    refute Repo.get(Note, note.id)
   end
 end

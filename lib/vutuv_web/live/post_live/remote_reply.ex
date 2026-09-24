@@ -14,6 +14,7 @@ defmodule VutuvWeb.PostLive.RemoteReply do
   alias Vutuv.Fediverse.PrivateMessage
   alias Vutuv.Posts
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.RemoteReplyActions
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
   # The composer here takes a clip; its progress arrives through this hook
@@ -104,6 +105,13 @@ defmodule VutuvWeb.PostLive.RemoteReply do
     end
   end
 
+  # The card's ⋯ menu offers Report to the reader answering it. Our copy is
+  # deleted for everybody, so there is nothing left here to answer: back to the
+  # conversation it was part of, as `RemotePostReply` does for a post.
+  def handle_event("report-remote-reply", _params, socket) do
+    RemoteReplyActions.report(socket, socket.assigns.note.id, &leave/1)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -158,4 +166,9 @@ defmodule VutuvWeb.PostLive.RemoteReply do
     </.remote_answer_page>
     """
   end
+
+  # Where the reader goes once the reply they came to answer is gone: the
+  # conversation, or the feed when its post is gone too.
+  defp leave(%{assigns: %{post: nil}} = socket), do: push_navigate(socket, to: ~p"/feed")
+  defp leave(socket), do: push_navigate(socket, to: Posts.path(socket.assigns.post))
 end

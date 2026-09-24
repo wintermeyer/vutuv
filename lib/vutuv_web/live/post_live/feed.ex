@@ -1415,11 +1415,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # menu is rendered here, so its events are owed here — see
   # `VutuvWeb.Live.RemoteReplyActions`.
   def handle_event("remove-remote-reply", %{"id" => id}, socket) do
-    take_down_note(socket, id, &RemoteReplyActions.remove/2)
+    RemoteReplyActions.remove(socket, id, &drop_note(&1, id))
   end
 
   def handle_event("report-remote-reply", %{"id" => id}, socket) do
-    take_down_note(socket, id, &RemoteReplyActions.report/2)
+    RemoteReplyActions.report(socket, id, &drop_note(&1, id))
   end
 
   # The "New here" card's Follow button: welcome the newcomer with no reload.
@@ -3153,14 +3153,6 @@ defmodule VutuvWeb.PostLive.Feed do
   # it. Both, not either — the same reply can be on the page as a reshared row
   # while a *different* entry's thread holds another one under the post it
   # answers.
-  defp take_down_note(socket, note_id, fun) do
-    case fun.(note_id, socket.assigns.current_user) do
-      {:ok, done} -> {:noreply, socket |> put_flash(:info, done) |> drop_note(note_id)}
-      {:error, nil} -> {:noreply, socket}
-      {:error, message} -> {:noreply, put_flash(socket, :error, message)}
-    end
-  end
-
   defp drop_note(socket, note_id) do
     {going, rest} = Enum.split_with(socket.assigns.entries, &note_entry?(&1, note_id))
     kept = Enum.map(rest, &without_note(&1, note_id))
