@@ -1,0 +1,9 @@
+{
+  "name": "vutuv-teaser",
+  "private": true,
+  "type": "module",
+  "description": "Records the vutuv teaser video from a local dev server. See README.md.",
+  "dependencies": {
+    "playwright": "1.55.0"
+  }
+}

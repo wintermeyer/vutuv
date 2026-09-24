@@ -1169,6 +1169,13 @@ document.addEventListener("click", (event) => {
     if (dialog && typeof dialog.showModal === "function") {
       event.preventDefault()
       dialog.showModal()
+      const video = dialog.querySelector("video[data-play-on-open]")
+      if (video) {
+        // The click that opened it counts as the gesture the browser wants
+        // before a video may start; a refusal leaves the controls to the viewer.
+        video.play()?.catch(() => {})
+        fullscreenOnPhone(dialog, video)
+      }
     }
     return
   }
@@ -1193,6 +1200,69 @@ document.addEventListener("click", (event) => {
     if (!inside) dialog.close()
   }
 })
+
+// On a phone a dialog is no wider than the page it covers, so a film that names
+// the screens it is too small on (`data-fullscreen-below="<media query>"`) goes
+// full screen there instead, and leaving full screen closes the dialog too.
+// iPhone Safari lets only the <video> itself go full screen, through its own
+// prefixed call.
+function fullscreenOnPhone(dialog, video) {
+  const below = video.dataset.fullscreenBelow
+  if (!below || !window.matchMedia(below).matches) return
+
+  if (video.requestFullscreen) {
+    const onChange = () => {
+      if (document.fullscreenElement) return
+      document.removeEventListener("fullscreenchange", onChange)
+      dialog.close()
+    }
+    document.addEventListener("fullscreenchange", onChange)
+    video.requestFullscreen().catch(() => document.removeEventListener("fullscreenchange", onChange))
+  } else if (video.webkitEnterFullscreen) {
+    video.addEventListener("webkitendfullscreen", () => dialog.close(), {once: true})
+    try {
+      video.webkitEnterFullscreen()
+    } catch (_error) {
+      // Not ready yet (no metadata): the dialog stays, with its controls.
+    }
+  }
+}
+
+// The quality choice under a film: buttons carrying `data-video-quality="<video
+// id>"` and `data-quality="sd|hd"`. HD puts each source's `data-hd-src` (and
+// `data-hd-type`) in its place, Standard the sources the page rendered; the
+// chosen button is the pressed one.
+document.addEventListener("click", (event) => {
+  const choice = event.target.closest("[data-video-quality]")
+  if (!choice || choice.getAttribute("aria-pressed") === "true") return
+  const video = document.getElementById(choice.dataset.videoQuality)
+  if (!video) return
+
+  video.qualitySources ??= (() => {
+    const sd = [...video.querySelectorAll("source")].map((s) => ({src: s.getAttribute("src"), type: s.type, media: s.media, hd: s.dataset.hdSrc, hdType: s.dataset.hdType}))
+    return {
+      sd,
+      hd: sd.map((s) => (s.hd ? {src: s.hd, type: s.hdType || s.type, media: s.media} : s)),
+    }
+  })()
+  swapVideoSources(video, video.qualitySources[choice.dataset.quality === "hd" ? "hd" : "sd"])
+  for (const other of document.querySelectorAll(`[data-video-quality="${video.id}"]`)) {
+    other.setAttribute("aria-pressed", String(other === choice))
+  }
+})
+
+// A film in a dialog stops when the dialog closes, however it was closed
+// (button, Escape, backdrop). `close` does not bubble, so this listens in the
+// capture phase.
+document.addEventListener(
+  "close",
+  (event) => {
+    if (event.target instanceof HTMLDialogElement) {
+      event.target.querySelector("video[data-play-on-open]")?.pause()
+    }
+  },
+  true,
+)
 
 // The sign-up form's tag field: a comma finishes a tag, and the browser has to
 // be the one that shortens the field. LiveView deliberately never overwrites
@@ -3450,23 +3520,33 @@ function loadFullVideo(control) {
     return
   }
   if (!sources.length) return
+  control.setAttribute("aria-busy", "true")
+  swapVideoSources(video, sources, () => {
+    control.removeAttribute("aria-busy")
+    figure.setAttribute(HD_LOADED, "")
+  })
+}
+
+// Puts `sources` ({src, type, media}) in place of a video's own and picks the
+// film up where it was, playing if it played. Shared by the data-saving HD
+// switch on post videos and the quality choice under the start page's teaser.
+function swapVideoSources(video, sources, onReady) {
   const at = video.currentTime
   const playing = !video.paused && !video.ended
-  control.setAttribute("aria-busy", "true")
   video.querySelectorAll("source").forEach((s) => s.remove())
-  sources.forEach((s) => {
+  for (const s of sources) {
     const el = document.createElement("source")
     el.src = s.src
-    el.type = s.type
+    if (s.type) el.type = s.type
+    if (s.media) el.media = s.media
     video.appendChild(el)
-  })
+  }
   video.addEventListener(
     "loadedmetadata",
     () => {
       if (at > 0) video.currentTime = at
       if (playing) video.play().catch(() => {})
-      control.removeAttribute("aria-busy")
-      figure.setAttribute(HD_LOADED, "")
+      onReady?.()
     },
     { once: true },
   )

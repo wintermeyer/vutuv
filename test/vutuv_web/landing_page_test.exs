@@ -291,6 +291,125 @@ defmodule VutuvWeb.LandingPageTest do
     end
   end
 
+  describe "the teaser video" do
+    # A browser takes the first <source> whose `media` matches and whose type
+    # it can play. So a phone (below `md`) finds the 9:16 cut first, everybody
+    # else the 16:9 one, and each comes as AV1 first, H.264 as the fallback
+    # (Safari only claims AV1 where the hardware decodes it). Nothing loads
+    # before a click (`preload="none"`, no autoplay), because the page promises
+    # "Fast." and is the most requested one in the app.
+    test "offers a portrait cut to phones and a landscape one to the rest, AV1 first",
+         %{conn: conn} do
+      html = landing_de(conn)
+      [video] = elements(html, "video#landing-teaser")
+
+      assert LazyHTML.attribute(video, "preload") == ["none"]
+      assert LazyHTML.attribute(video, "autoplay") == []
+      assert LazyHTML.attribute(video, "poster") == ["/images/teaser/vutuv-teaser-de.avif"]
+
+      sources =
+        video
+        |> LazyHTML.query("source")
+        |> Enum.map(&{attribute(&1, "src"), attribute(&1, "media"), attribute(&1, "type")})
+
+      phone = "(max-width: 767px)"
+
+      assert sources == [
+               {"/images/teaser/vutuv-teaser-de-portrait.av1.mp4", phone,
+                "video/mp4; codecs=av01.0.05M.08"},
+               {"/images/teaser/vutuv-teaser-de-portrait.mp4", phone, "video/mp4"},
+               {"/images/teaser/vutuv-teaser-de.av1.mp4", "", "video/mp4; codecs=av01.0.04M.08"},
+               {"/images/teaser/vutuv-teaser-de.mp4", "", "video/mp4"}
+             ]
+    end
+
+    # The hero is too narrow to watch a film in, so it shows the poster as a
+    # play button, and the video itself sits in a dialog that button opens
+    # (large on a desktop). The dialog starts it on opening and stops it on
+    # closing (`data-play-on-open`, the modal helper in app.js).
+    test "plays the video in a dialog the poster in the hero opens", %{conn: conn} do
+      html = landing_de(conn)
+
+      [button] = elements(html, ~s(button[data-modal-open="landing-teaser-dialog"]))
+      assert attribute(button, "aria-label") == "Video abspielen"
+
+      assert button |> LazyHTML.query("img") |> LazyHTML.attribute("src") ==
+               ["/images/teaser/vutuv-teaser-de.avif"]
+
+      assert [_] =
+               elements(
+                 html,
+                 "dialog#landing-teaser-dialog video#landing-teaser[data-play-on-open]"
+               )
+
+      assert [_] = elements(html, "dialog#landing-teaser-dialog [data-modal-close]")
+    end
+
+    # The page plays half the master's resolution; the full one is one click
+    # away in a bar UNDER the film, never over it: "Quality: Standard | HD",
+    # the chosen one pressed. A lone "HD" pill on the picture read as a logo or
+    # a badge rather than a control. Choosing swaps every source to its
+    # `data-hd-src` (the helper in app.js) and carries on where it was.
+    test "offers Standard and HD as a labelled choice under the film", %{conn: conn} do
+      html = landing_de(conn)
+
+      [bar] = elements(html, "dialog#landing-teaser-dialog [data-video-bar]")
+      assert LazyHTML.text(bar) =~ "Qualität"
+
+      choices =
+        bar
+        |> LazyHTML.query(~s(button[data-video-quality="landing-teaser"]))
+        |> Enum.map(
+          &{attribute(&1, "data-quality"), String.trim(LazyHTML.text(&1)),
+           attribute(&1, "aria-pressed")}
+        )
+
+      assert choices == [{"sd", "Standard", "true"}, {"hd", "HD", "false"}]
+
+      # the bar, with the close button, sits beside the video, not inside it
+      assert [] = elements(html, "video#landing-teaser [data-video-bar]")
+
+      assert [_] =
+               elements(html, "dialog#landing-teaser-dialog [data-video-bar] [data-modal-close]")
+
+      hd =
+        html |> elements("video#landing-teaser source") |> Enum.map(&attribute(&1, "data-hd-src"))
+
+      # the phone plays its cut full screen, where the toggle is out of reach
+      assert hd == [
+               "",
+               "",
+               "/images/teaser/vutuv-teaser-de.hd.av1.mp4",
+               "/images/teaser/vutuv-teaser-de.hd.mp4"
+             ]
+    end
+
+    # Two cuts: every German browser gets the German one, whatever its region.
+    for locale <- ["de-AT,de;q=0.9", "de-CH"] do
+      test "shows the German cut to #{locale}", %{conn: conn} do
+        html = conn |> put_req_header("accept-language", unquote(locale)) |> landing()
+
+        assert html =~ ~s(src="/images/teaser/vutuv-teaser-de.av1.mp4")
+        refute html =~ "vutuv-teaser-en"
+      end
+    end
+
+    # And every other language, or none at all, the English one.
+    for locale <- ["en", "en-GB,en;q=0.9,de;q=0.8", "fr-FR,fr", "es-ES,es", nil] do
+      test "shows the English cut to #{inspect(locale)}", %{conn: conn} do
+        conn =
+          if unquote(locale),
+            do: put_req_header(conn, "accept-language", unquote(locale)),
+            else: conn
+
+        html = landing(conn)
+
+        assert html =~ ~s(src="/images/teaser/vutuv-teaser-en.av1.mp4")
+        refute html =~ "vutuv-teaser-de"
+      end
+    end
+  end
+
   describe "German rendering" do
     # The short labels are the ones `gettext.extract --merge` fuzzy-fills with
     # something unrelated ("Job applications" once came back as "Ihre

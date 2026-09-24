@@ -232,9 +232,10 @@ defmodule VutuvWeb.VideoComponents do
   @doc "The length in whole minutes, rounded up — never `0`, a clip is at least a minute of waiting."
   def minutes_up(%PostVideo{} = video), do: max(1, div(PostVideo.seconds(video) + 59, 60))
 
+  @doc "The play triangle every video control draws, the start page's teaser included."
   attr(:class, :string, default: "h-5 w-5")
 
-  defp play_icon(assigns) do
+  def play_icon(assigns) do
     ~H"""
     <svg viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
       <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />

@@ -324,6 +324,47 @@ defmodule VutuvWeb.CompanyControllerTest do
       refute html =~ "Readable without an account"
     end
 
+    # The teaser, to watch here and to pass on: the player in the reader's
+    # language, and one copyable address per cut, both languages and both
+    # formats, as MP4 (H.264), which plays wherever a link ends up.
+    test "shows the teaser and hands out its addresses to copy", %{conn: conn} do
+      html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
+
+      [video] = elements(html, "#investors-teaser video")
+      assert LazyHTML.attribute(video, "preload") == ["none"]
+      assert LazyHTML.attribute(video, "poster") == ["/images/teaser/vutuv-teaser-de.avif"]
+      assert html =~ ~s(src="/images/teaser/vutuv-teaser-de.av1.mp4")
+      assert html =~ ~s(src="/images/teaser/vutuv-teaser-de-portrait.mp4")
+      assert html =~ "Der Film"
+
+      base = VutuvWeb.Endpoint.url() <> "/images/teaser/vutuv-teaser-"
+
+      copied =
+        html
+        |> elements("#investors-teaser button[data-copy]")
+        |> Enum.map(&attribute(&1, "data-copy-text"))
+
+      assert copied == [
+               base <> "de.hd.mp4",
+               base <> "de-portrait.mp4",
+               base <> "en.hd.mp4",
+               base <> "en-portrait.mp4"
+             ]
+
+      assert html =~ "Deutsch · 16:9"
+      assert html =~ "English · 9:16"
+    end
+
+    test "names the same addresses in the agent formats", %{conn: conn} do
+      markdown = conn |> get(~p"/system/investors" <> ".md") |> response(200)
+      json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
+
+      url = VutuvWeb.Endpoint.url() <> "/images/teaser/vutuv-teaser-en-portrait.mp4"
+      assert markdown =~ "## The film"
+      assert markdown =~ url
+      assert url in Enum.map(json["videos"], & &1["url"])
+    end
+
     test "serves its agent-format siblings", %{conn: conn} do
       json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
 

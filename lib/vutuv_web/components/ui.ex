@@ -1053,17 +1053,27 @@ defmodule VutuvWeb.UI do
   quote with an attribution block, say), pass a `:headline` slot instead — it
   replaces the default `<h1>{@title}` + subtitle. `title` is still required and
   serves as the plain-text fallback.
+
+  `compact` tightens the spacing below `md` only: the start page's hero carries
+  a video, and on a phone the sign-up form must still show below it.
   """
   attr(:title, :string, required: true)
   attr(:subtitle, :string, default: nil)
+  attr(:compact, :boolean, default: false)
   slot(:headline)
   slot(:hero)
   slot(:inner_block, required: true)
 
   def auth_layout(assigns) do
     ~H"""
-    <div class="mx-auto grid max-w-5xl items-stretch gap-6 py-8 md:grid-cols-2 md:gap-8 md:py-12">
-      <section class="relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 to-brand-500 p-8 text-white shadow-sm md:p-10 dark:from-brand-800 dark:to-brand-700">
+    <div class={[
+      "mx-auto grid max-w-5xl items-stretch md:grid-cols-2 md:gap-8 md:py-12",
+      if(@compact, do: "gap-4 py-4", else: "gap-6 py-8")
+    ]}>
+      <section class={[
+        "relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 to-brand-500 text-white shadow-sm md:p-10 dark:from-brand-800 dark:to-brand-700",
+        if(@compact, do: "p-5", else: "p-8")
+      ]}>
         <%!-- Soft decorative rings — the signature flourish, purely cosmetic. --%>
         <div aria-hidden="true" class="pointer-events-none absolute -right-16 -top-20 -z-10 h-60 w-60 rounded-full bg-white/10"></div>
         <div aria-hidden="true" class="pointer-events-none absolute -bottom-24 -left-12 -z-10 h-52 w-52 rounded-full bg-white/5"></div>
@@ -4219,8 +4229,15 @@ defmodule VutuvWeb.UI do
   `m-auto` is load-bearing: a native dialog centres itself with `margin: auto`,
   and Tailwind's preflight zeroes every margin, which parks the modal in the
   top-left corner.
+
+  `size="video"` is the black, padless frame for a film: as wide as the screen
+  allows up to 72rem, and never taller than 90 % of it (the film inside caps
+  its own height, so it knows what else it shares the frame with). A `<video>` inside
+  carrying `data-play-on-open` starts when the dialog opens and stops when it
+  closes (the same helper).
   """
   attr(:id, :string, required: true)
+  attr(:size, :string, default: "default", values: ~w(default video))
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
@@ -4228,7 +4245,15 @@ defmodule VutuvWeb.UI do
     ~H"""
     <dialog
       id={@id}
-      class="m-auto max-h-[90vh] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl bg-white p-6 text-slate-900 shadow-xl ring-1 ring-slate-200 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-800"
+      class={[
+        "m-auto max-h-[90vh] rounded-2xl shadow-xl backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm",
+        if(@size == "video",
+          do:
+            "w-[min(72rem,calc(100vw-2rem))] overflow-hidden bg-black p-0",
+          else:
+            "w-[min(32rem,calc(100vw-2rem))] overflow-y-auto bg-white p-6 text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-800"
+        )
+      ]}
       {@rest}
     >
       {render_slot(@inner_block)}

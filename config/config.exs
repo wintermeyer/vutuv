@@ -398,6 +398,12 @@ config :vutuv, :data_location, "Deutschland"
 # line. Runtime override: LANDING_EXAMPLE_PROFILE_URL (config/runtime.exs).
 config :vutuv, :landing_example_profile_url, "https://vutuv.de/wintermeyer"
 
+# The teaser video in the start page's hero, a silent film of vutuv in use
+# (built by scripts/teaser/, served from priv/static/images/teaser/). It loads
+# only on a click. The investor page plays it too and hands out its addresses.
+# Set to false to drop it from both.
+config :vutuv, :landing_teaser_video, true
+
 # Follow-only ActivityPub federation (Vutuv.Fediverse): people on Mastodon
 # & Co. can follow opted-in members and receive their public posts. Off =
 # every Fediverse endpoint 404s and nothing is ever delivered — the switch
