@@ -42,11 +42,10 @@ defmodule VutuvWeb.CompanyController do
   template, so the page cannot quietly go stale — see `InvestorsDoc.facts/0`,
   which this page and its agent-format siblings both render.
 
-  It states no email address: an investor writes through vutuv itself
-  (`InvestorsDoc.contact_handle/0`), which keeps a personal address off a page
-  built to be read by strangers and machines, and spends the first minute of
-  the conversation inside the product it is about. The operator's profile here
-  is linked beside that.
+  It names the operator's email address beside a message through vutuv itself
+  (`InvestorsDoc.contact_handle/0`), which spends the first minute of the
+  conversation inside the product it is about. The operator's profile here is
+  linked beside that.
   """
   def investors(conn, _params) do
     facts = InvestorsDoc.facts()

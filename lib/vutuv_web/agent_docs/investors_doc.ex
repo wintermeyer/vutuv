@@ -12,11 +12,11 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   (see `VutuvWeb.CompanyController`), so the labels here go through gettext and
   the doc reports the locale it was built in.
 
-  It states **no email address**: an investor writes through vutuv itself,
-  which is both the least spammable inbox we have and a minute spent inside the
-  product they are about to be told about. The operator's profile here is
-  linked beside that, because somebody about to put six figures somewhere wants
-  to see who is on the other side first.
+  It names the operator's email address (`Vutuv.Operator`) beside a message on
+  vutuv itself, which is a minute spent inside the product they are about to be
+  told about. The operator's profile here is linked beside that, because
+  somebody about to put six figures somewhere wants to see who is on the other
+  side first.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
@@ -24,6 +24,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.Operator
   alias Vutuv.PeopleHistory
   alias Vutuv.PostAnalytics.TwelveMonthsRunner
   alias VutuvWeb.AgentDocs
@@ -314,11 +315,23 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
 
   def growth_sentence(_none), do: nil
 
-  @doc "How to get in touch, given that this page states no address."
+  @doc """
+  How to get in touch: the operator's address (`Vutuv.Operator`, so another
+  installation names its own) or a message here. The agent formats get the
+  sentence with the address in it; the page links the address in place, from
+  `contact_note_parts/0`.
+  """
   def contact_note do
+    {before, rest} = contact_note_parts()
+    before <> Operator.contact_email() <> rest
+  end
+
+  @doc "The contact note split around the address, for the page to link it."
+  def contact_note_parts do
     gettext(
-      "Write to me here, on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
+      "Email me at {email} or send me a message here on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
     )
+    |> UI.split_marker("{email}")
   end
 
   @doc """
@@ -381,6 +394,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
       counter_explainer: counter_explainer(),
       contact_note: contact_note(),
       contact_handle: handle,
+      contact_email: handle && Operator.contact_email(),
       contact_url: handle && AgentDocs.abs_url("/messages/with/" <> handle),
       contact_profile_url: handle && AgentDocs.abs_url("/" <> handle),
       growth_sentence: growth_sentence(facts.growth),

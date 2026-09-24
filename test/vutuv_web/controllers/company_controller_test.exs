@@ -80,18 +80,34 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert length(Regex.scan(~r{<h1[^>]*>}, html)) == 1
     end
 
-    test "states no email address, but does link the profile", %{conn: conn} do
-      # The address stays off a page read by strangers and machines; the media
-      # kit still carries it, for a journalist on a deadline. The profile is a
-      # different matter: somebody about to put six figures somewhere wants to
-      # see who is on the other side.
+    test "offers the email address beside a message on vutuv", %{conn: conn} do
+      # The note names the operator's address as a link and still offers the
+      # message here. The profile stays linked: somebody about
+      # to put six figures somewhere wants to see who is on the other side.
+      insert(:activated_user, username: Application.get_env(:vutuv, :operator_handle))
+      email = Vutuv.Operator.contact_email()
+
+      html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ ~s|href="mailto:#{email}"|
+
+      note = html |> text_of("#investors-contact-note") |> String.replace(~r/\s+/u, " ")
+
+      assert note =~
+               "Schreiben Sie mir eine E-Mail an #{email} oder hier auf vutuv eine Nachricht."
+
+      assert html =~ ~s|href="#{InvestorsDoc.contact_profile_url()}"|
+    end
+
+    # The film closes the page: the claim, the figures, the argument and the
+    # contact come first, and the film is there for whoever wants to see it.
+    test "keeps the film card at the very end", %{conn: conn} do
       insert(:activated_user, username: Application.get_env(:vutuv, :operator_handle))
 
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      refute html =~ MediaKitDoc.press_contact()
-      refute html =~ "mailto:"
-      assert html =~ ~s|href="#{InvestorsDoc.contact_profile_url()}"|
+      assert [_] = elements(html, "#investors-teaser")
+      assert elements(html, "#investors-teaser ~ *") == []
     end
 
     test "offers a message on this installation instead", %{conn: conn} do
@@ -366,15 +382,17 @@ defmodule VutuvWeb.CompanyControllerTest do
     end
 
     test "serves its agent-format siblings", %{conn: conn} do
+      insert(:activated_user, username: Application.get_env(:vutuv, :operator_handle))
+
       json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
 
       assert json["type"] == "investors"
       assert is_integer(json["figures"]["members"])
       assert json["language"] == "en"
-      # No address here either: an agent summarising this page for somebody
-      # must not be the way the address gets out.
-      refute json["contact"]
-      refute Jason.encode!(json) =~ MediaKitDoc.press_contact()
+      # The address the page names, the agent formats name too, as a field of
+      # its own and in the note.
+      assert json["contact_email"] == Vutuv.Operator.contact_email()
+      assert json["contact_note"] =~ json["contact_email"]
     end
 
     test "the Markdown sibling carries the argument, not only the counts", %{conn: conn} do

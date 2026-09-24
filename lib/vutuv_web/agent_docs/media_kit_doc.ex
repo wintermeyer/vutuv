@@ -217,10 +217,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   literal address, so a third-party installation names its own operator and
   never ours.
 
-  The investor page beside this one deliberately states no address at all: a
-  journalist on deadline needs one, an investor does not, and the address on a
-  page built to be read by strangers and machines is the one that gets
-  harvested.
+  The investor page names the same address beside a message on vutuv.
   """
   def press_contact, do: Operator.contact_email()
 
