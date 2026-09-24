@@ -161,6 +161,8 @@ defmodule VutuvWeb.ShellLiveTest do
         live_isolated(conn, VutuvWeb.ShellLive, session: %{"path" => "/feed"})
 
       assert has_element?(view, ~s(header a[data-brand][href="/"]), "vutuv")
+      # The wordmark is inline SVG so it takes the link's text colour.
+      assert has_element?(view, ~s(header a[data-brand] svg[fill="currentColor"][aria-hidden]))
     end
 
     test "the real feed page wires the brand link to the member's profile", %{conn: conn} do
