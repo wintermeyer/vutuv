@@ -4439,7 +4439,7 @@ msgstr ""
 msgid "Not an exact match, but sounds like your search."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:214
+#: lib/vutuv_web/agent_docs/investors_doc.ex:215
 #: lib/vutuv_web/agent_docs/markdown.ex:554
 #: lib/vutuv_web/agent_docs/text.ex:546
 #: lib/vutuv_web/components/saved_search_components.ex:57
@@ -6679,8 +6679,8 @@ msgstr ""
 msgid "Maximum age"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:71
-#: lib/vutuv_web/agent_docs/investors_doc.ex:202
+#: lib/vutuv_web/agent_docs/investors_doc.ex:72
+#: lib/vutuv_web/agent_docs/investors_doc.ex:203
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:592
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:665
 #: lib/vutuv_web/live/admin/user_detail_live.ex:64
@@ -6692,7 +6692,7 @@ msgstr ""
 #: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:45
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:90
 #: lib/vutuv_web/templates/admin/user_pref/show.html.heex:9
-#: lib/vutuv_web/templates/company/investors.html.heex:60
+#: lib/vutuv_web/templates/company/investors.html.heex:27
 #, elixir-autogen, elixir-format
 msgid "Members"
 msgstr ""
@@ -22199,49 +22199,49 @@ msgstr[1] ""
 msgid "Their page here"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:83
+#: lib/vutuv_web/agent_docs/investors_doc.ex:84
 #, elixir-autogen, elixir-format
 msgid "A professional network that works without an account"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:141
+#: lib/vutuv_web/agent_docs/investors_doc.ex:142
 #, elixir-autogen, elixir-format
 msgid "Advertising instead of a paywall"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:194
+#: lib/vutuv_web/templates/company/investors.html.heex:164
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Create an account"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:72
-#: lib/vutuv_web/agent_docs/investors_doc.ex:208
-#: lib/vutuv_web/templates/company/investors.html.heex:62
+#: lib/vutuv_web/agent_docs/investors_doc.ex:73
+#: lib/vutuv_web/agent_docs/investors_doc.ex:209
+#: lib/vutuv_web/templates/company/investors.html.heex:29
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Fediverse accounts"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:73
+#: lib/vutuv_web/agent_docs/investors_doc.ex:74
 #: lib/vutuv_web/live/investors_reach_live.ex:136
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Fediverse servers"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:65
+#: lib/vutuv_web/templates/company/investors.html.heex:32
 #, elixir-autogen, elixir-format
 msgid "From %{formatted} server"
 msgid_plural "From %{formatted} servers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:370
+#: lib/vutuv_web/agent_docs/investors_doc.ex:383
 #: lib/vutuv_web/controllers/company_controller.ex:57
 #: lib/vutuv_web/templates/layout/app.html.heex:100
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Investors"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:307
+#: lib/vutuv_web/agent_docs/investors_doc.ex:308
 #, elixir-autogen, elixir-format
 msgid "Over these %{days} days %{total} people arrived, %{members} of them as members here."
 msgstr ""
@@ -22257,26 +22257,26 @@ msgstr ""
 msgid "Press material: %{url}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:111
+#: lib/vutuv_web/agent_docs/investors_doc.ex:112
 #, elixir-autogen, elixir-format
 msgid "Readable without an account"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:199
+#: lib/vutuv_web/templates/company/investors.html.heex:169
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Send a message"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:443
 #: lib/vutuv_web/agent_docs/text.ex:388
-#: lib/vutuv_web/templates/company/investors.html.heex:52
+#: lib/vutuv_web/templates/company/investors.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "Where we are"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:452
 #: lib/vutuv_web/agent_docs/text.ex:397
-#: lib/vutuv_web/templates/company/investors.html.heex:134
+#: lib/vutuv_web/templates/company/investors.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "Why this is worth building"
 msgstr ""
@@ -22289,17 +22289,12 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:458
 #: lib/vutuv_web/agent_docs/text.ex:399
-#: lib/vutuv_web/templates/company/investors.html.heex:172
+#: lib/vutuv_web/templates/company/investors.html.heex:138
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Write to me"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:319
-#, elixir-autogen, elixir-format
-msgid "Write to me here, on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
-msgstr ""
-
-#: lib/vutuv_web/templates/company/investors.html.heex:182
+#: lib/vutuv_web/templates/company/investors.html.heex:152
 #, elixir-autogen, elixir-format, fuzzy
 msgid "My profile:"
 msgstr ""
@@ -22310,17 +22305,17 @@ msgstr ""
 msgid "My profile: %{url}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:143
+#: lib/vutuv_web/agent_docs/investors_doc.ex:144
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Text ads are to carry the operation, which is why there is no premium tier and will not be one. Nothing is held back from somebody who will not pay for it, and a paid tier is the single thing that stops most people from ever starting. Leaving it out is what lets the network grow, and only a growing network makes the ads worth anything."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:119
+#: lib/vutuv_web/agent_docs/investors_doc.ex:120
 #, elixir-autogen, elixir-format
 msgid "Fast pages win"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:153
+#: lib/vutuv_web/templates/company/investors.html.heex:120
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Source:"
 msgstr ""
@@ -22331,37 +22326,37 @@ msgstr ""
 msgid "Source: %{source}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:121
+#: lib/vutuv_web/agent_docs/investors_doc.ex:122
 #, elixir-autogen, elixir-format, fuzzy
 msgid "A page that answers in milliseconds is not a matter of polish, it decides whether somebody stays. Google had 55 and Deloitte measure that across 37 European and American brands and more than 30 million sessions: a tenth of a second faster raised conversions by 8.4% in retail and by 10.1% in travel."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:113
+#: lib/vutuv_web/agent_docs/investors_doc.ex:114
 #, elixir-autogen, elixir-format
 msgid "LinkedIn shows a profile to whoever is logged in and asks everybody else to sign up first. Everybody who is inside knows the other half: you go looking for one person and get a feed, suggestions you did not ask for, and a note that the rest is behind Premium. A vutuv profile is an ordinary public web page: a search engine indexes it, an AI agent reads it as Markdown, JSON or vCard, and a person who has never heard of us reads it without handing over an address first. That is why somebody arrives at all, and why a member puts their work here."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:132
+#: lib/vutuv_web/agent_docs/investors_doc.ex:133
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and somebody online in a wealthy country moves nearly eight times as much mobile data as somebody in a poor one. A site that assumes a fast line is shut to most of them in practice. A vutuv page loads less data than a LinkedIn page to begin with, and a data-saving mode cuts that again for anybody on a slow connection or paying by the megabyte."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:130
+#: lib/vutuv_web/agent_docs/investors_doc.ex:131
 #, elixir-autogen, elixir-format
 msgid "The market behind the slow connection"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:170
+#: lib/vutuv_web/agent_docs/investors_doc.ex:171
 #, elixir-autogen, elixir-format
 msgid "%{members} members + %{fediverse} Fediverse accounts = %{total} people"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:91
+#: lib/vutuv_web/agent_docs/investors_doc.ex:92
 #, elixir-autogen, elixir-format, fuzzy
 msgid "This page is for potential investors. It says what vutuv is, where the network stands today, and how it is meant to earn money one day."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:224
+#: lib/vutuv_web/agent_docs/investors_doc.ex:225
 #, elixir-autogen, elixir-format
 msgid "A Fediverse account following several profiles here still counts as one person."
 msgstr ""
@@ -24808,7 +24803,7 @@ msgstr ""
 msgid "How this is calculated"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:248
+#: lib/vutuv_web/agent_docs/investors_doc.ex:249
 #: lib/vutuv_web/templates/post/analytics.html.heex:42
 #, elixir-autogen, elixir-format
 msgid "Follower totals are fetched in the background from public ActivityPub collections or Mastodon APIs and stored with a timestamp."
@@ -24819,7 +24814,7 @@ msgstr ""
 msgid "Each reposter is counted once. Missing totals are excluded, so + marks a lower bound."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:251
+#: lib/vutuv_web/agent_docs/investors_doc.ex:252
 #: lib/vutuv_web/templates/post/analytics.html.heex:44
 #, elixir-autogen, elixir-format
 msgid "Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers."
@@ -24936,7 +24931,7 @@ msgstr "Reposters · Servers · Interactions"
 msgid "What is the real reach?"
 msgstr "What is the real reach?"
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:254
+#: lib/vutuv_web/agent_docs/investors_doc.ex:255
 #: lib/vutuv_web/templates/post/analytics.html.heex:103
 #, elixir-autogen
 msgid "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
@@ -24986,7 +24981,7 @@ msgstr ""
 msgid "Calculated %{when}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:245
+#: lib/vutuv_web/agent_docs/investors_doc.ex:246
 #, elixir-autogen, elixir-format
 msgid "Each post brings the follower counts of the members, pages and Fediverse accounts that reposted it. Somebody who reposts three posts counts three times."
 msgstr ""
@@ -25036,7 +25031,7 @@ msgstr ""
 msgid "Working it out in the background"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:272
+#: lib/vutuv_web/agent_docs/investors_doc.ex:273
 #, elixir-autogen, elixir-format
 msgid "Potential reach from reposts over the last 12 months: at least %{reach} followers, from %{formatted} public post."
 msgid_plural "Potential reach from reposts over the last 12 months: at least %{reach} followers, from %{formatted} public posts."
@@ -25053,7 +25048,7 @@ msgstr ""
 msgid "Reach over the last 12 months"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:232
+#: lib/vutuv_web/agent_docs/investors_doc.ex:233
 #, elixir-autogen, elixir-format
 msgid "The potential reach of every public post published here in the last 12 months, added up the way each post's own reach analysis counts it."
 msgstr ""
@@ -26538,17 +26533,22 @@ msgid "Standard"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:440
-#: lib/vutuv_web/templates/company/investors.html.heex:21
+#: lib/vutuv_web/templates/company/investors.html.heex:181
 #, elixir-autogen, elixir-format
 msgid "The film"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:32
+#: lib/vutuv_web/templates/company/investors.html.heex:192
 #, elixir-autogen, elixir-format
 msgid "To pass on"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:348
+#: lib/vutuv_web/agent_docs/investors_doc.ex:361
 #, elixir-autogen, elixir-format
 msgid "Two silent minutes of vutuv in use: one member's morning, from her feed to a job offer and a CV saved as PDF. The addresses below are MP4 files that play anywhere, 16:9 in full HD for a screen and 9:16 for a phone."
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/investors_doc.ex:331
+#, elixir-autogen, elixir-format
+msgid "Email me at {email} or send me a message here on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
 msgstr ""
