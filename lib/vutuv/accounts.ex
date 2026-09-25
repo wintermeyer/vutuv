@@ -2475,6 +2475,18 @@ defmodule Vutuv.Accounts do
     end
   end
 
+  @doc """
+  Turns the "Only replies and mentions" switch on /notifications on or off for
+  the member. One column, written on its own: the switch is a click, not a form.
+  """
+  def set_notifications_replies_only(%User{id: id}, on?) when is_boolean(on?) do
+    Repo.update_all(from(u in User, where: u.id == ^id),
+      set: [notifications_replies_only?: on?]
+    )
+
+    :ok
+  end
+
   # ── Usernames ──
 
   @username_change_limit 4

@@ -45,14 +45,14 @@ defmodule VutuvWeb.NotificationLive.Timeline do
   """
   def build(items, visits, opts \\ []) do
     new_since = Keyword.get(opts, :new_since)
-    only_words? = Keyword.get(opts, :only_words?, false)
+    replies_only? = Keyword.get(opts, :replies_only?, false)
 
     visits = Enum.sort_by(visits, & &1.at, NaiveDateTime)
 
     rows =
       items
       |> Enum.map(&normalize/1)
-      |> Enum.filter(&(not only_words? or &1.kind in @words_kinds))
+      |> Enum.filter(&(not replies_only? or &1.kind in @words_kinds))
       |> Enum.group_by(&section_key(&1, visits))
       |> Enum.flat_map(fn {key, members} -> section_rows(key, members, new_since) end)
 

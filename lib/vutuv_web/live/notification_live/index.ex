@@ -33,7 +33,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   answer and followed by the member's own answer. The card's Reply opens the
   composer under it (the `InlineReply` hook; without JavaScript the link still
   leads to the reply page). Likes of one post are one line, new people one
-  line, everything rarer one line each. "Only replies and mentions" (`?only=words`)
+  line, everything rarer one line each. "Only replies and mentions" (a switch
+  kept with the member, `users.notifications_replies_only?`)
   keeps the cards alone.
 
   The static render carries the whole list (issue #919); the visit is only
@@ -60,6 +61,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
   on_mount(VutuvWeb.Live.RemoteCounts)
 
+  alias Vutuv.Accounts
   alias Vutuv.Activity
   alias Vutuv.Activity.ReplyStatus
   alias Vutuv.Fediverse
@@ -118,6 +120,7 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:cal_counts, %{})
      |> assign(:cal_counted, nil)
      |> assign(:cal_capped?, false)
+     |> assign(:replies_only?, user.notifications_replies_only?)
      |> assign(:travel, nil)
      |> assign(:day, nil)}
   end
@@ -135,10 +138,9 @@ defmodule VutuvWeb.NotificationLive.Index do
       socket
       |> assign(:travel, travel)
       |> assign(:day, day)
-      |> assign(:only_words?, params["only"] == "words")
       |> assign(:cal_month, FeedTimeTravel.month_of(day))
 
-    # The switch only filters what is already loaded; a new window loads.
+    # A patch that keeps the window rebuilds from what is loaded; a new one loads.
     socket = if same_window?, do: rebuild(socket), else: load_first(socket)
 
     {:noreply, load_calendar_counts(socket)}
@@ -151,6 +153,14 @@ defmodule VutuvWeb.NotificationLive.Index do
   @impl true
   def handle_event("compose", %{"id" => id}, socket) do
     {:noreply, assign(socket, :composing, if(socket.assigns.composing == id, do: nil, else: id))}
+  end
+
+  # The switch is the member's setting: written at once, and the list is
+  # filtered from what is already loaded.
+  def handle_event("toggle-replies-only", _params, socket) do
+    on? = !socket.assigns.replies_only?
+    Accounts.set_notifications_replies_only(socket.assigns.current_user, on?)
+    {:noreply, socket |> assign(:replies_only?, on?) |> rebuild()}
   end
 
   def handle_event("cancel-compose", _params, socket),
@@ -343,7 +353,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     blocks =
       Timeline.build(socket.assigns.entries, lines,
         new_since: if(travel, do: last_at(lines), else: socket.assigns.new_since),
-        only_words?: socket.assigns.only_words?
+        replies_only?: socket.assigns.replies_only?
       )
 
     socket
@@ -435,13 +445,11 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp page_path(assigns, overrides) do
     day = Keyword.get(overrides, :day, assigns.day)
     at = Keyword.get(overrides, :at, assigns.travel)
-    only? = Keyword.get(overrides, :only_words?, assigns.only_words?)
 
     query =
       [
         at: at && NaiveDateTime.to_iso8601(at),
-        day: is_nil(at) && day && Date.to_iso8601(day),
-        only: only? && "words"
+        day: is_nil(at) && day && Date.to_iso8601(day)
       ]
       |> Enum.filter(fn {_key, value} -> value end)
 
@@ -478,24 +486,25 @@ defmodule VutuvWeb.NotificationLive.Index do
             <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {gettext("Notifications")}
             </h1>
-            <.link
-              id="only-words"
-              patch={@paths.toggle}
+            <button
+              type="button"
+              id="replies-only"
+              phx-click="toggle-replies-only"
               role="switch"
-              aria-checked={to_string(@only_words?)}
+              aria-checked={to_string(@replies_only?)}
               class="inline-flex min-h-10 items-center gap-2.5 text-sm font-medium text-slate-700 dark:text-slate-300"
             >
               <span class={[
                 "relative h-6 w-10 shrink-0 rounded-full transition-colors",
-                if(@only_words?, do: "bg-brand-600", else: "bg-slate-300 dark:bg-slate-600")
+                if(@replies_only?, do: "bg-brand-600", else: "bg-slate-300 dark:bg-slate-600")
               ]}>
                 <span class={[
                   "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
-                  @only_words? && "translate-x-4"
+                  @replies_only? && "translate-x-4"
                 ]}></span>
               </span>
               {gettext("Only replies and mentions")}
-            </.link>
+            </button>
           </div>
 
           <%!-- The phone has no rail column: the calendar and the looks of the
@@ -588,7 +597,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     a = socket.assigns
 
     assign(socket, :paths, %{
-      toggle: page_path(a, only_words?: !a.only_words?),
       now: page_path(a, day: nil, at: nil),
       now?: present?(a),
       earlier: page_path(a, day: Date.add(a.top_day, -2), at: nil),
