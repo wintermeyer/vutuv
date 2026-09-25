@@ -876,8 +876,7 @@ need distribution, which the reference setup disables.
 
 Some behaviour is a **member preference** with an installation-wide default:
 how many lines a post shows in the feed before "Read more" (desktop and
-mobile separately), whether post text hyphenates, how many lines of a post a
-notification on `/notifications` quotes, and which map service an address on
+mobile separately), whether post text hyphenates, and which map service an address on
 a profile links to, if any. Members tune these on their own settings pages;
 you decide what everyone gets **until** they do.
 

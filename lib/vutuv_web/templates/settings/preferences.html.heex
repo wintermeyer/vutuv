@@ -292,27 +292,6 @@ are shortened and hyphenated. Each form posts its own subset and lands back here
           </div>
         </fieldset>
 
-        <fieldset class="space-y-2">
-          <legend class="text-sm font-medium text-slate-900 dark:text-white">
-            {gettext("Quoted posts in notifications")}
-          </legend>
-          <p class="text-sm text-slate-600 dark:text-slate-400">
-            {gettext(
-              "Your notifications quote the post someone liked or replied to. Leave the field empty to follow the site default."
-            )}
-          </p>
-
-          <div class="sm:max-w-[13rem]">
-            <%= label f, :notification_post_lines, gettext("Lines in notifications"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-            <%= number_input f, :notification_post_lines,
-              min: Vutuv.Accounts.User.notification_post_lines_min(),
-              max: Vutuv.Accounts.User.notification_post_lines_max(),
-              class: input_class(f, :notification_post_lines),
-              "aria-invalid": f.errors[:notification_post_lines] && "true" %>
-            <%= error_tag f, :notification_post_lines %>
-          </div>
-        </fieldset>
-
         <fieldset class="space-y-3">
           <legend class="text-sm font-medium text-slate-900 dark:text-white">
             {gettext("Hyphenation")}
