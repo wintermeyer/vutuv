@@ -313,19 +313,32 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute has_element?(live, ~s(button[phx-value-followee="#{newcomer.id}"]))
     end
 
-    test "only words keeps the cards and drops likes and people", %{conn: conn} do
+    test "the replies-only switch keeps the cards, and stays on for the next visit",
+         %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       reply!(user, "Worte an mich")
       new_follower!(user, first_name: "Some", last_name: "Follower")
       like!(insert(:post, user: user), insert(:user))
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
-      html = live |> element("#only-words") |> render_click()
+      html = live |> element("#replies-only") |> render_click()
 
-      assert_patch(live, ~p"/notifications?only=words")
       assert html =~ "Worte an mich"
       refute html =~ ~s(data-row="people")
       refute html =~ ~s(data-row="reactions")
+      assert Repo.reload!(user).notifications_replies_only?
+
+      # A setting of the member's, not of this tab: the next visit, and its
+      # static render, open with it on.
+      body = conn |> recycle() |> get(~p"/notifications") |> html_response(200)
+      assert body =~ ~s(aria-checked="true")
+      refute body =~ ~s(data-row="people")
+
+      {:ok, again, _html} = live(conn, ~p"/notifications")
+      again |> element("#replies-only") |> render_click()
+
+      refute Repo.reload!(user).notifications_replies_only?
+      assert has_element?(again, ~s([data-row="people"]))
     end
 
     test "a reply from another network is its own card and can be reported", %{conn: conn} do

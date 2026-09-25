@@ -261,6 +261,10 @@ defmodule Vutuv.Accounts.User do
     # nobody who did not ask for it is ever prompted. The switch is the
     # member's, the permission is each browser's — see VutuvWeb.ShellLive.
     field(:browser_notifications?, :boolean, default: false)
+    # The "Only replies and mentions" switch on /notifications: kept with the
+    # member rather than in the URL, so it holds on the next visit and on
+    # every device. Set through Accounts.set_notifications_replies_only/2.
+    field(:notifications_replies_only?, :boolean, default: false)
     # Whether this member's avatar shows the real-time "online" green dot while
     # they have the site open. Default on; opting out (Privacy settings) means
     # VutuvWeb.Presence never tracks them, so they show as online to no one.

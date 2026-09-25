@@ -126,7 +126,7 @@ defmodule VutuvWeb.NotificationTimelineTest do
           item("follower", 4)
         ],
         [],
-        only_words?: true
+        replies_only?: true
       )
 
     assert rows(blocks) |> Enum.map(& &1.item.kind) |> Enum.sort() == ["mention", "reply"]
