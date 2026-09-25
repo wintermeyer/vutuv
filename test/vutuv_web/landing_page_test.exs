@@ -122,52 +122,60 @@ defmodule VutuvWeb.LandingPageTest do
       assert at(html, "Ein berufliches Netzwerk") < at(html, "data-hero-points")
     end
 
-    # Nine questions somebody has BEFORE signing up, each answered in a
+    # Ten questions somebody has BEFORE signing up, each answered in a
     # sentence or two, all open on the page: a collapsed block reads as
     # something to hide, and a FAQ that grows past what a visitor asks before
-    # joining is the feature catalogue this replaced. Asserted by key, so a
-    # tenth question or a renamed one is a decision and not a drift, and as
+    # joining is the feature catalogue this replaced. Asserted by key, so an
+    # eleventh question or a renamed one is a decision and not a drift, and as
     # German literals for the reason the hero test gives.
-    test "answers nine questions anybody asks before signing up", %{conn: conn} do
+    test "answers ten questions anybody asks before signing up", %{conn: conn} do
       html = landing_de(conn)
 
       assert html =~ "Häufige Fragen"
 
       assert faq_keys(html) ==
-               ~w(price public data linkedin organizations fediverse open_source api delete)
+               ~w(price public data tracking linkedin organizations fediverse open_source api delete)
 
       assert html =~ "Was kostet vutuv?"
       assert html =~ "Nichts. Es gibt keine bezahlten Premium-Accounts"
       assert html =~ "Kann ich mir Profile und Beiträge auf vutuv ansehen, ohne mich anzumelden?"
       assert html =~ "Wo liegen meine Daten?"
       assert html =~ "eigenen Servern in Deutschland"
-      assert html =~ "ein einziges Cookie"
+      assert html =~ "Benutzt vutuv Cookies von Dritten oder sonst ein externes Tracking?"
+      assert html =~ "Nein. vutuv setzt ein einziges Cookie"
       assert html =~ "Kann ich mein LinkedIn-Profil mitnehmen?"
       assert html =~ "Wie bekommt meine Organisation"
       assert html =~ "Admin oder Redaktion"
       assert html =~ "Was hat vutuv mit dem Fediverse zu tun?"
+      assert html =~ "Jedes Mitglied entscheidet selbst"
+      assert html =~ "in beide Richtungen"
       assert html =~ "Ist vutuv Open Source?"
       assert html =~ "MIT-Lizenz"
       assert html =~ "Gibt es eine API?"
+      assert html =~ "REST-API"
+      assert html =~ ".md oder .json"
       assert html =~ "Kann ich mein Konto wieder löschen?"
-      assert html =~ "Niemand fragt, warum"
+      # The answer names the settings row by its own label, bound from the
+      # catalog, so the two cannot drift apart.
+      assert html =~ "Suchen Sie in den Einstellungen nach „Konto löschen“"
 
       refute html =~ "<details"
     end
 
-    # The links that let a reader check an answer: the example profile, its
-    # Markdown sibling, the source code. The deletion answer names the path
-    # and deliberately does not link it, and the LinkedIn answer links
-    # nothing: both pages need a login, so a logged-out click would trade the
-    # sign-up form for the login page.
-    test "links what can be checked and names the settings path unlinked", %{conn: conn} do
+    # The links that let a reader check an answer: the example profile, the
+    # developer documentation with the profile's JSON sibling as the quick way
+    # in, the source code. The deletion answer names the settings row and
+    # deliberately does not link it, and the LinkedIn answer links nothing:
+    # both pages need a login, so a logged-out click would trade the sign-up
+    # form for the login page.
+    test "links what can be checked and names the settings row unlinked", %{conn: conn} do
       html = landing_de(conn)
 
       assert html =~ ~s(href="https://vutuv.de/wintermeyer")
-      assert html =~ ~s(href="https://vutuv.de/wintermeyer.md")
+      assert html =~ ~s(href="/developers")
+      assert html =~ ~s(href="https://vutuv.de/wintermeyer.json")
       assert html =~ Vutuv.SourceRepo.url()
 
-      assert html =~ "unter /settings/delete"
       refute html =~ ~s(href="/settings/delete")
       refute html =~ ~s(href="/import/linkedin")
     end
@@ -191,6 +199,10 @@ defmodule VutuvWeb.LandingPageTest do
 
       open_source = Enum.find(faq["mainEntity"], &(&1["name"] == "Ist vutuv Open Source?"))
       assert open_source["acceptedAnswer"]["url"] == Vutuv.SourceRepo.url()
+
+      # An answer with two links carries the first, the one that explains.
+      api = Enum.find(faq["mainEntity"], &(&1["name"] == "Gibt es eine API?"))
+      assert api["acceptedAnswer"]["url"] == VutuvWeb.AgentDocs.abs_url("/developers")
     end
 
     # The page's argument, in order: the form, then the questions.

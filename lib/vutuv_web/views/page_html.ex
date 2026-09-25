@@ -115,7 +115,7 @@ defmodule VutuvWeb.PageHTML do
   filled-in profile of its own yet, and a local path would be a dead link there.
 
   The trailing slash a configured URL may carry comes off here, once: the API
-  answer appends `.md` to this, and `example_profile_label/1` strips the slash
+  answer appends `.json` to this, and `example_profile_label/1` strips the slash
   for the visible text, so a join at a call site once rendered
   `…/wintermeyer//cv` under a label reading `…/wintermeyer/cv`.
   """
@@ -156,8 +156,8 @@ defmodule VutuvWeb.PageHTML do
   cookies" and "delete your account yourself" are promises the software keeps
   on every installation, while "our own servers in X" is a promise only the
   operator can make. An operator on rented cloud infrastructure
-  clears this and the whole hosting sentence goes with it, rather than the start
-  page claiming something untrue on their behalf.
+  clears this and the whole "Where does my data live?" question goes with it,
+  rather than the start page claiming something untrue on their behalf.
   """
   def data_location do
     case Application.get_env(:vutuv, :data_location) do
@@ -172,25 +172,29 @@ defmodule VutuvWeb.PageHTML do
   @doc """
   The questions under the sign-up form, in the order the page asks them.
 
-  Nine questions somebody has *before* signing up, each answered in a
+  Ten questions somebody has *before* signing up, each answered in a
   sentence or two (Stefan, 2026-09-25). A list rather than markup, because
   the FAQPage block (`VutuvWeb.JsonLd.faq_page/1`) is built from the same
   entries the page renders and so cannot say something the page does not.
   Each entry carries a `key` for the tests, the `question`, the `answer` (built
   from sentences here, because some of them depend on the installation, and
-  joined once so the page and the JSON-LD block read the same string), and an
-  optional `link` a reader checks the answer with.
+  joined once so the page and the JSON-LD block read the same string), and the
+  `links` a reader checks the answer with, the explaining one first (the
+  JSON-LD block carries that one as the Answer's `url`).
 
   What depends on the installation drops out per answer, not per section:
   the example profile (`:landing_example_profile_url`) carries the link of
-  the public-profile answer and the Markdown example of the API answer, the
-  hosting sentence is the operator's alone (`:data_location`, see
-  `data_location/0`), and the Fediverse question exists only where the
-  installation federates — with FEDIVERSE_ENABLED=false (the intranet case)
-  every endpoint behind it 404s, so promising Mastodon there would be a lie.
+  the public-profile answer and the JSON example of the API answer; the
+  data-location question exists only where the operator named a place
+  (`:data_location`, see `data_location/0`), because "our own servers" is a
+  promise only they can make; and the Fediverse question exists only where
+  the installation federates — with FEDIVERSE_ENABLED=false (the intranet
+  case) every endpoint behind it 404s, so promising it there would be a lie.
+  The cookie question holds everywhere: it describes the software.
 
-  The deletion answer names the settings path and deliberately does not link
-  it, and the LinkedIn answer links nothing: both pages need a login, so a
+  The deletion answer names the settings row by its own label (bound from the
+  catalog, so the two cannot drift apart) and deliberately does not link it,
+  and the LinkedIn answer links nothing: both pages need a login, so a
   logged-out click would trade the sign-up form for the login page. The
   organization kinds in that question are prose, not `Organization.kinds/0`:
   German gives every noun its own case ending.
@@ -210,19 +214,17 @@ defmodule VutuvWeb.PageHTML do
         gettext("Can I look at profiles and posts on vutuv without signing up?"),
         [gettext("Yes. Every profile and every public post can be read without an account.")] ++
           List.wrap(example && gettext("For example:")),
-        example && check_link(example_profile_label(example), example)
+        List.wrap(example && check_link(example_profile_label(example), example))
       ),
+      data_entry(place),
       entry(
-        "data",
-        gettext("Where does my data live?"),
-        List.wrap(
-          place && gettext("On our own servers in %{place}, in no foreign cloud.", place: place)
-        ) ++
-          [
-            gettext(
-              "vutuv sets a single cookie, the one that keeps you signed in, and loads nothing from anybody else's server."
-            )
-          ]
+        "tracking",
+        gettext("Does vutuv use third-party cookies or any other external tracking?"),
+        [
+          gettext(
+            "No. vutuv sets a single cookie, the one that keeps you signed in, and loads nothing from anybody else's server."
+          )
+        ]
       ),
       entry("linkedin", gettext("Can I bring my LinkedIn profile along?"), [
         gettext(
@@ -245,37 +247,60 @@ defmodule VutuvWeb.PageHTML do
         "open_source",
         gettext("Is vutuv open source?"),
         [gettext("Yes, the whole source code under the MIT license.")],
-        check_link(gettext("Source code"), SourceRepo.url(), external: true)
+        [check_link(gettext("Source code"), SourceRepo.url(), external: true)]
       ),
       entry(
         "api",
         gettext("Is there an API?"),
         [
-          gettext("Every public page is also served as Markdown, JSON or vCard, plus a REST API.")
+          gettext(
+            "For developers there is a clean REST API, described in the developer documentation. If you only want to pull a profile's data quickly, append .md or .json to its address."
+          )
         ],
-        example && check_link(gettext("Example"), example <> ".md")
+        [check_link(gettext("Developer documentation"), ~p"/developers")] ++
+          List.wrap(example && example_json_link(example <> ".json"))
       ),
       entry("delete", gettext("Can I delete my account again?"), [
-        gettext("Any time, yourself, under %{path}. Nobody asks why.", path: ~p"/settings/delete")
+        gettext(
+          "Any time, and it takes a minute: look for “%{label}” in the settings, the red entry.",
+          label: gettext("Delete account")
+        )
       ])
     ]
     |> Enum.reject(&is_nil/1)
   end
 
-  defp entry(key, question, sentences, link \\ nil),
-    do: %{key: key, question: question, answer: Enum.join(sentences, " "), link: link}
+  defp entry(key, question, sentences, links \\ []),
+    do: %{key: key, question: question, answer: Enum.join(sentences, " "), links: links}
 
   defp check_link(label, href, opts \\ []),
     do: %{label: label, href: href, external: Keyword.get(opts, :external, false)}
 
-  # The closing sentence is Stefan's own line and the whole stance: plenty of
-  # people want a business network and no Fediverse at all, and they need to
-  # read that it is a choice, not something that happens to them.
+  # The label shows the address the link opens ("Example: vutuv.de/wintermeyer.json"),
+  # because the answer tells the reader to append something to an address and
+  # the link is the proof of what that looks like.
+  defp example_json_link(href),
+    do: check_link(gettext("Example: %{address}", address: example_profile_label(href)), href)
+
+  # "Our own servers" is a promise only the operator can make, so the question
+  # exists only where they named a place (see `data_location/0`).
+  defp data_entry(nil), do: nil
+
+  defp data_entry(place) do
+    entry("data", gettext("Where does my data live?"), [
+      gettext("On our own servers in %{place}, in no foreign cloud.", place: place)
+    ])
+  end
+
+  # Both directions, said twice (at sign-up, and later in the settings), and
+  # the whole stance in it: plenty of people want a business network and no
+  # Fediverse at all, and they need to read that it is their choice, not
+  # something that happens to them (Stefan, 2026-09-25).
   defp fediverse_entry do
     if Fediverse.enabled?() do
       entry("fediverse", gettext("What does vutuv have to do with the Fediverse?"), [
         gettext(
-          "vutuv is part of it, as Mastodon is. Whether your posts take part is your choice at sign-up, and one switch in the settings later. Each to their own."
+          "Every member decides for themselves whether their vutuv account takes part in the Fediverse. You make that choice at sign-up and can change it any time later in the settings, in either direction."
         )
       ])
     end
@@ -283,7 +308,7 @@ defmodule VutuvWeb.PageHTML do
 
   @doc """
   One question with its answer: the question as a heading, the answer as one
-  paragraph, and the link that lets the reader check it at the end of that
+  paragraph, and the links that let the reader check it at the end of that
   paragraph. An external link wears ↗, a page on this site ›.
   """
   attr(:entry, :map, required: true)
@@ -294,9 +319,9 @@ defmodule VutuvWeb.PageHTML do
       <h3 class="font-semibold text-slate-900 dark:text-white">{@entry.question}</h3>
       <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
         {@entry.answer}
-        <a :if={@entry.link} href={@entry.link.href} class={link_class()}>
-          {@entry.link.label}
-          <span aria-hidden="true">{if @entry.link.external, do: "↗", else: "›"}</span>
+        <a :for={link <- @entry.links} href={link.href} class={[link_class(), "mr-2"]}>
+          {link.label}
+          <span aria-hidden="true">{if link.external, do: "↗", else: "›"}</span>
         </a>
       </p>
     </div>

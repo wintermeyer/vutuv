@@ -134,7 +134,8 @@ defmodule VutuvWeb.JsonLd do
   The landing page's questions as a schema.org FAQPage, from the same entries
   `VutuvWeb.PageHTML.landing_faq/0` renders, so the block cannot say something
   the page does not (landing_page_test pins the two against each other). The
-  link a reader checks an answer with rides along as the Answer's `url`.
+  first of an answer's links, the one that explains, rides along as the
+  Answer's `url`.
   """
   def faq_page(entries) do
     %{
@@ -149,12 +150,15 @@ defmodule VutuvWeb.JsonLd do
               compact(%{
                 "@type" => "Answer",
                 "text" => entry.answer,
-                "url" => entry.link && entry.link.href
+                "url" => first_href(entry.links)
               })
           }
         end)
     }
   end
+
+  defp first_href([%{href: href} | _]), do: absolute(href)
+  defp first_href([]), do: nil
 
   @doc """
   The profile as ProfilePage/Person, from the show page's assigns.
