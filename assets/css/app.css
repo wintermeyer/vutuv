@@ -298,7 +298,9 @@ html[data-nav-pressing] main {
    arrival, not a state, and the first re-render of the row drops it (the server
    renders neither attribute). Short and small — ten of these run at once, and a
    long slide would read as the page moving under the reader rather than as
-   posts arriving. */
+   posts arriving. `backwards`, never `both`: a kept end state is a kept
+   `transform`, which makes the row a stacking context of its own, and the next
+   row then paints over this row's open ⋯ menu. */
 @keyframes feed-row-reveal {
   from {
     opacity: 0;
@@ -307,12 +309,12 @@ html[data-nav-pressing] main {
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
 [data-pending-shown] {
-  animation: feed-row-reveal 200ms ease-out both;
+  animation: feed-row-reveal 200ms ease-out backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
