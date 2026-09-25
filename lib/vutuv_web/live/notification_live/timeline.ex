@@ -200,11 +200,22 @@ defmodule VutuvWeb.NotificationLive.Timeline do
     |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
   end
 
+  # One entry per person, newest first, saying what they did: the reactions
+  # row lists them with a heart, the re-share arrows, or both.
   defp distinct_actors(items) do
     items
     |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
-    |> Enum.uniq_by(&actor_key/1)
-    |> Enum.map(&actor/1)
+    |> Enum.group_by(&actor_key/1)
+    |> Enum.map(fn {_key, [newest | _] = theirs} ->
+      newest
+      |> actor()
+      |> Map.merge(%{
+        at: newest.at,
+        liked?: Enum.any?(theirs, &like?/1),
+        shared?: Enum.any?(theirs, &share?/1)
+      })
+    end)
+    |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
   end
 
   @doc "The actor an item names, in the shape the page links."

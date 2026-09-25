@@ -249,10 +249,42 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert has_element?(live, ~s([data-row="reactions"]), "2 likes")
-      assert has_element?(live, ~s([data-row="reactions"]), "Anna A")
-      assert has_element?(live, ~s([data-row="reactions"]), "Ben B")
+      # The feed card's bottom line: the heart with its count, the faces, and
+      # every name behind them.
+      assert has_element?(
+               live,
+               ~s([data-row="reactions"] [data-reaction="likes"][title="2 likes"]),
+               "2"
+             )
+
+      refute has_element?(live, ~s([data-row="reactions"] [data-reaction="shares"]))
+      assert has_element?(live, ~s([data-row="reactions"] [data-reactor]), "Anna A")
+      assert has_element?(live, ~s([data-row="reactions"] [data-reactor]), "Ben B")
       assert length(Regex.scan(~r/data-row="reactions"/, render(live))) == 1
+    end
+
+    test "a re-share from another network shows the arrows, not a heart", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = insert(:post, user: user, body: "Weitergereicht")
+
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: "https://social.example/users/dendroniker",
+        handle: "dendroniker",
+        kind: "announce",
+        received_at: DateTime.utc_now(:second)
+      })
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(
+               live,
+               ~s([data-row="reactions"] [data-reaction="shares"][title="1 repost"]),
+               "1"
+             )
+
+      refute has_element?(live, ~s([data-row="reactions"] [data-reaction="likes"]))
+      assert has_element?(live, ~s([data-row="reactions"] [data-reactor]), "dendroniker")
     end
 
     test "a follower who became a connection is one person, and a new one can be followed back",
@@ -394,7 +426,7 @@ defmodule VutuvWeb.NotificationLiveTest do
         |> html_response(200)
 
       assert body =~ "Mitteilungen"
-      assert body =~ "Nur Worte an mich"
+      assert body =~ "Nur Antworten und Erwähnungen"
       assert body =~ "Hier waren Sie ·"
       assert body =~ "neu seit Ihrem Besuch um"
       assert body =~ "Antwort auf Ihren Beitrag"

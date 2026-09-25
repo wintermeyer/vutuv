@@ -33,7 +33,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   answer and followed by the member's own answer. The card's Reply opens the
   composer under it (the `InlineReply` hook; without JavaScript the link still
   leads to the reply page). Likes of one post are one line, new people one
-  line, everything rarer one line each. "Only words to me" (`?only=words`)
+  line, everything rarer one line each. "Only replies and mentions" (`?only=words`)
   keeps the cards alone.
 
   The static render carries the whole list (issue #919); the visit is only
@@ -81,8 +81,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   # How many of a handle change's rewritten posts are named.
   @change_preview_limit 5
 
-  # How many actors a reactions line names before "and N more".
-  @named_actors 3
+  # How many faces a reactions line shows before "+N".
+  @stack_faces 5
 
   # A live arrival rebuilds the page; several in a burst rebuild it once.
   @reload_delay 1_000
@@ -493,7 +493,7 @@ defmodule VutuvWeb.NotificationLive.Index do
                   @only_words? && "translate-x-4"
                 ]}></span>
               </span>
-              {gettext("Only words to me")}
+              {gettext("Only replies and mentions")}
             </.link>
           </div>
 
@@ -831,37 +831,101 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
+  # Likes and re-shares of one post, drawn like the bottom line of a feed
+  # card: the heart and the arrows with their counts, the faces beside them,
+  # and every name behind a press on the faces.
   defp row_body(%{row: %{type: :reactions} = row} = assigns) do
-    named = Enum.take(row.actors, @named_actors)
-
     assigns =
       assign(assigns,
         post: Map.get(assigns.cards.posts, row.post_id),
-        named: named,
-        overflow: length(row.actors) - length(named)
+        faces: Enum.take(row.actors, @stack_faces),
+        more: length(row.actors) - @stack_faces
       )
 
     ~H"""
-    <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300">
-      ♥
+    <span class={[
+      "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+      if(@row.likes > 0,
+        do: "bg-rose-50 text-accent dark:bg-rose-900/30",
+        else: "bg-brand-50 text-brand-600 dark:bg-brand-800/60 dark:text-brand-300"
+      )
+    ]}>
+      <.icon_heart :if={@row.likes > 0} filled? class="h-5 w-5" />
+      <.icon_repost :if={@row.likes == 0} class="h-5 w-5" />
     </span>
-    <div class="min-w-0 flex-1 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-      <p class="mb-0">
-        <span class="font-semibold">{reaction_counts(@row)}</span>
-        <.link
-          :if={@post}
-          href={Posts.path(@post)}
-          class="text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+    <div class="min-w-0 flex-1">
+      <.link
+        :if={@post}
+        href={Posts.path(@post)}
+        class="block truncate text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300 dark:hover:text-brand-300"
+      >
+        „{PostTeaser.plain_line(@post, length: 200)}“
+      </.link>
+      <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span
+          :if={@row.likes > 0}
+          data-reaction="likes"
+          class="inline-flex items-center gap-1.5 text-sm font-semibold text-accent"
+          title={likes_label(@row.likes)}
         >
-          {pgettext("reactions", "on “%{post}”", post: PostTeaser.plain_line(@post, length: 90))}
-        </.link>
-      </p>
-      <p class="mb-0 text-xs text-slate-600 dark:text-slate-400">
-        <span :for={{actor, index} <- Enum.with_index(@named)}>{if index > 0, do: ", "}<.actor_link actor={actor} /></span>
-        <span :if={@overflow > 0}>
-          {gettext("and %{count} more", count: compact_count(@overflow))}
+          <.icon_heart filled? class="h-5 w-5" />{compact_count(@row.likes)}
         </span>
-      </p>
+        <span
+          :if={@row.shares > 0}
+          data-reaction="shares"
+          class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 dark:text-brand-300"
+          title={shares_label(@row.shares)}
+        >
+          <.icon_repost class="h-5 w-5" />{compact_count(@row.shares)}
+        </span>
+        <details data-menu class="relative" id={"reactors-#{@row.id}"}>
+          <summary
+            aria-label={gettext("Who reacted")}
+            class="flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-full pr-1 hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden"
+          >
+            <span class="flex items-center" aria-hidden="true">
+              <span
+                :for={{actor, index} <- Enum.with_index(@faces)}
+                class={["rounded-full ring-2 ring-white dark:ring-slate-900", index > 0 && "-ml-1.5"]}
+              >
+                <.reactor_face actor={actor} />
+              </span>
+              <span
+                :if={@more > 0}
+                class="-ml-1.5 inline-flex h-5 items-center rounded-full bg-slate-100 px-1.5 text-[10px] font-bold text-slate-600 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900"
+              >
+                +{compact_count(@more)}
+              </span>
+            </span>
+            <svg
+              class="h-4 w-4 text-slate-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <ul class="absolute left-0 z-30 mt-1 max-h-72 w-72 max-w-[80vw] space-y-0.5 overflow-y-auto rounded-xl bg-white p-2 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+            <li :for={actor <- @row.actors} data-reactor class="flex min-h-9 items-center gap-2 px-1">
+              <.reactor_face actor={actor} />
+              <span class="min-w-0 flex-1 truncate text-sm">
+                <.actor_link actor={actor} /><span
+                  :if={actor.handle && actor.handle != actor.name}
+                  class="ml-1 text-xs text-slate-500 dark:text-slate-400"
+                >{actor.handle}</span>
+              </span>
+              <.icon_heart :if={actor.liked?} filled? class="h-4 w-4 shrink-0 text-accent" />
+              <.icon_repost
+                :if={actor.shared?}
+                class="h-4 w-4 shrink-0 text-brand-600 dark:text-brand-300"
+              />
+            </li>
+          </ul>
+        </details>
+      </div>
     </div>
     <.row_time at={@row.at} />
     """
@@ -969,6 +1033,23 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   # ── Pieces ──
+
+  # One small face: the member's picture, or their initials for a picture-less
+  # member and for somebody on another network.
+  attr(:actor, :map, required: true)
+
+  defp reactor_face(assigns) do
+    ~H"""
+    <.avatar :if={@actor.avatar} src={@actor.avatar} size="2xs" alt="" />
+    <span
+      :if={!@actor.avatar}
+      class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-200"
+      aria-hidden="true"
+    >
+      {name_initials(String.trim_leading(@actor.name || "?", "@"))}
+    </span>
+    """
+  end
 
   attr(:kind, :string, required: true)
   attr(:actor, :any, required: true)
@@ -1109,21 +1190,15 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp context_label(%{kind: "mention"}), do: gettext("Mentions you")
   defp context_label(_item), do: gettext("Reply to your post")
 
-  # "3 likes, 1 repost": each part its own complete phrase.
-  defp reaction_counts(row) do
-    [
-      row.likes > 0 &&
-        ngettext("%{formatted} like", "%{formatted} likes", row.likes,
-          formatted: compact_count(row.likes)
-        ),
-      row.shares > 0 &&
-        ngettext("%{formatted} repost", "%{formatted} reposts", row.shares,
-          formatted: compact_count(row.shares)
-        )
-    ]
-    |> Enum.filter(& &1)
-    |> Enum.join(", ")
-  end
+  defp likes_label(count),
+    do:
+      ngettext("%{formatted} like", "%{formatted} likes", count, formatted: compact_count(count))
+
+  defp shares_label(count),
+    do:
+      ngettext("%{formatted} repost", "%{formatted} reposts", count,
+        formatted: compact_count(count)
+      )
 
   # A handle change names the newest of the member's own posts it rewrote.
   defp change_posts(%{post_ids: ids}, posts) when is_list(ids) do
