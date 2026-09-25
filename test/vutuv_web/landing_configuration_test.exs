@@ -1,8 +1,8 @@
 defmodule VutuvWeb.LandingConfigurationTest do
   @moduledoc """
-  The landing page's per-installation switches: which profile it offers as
-  "try it out", where it says the data lives, whether it mentions the
-  Fediverse at all, and whether it shows the teaser video.
+  The landing page's per-installation switches: which profile its questions
+  point at as the example, where it says the data lives, whether it asks the
+  Fediverse question at all, and whether it shows the teaser video.
 
   Keys flipped here, and who else reads them (the rule below wants this named,
   so a widened blast radius is visible at a glance): `:landing_example_profile_url`
@@ -98,33 +98,24 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
   describe "the landing page's installation switches" do
     # "Readable without an account" is a claim, and this is the one-click check
-    # that goes with it. The label drops the scheme, the href keeps it. And an
-    # operator's own example is offered as "a real profile", never as the
-    # founder's: that sentence is for the shipped default alone.
-    test "offers a real profile to try out", %{conn: conn} do
+    # that goes with it: the answer ends on the configured profile, label
+    # without the scheme, href with it.
+    test "offers the configured profile as the example to look at", %{conn: conn} do
       example("https://vutuv.example/ada")
 
       html = conn |> get(~p"/") |> html_response(200)
 
-      assert html =~ "Curious? Have a look at a real profile:"
-      refute html =~ "vutuv founder"
+      assert html =~ "For example:"
       assert html =~ ~s(href="https://vutuv.example/ada")
       assert html =~ ~r{>\s*vutuv\.example/ada\s*<}
-    end
-
-    test "names the founder only when the example is his profile", %{conn: conn} do
-      example("https://vutuv.de/wintermeyer/")
-
-      html = conn |> get(~p"/") |> html_response(200)
-
-      assert html =~ "profile of vutuv founder Stefan Wintermeyer"
-      assert html =~ ~s(href="https://vutuv.de/wintermeyer")
+      refute html =~ "vutuv.de/wintermeyer"
     end
 
     # A configured URL may carry a trailing slash. The join lives in
-    # `example_profile_url/1` so href and label cannot disagree about it, which
+    # `example_profile_url/0` so href and label cannot disagree about it, which
     # they did while the markup did the joining: `…/ada//cv` under `…/ada/cv`.
-    # The CV link is gone; the machine-format chips append to the same base.
+    # The CV link is gone; the API answer's Markdown example appends to the
+    # same base.
     test "a trailing slash in the configured URL does not double up", %{conn: conn} do
       example("https://vutuv.example/ada/")
 
@@ -133,21 +124,19 @@ defmodule VutuvWeb.LandingConfigurationTest do
       assert html =~ ~s(href="https://vutuv.example/ada.md")
     end
 
-    # The installability half of the same knob. Asserted on the line itself, not
-    # on the URL: the founder signature in the hero links to a profile too, so a
-    # bare URL match would pass for the wrong reason.
-    test "drops the try-it-out line where the installation cleared the URL", %{conn: conn} do
+    # The installability half of the same knob. Asserted on the answer's tail,
+    # not on the URL: the founder signature in the hero links to a profile too,
+    # so a bare URL match would pass for the wrong reason.
+    test "drops the example and its Markdown sibling where the URL is cleared", %{conn: conn} do
       example("")
 
       html = conn |> get(~p"/") |> html_response(200)
 
-      refute html =~ "Curious?"
-      # The rest of both blocks stays.
-      assert html =~ "data-landing-promises"
-      assert html =~ "data-landing-technical"
-      # The per-profile chips go with it; the installation-wide one remains.
-      refute html =~ "vutuv.de/wintermeyer.md"
-      assert html =~ ~s(href="/llms.txt")
+      refute html =~ "For example:"
+      refute html =~ "vutuv.de/wintermeyer"
+      # The questions stay: their claims hold on every installation.
+      assert html =~ "without signing up?"
+      assert html =~ "Is there an API?"
     end
 
     # The founder signature in the hero linked to `https://vutuv.de/wintermeyer`
@@ -200,19 +189,19 @@ defmodule VutuvWeb.LandingConfigurationTest do
     end
 
     # An intranet installation federates nothing: every endpoint behind that
-    # section 404s there, so promising Mastodon on the operator's front page
+    # question 404s there, so promising Mastodon on the operator's front page
     # would be a straight lie. The sign-up form already gates its Fediverse
     # question the same way.
-    test "hides the Fediverse line where the installation federates nothing", %{conn: conn} do
+    test "hides the Fediverse question where the installation federates nothing", %{conn: conn} do
       put_config(:fediverse_enabled, false)
 
       html = conn |> get(~p"/") |> html_response(200)
 
       refute html =~ "Fediverse"
       refute html =~ "Mastodon"
-      # The rest of the page is untouched.
-      assert html =~ "data-landing-promises"
-      assert html =~ "data-landing-technical"
+      # The other questions are untouched.
+      refute html =~ ~s(data-landing-faq-entry="fediverse")
+      assert html =~ ~s(data-landing-faq-entry="open_source")
     end
 
     test "drops only the hosting claim where the operator cleared it", %{conn: conn} do
@@ -222,9 +211,9 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
       refute html =~ "eigenen Servern in"
       refute html =~ "fremden Cloud"
-      # The software's own promises are not the operator's to lose.
-      assert html =~ "Ihre Daten bleiben hier"
-      assert html =~ "Keine Cookies von Dritten"
+      # The software's own promise is not the operator's to lose.
+      assert html =~ "Wo liegen meine Daten?"
+      assert html =~ "ein einziges Cookie"
     end
 
     test "names the place the operator configured", %{conn: conn} do
@@ -234,25 +223,6 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
       assert html =~ "eigenen Servern in Österreich"
       refute html =~ "eigenen Servern in Deutschland"
-    end
-
-    # The machine-format chips hang off that same profile, so one setting moves
-    # both and the claim above them can be checked against a real document.
-    test "the machine-format chips point at that same profile, RSS included", %{conn: conn} do
-      example("https://vutuv.example/ada")
-
-      html = conn |> get(~p"/") |> html_response(200)
-
-      for suffix <- ~w(.md .txt .json .xml .vcf) do
-        assert html =~ ~s(href="https://vutuv.example/ada#{suffix}")
-      end
-
-      # From VutuvWeb.Feeds, so the chip cannot drift from the real feed route.
-      assert html =~
-               ~s(href="https://vutuv.example/ada#{VutuvWeb.Feeds.user_feed_suffix()}")
-
-      # Installation-wide, so it survives a cleared example profile.
-      assert html =~ ~s(href="/llms.txt")
     end
 
     # An installation that does not want the vutuv.de teaser on its start page

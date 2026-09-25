@@ -6,7 +6,6 @@ defmodule VutuvWeb.PageHTML do
   # lives in `VutuvWeb.RegistrationLive`, which the landing template embeds.
   alias Vutuv.Fediverse
   alias Vutuv.SourceRepo
-  alias VutuvWeb.Feeds
   alias VutuvWeb.Teaser
   alias VutuvWeb.VideoComponents
 
@@ -108,40 +107,16 @@ defmodule VutuvWeb.PageHTML do
   end
 
   @doc """
-  The heading block both sections under the sign-up form wear: a small
-  uppercase eyebrow, the heading itself and an optional lead sentence.
-
-  Written once because the sections differ only in their words, and a landing
-  page where the second heading sits two pixels off the first reads as
-  unfinished.
-  """
-  attr(:eyebrow, :string, required: true)
-  attr(:title, :string, required: true)
-  attr(:lead, :string, default: nil)
-
-  def landing_heading(assigns) do
-    ~H"""
-    <.section_title>{@eyebrow}</.section_title>
-    <h2 class="mt-1 text-2xl font-bold text-slate-900 md:text-3xl dark:text-white">
-      {@title}
-    </h2>
-    <p :if={@lead} class="mt-3 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-400">
-      {@lead}
-    </p>
-    """
-  end
-
-  @doc """
-  The example profile the page offers as "try it out", or `nil` where the
-  installation dropped it (`:landing_example_profile_url` set to "").
+  The example profile the questions under the sign-up form point at, or `nil`
+  where the installation dropped it (`:landing_example_profile_url` set to "").
 
   A full URL rather than a local path: the default points at the reference
   installation, which is the useful answer on an installation that has no
   filled-in profile of its own yet, and a local path would be a dead link there.
 
-  The trailing slash a configured URL may carry comes off here, once: the
-  format chips append `.md` and friends to this, and `example_profile_label/1`
-  strips the slash for the visible text, so a join at a call site once rendered
+  The trailing slash a configured URL may carry comes off here, once: the API
+  answer appends `.md` to this, and `example_profile_label/1` strips the slash
+  for the visible text, so a join at a call site once rendered
   `…/wintermeyer//cv` under a label reading `…/wintermeyer/cv`.
   """
   def example_profile_url do
@@ -158,10 +133,9 @@ defmodule VutuvWeb.PageHTML do
   end
 
   @doc """
-  The text-link recipe every link below the sign-up form wears (the design
-  rule's "Text link" pair, dark half included). Named once here so the
-  template and `try_it_out/1` cannot drift apart; a `<% %>` binding in the
-  template would be out of reach of a component rendering into the same page.
+  The text-link recipe (the design rule's "Text link" pair, dark half
+  included), shared by the questions below the sign-up form, the community
+  page and `VutuvWeb.ReportHTML`.
   """
   def link_class do
     "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
@@ -174,53 +148,6 @@ defmodule VutuvWeb.PageHTML do
   def example_profile_label(url) do
     url |> String.replace(~r{^https?://}, "") |> String.trim_trailing("/")
   end
-
-  @doc """
-  The "Curious?" line under the first heading, or nothing where the
-  installation cleared the example profile.
-
-  Two sentences, picked by whose profile the link opens. Where it is the
-  founder's (the shipped default), the line says so by name, because a real
-  person behind the invitation is the point of it (Stefan, 2026-09-06); where
-  an operator pointed it at somebody else, the same invitation without the
-  name, so a third-party installation never introduces its own member as the
-  founder of vutuv. The link is the marker in a whole sentence rather than a
-  label glued to a URL, so German and English can each put it where their
-  grammar wants it; `split_marker/2` never raises on a translation that lost
-  the marker.
-  """
-  def try_it_out(assigns) do
-    url = example_profile_url()
-
-    sentence =
-      if founder_profile?(url),
-        do:
-          gettext(
-            "Curious? Have a look at the profile of vutuv founder Stefan Wintermeyer: {profile}. With or without a vutuv account of your own."
-          ),
-        else:
-          gettext(
-            "Curious? Have a look at a real profile: {profile}. With or without a vutuv account of your own."
-          )
-
-    {pre, post} = split_marker(sentence, "{profile}")
-    assigns = assign(assigns, url: url, pre: pre, post: post)
-
-    ~H"""
-    <p :if={@url} class="mt-3 max-w-2xl text-base text-slate-600 dark:text-slate-400">
-      {@pre}<a href={@url} class={link_class()}>{example_profile_label(@url)}</a>{@post}
-    </p>
-    """
-  end
-
-  # Whether the configured example profile is the founder's own, i.e. the
-  # shipped default. Matched on the profile address rather than on "is this
-  # vutuv.de", because it decides a sentence about a person, not about a host.
-  defp founder_profile?(url) when is_binary(url) do
-    String.ends_with?(url, "vutuv.de/wintermeyer")
-  end
-
-  defp founder_profile?(_), do: false
 
   @doc """
   Where this installation's data lives, or `nil` where the operator cleared it.
@@ -243,151 +170,136 @@ defmodule VutuvWeb.PageHTML do
   end
 
   @doc """
-  The agent-format chips: live links to the machine-readable siblings of one
-  real profile.
+  The questions under the sign-up form, in the order the page asks them.
 
-  Anchored on the same profile the "try it out" link points at
-  (`:landing_example_profile_url`), so the claim above them can be checked
-  against a page with somebody's actual CV in it rather than against an
-  abstraction — and so one setting moves both. Where an installation cleared
-  that setting only `/llms.txt` is left, which is installation-wide and always
-  there.
+  Nine questions somebody has *before* signing up, each answered in a
+  sentence or two (Stefan, 2026-09-25). A list rather than markup, because
+  the FAQPage block (`VutuvWeb.JsonLd.faq_page/1`) is built from the same
+  entries the page renders and so cannot say something the page does not.
+  Each entry carries a `key` for the tests, the `question`, the `answer` (built
+  from sentences here, because some of them depend on the installation, and
+  joined once so the page and the JSON-LD block read the same string), and an
+  optional `link` a reader checks the answer with.
 
-  The URL is absolute and the extensions are appended to it, the way
-  `<.other_formats_card>` appends to its `base_path`: a verified route cannot
-  carry an extension after an interpolated segment, and the example profile may
-  well live on another installation anyway.
+  What depends on the installation drops out per answer, not per section:
+  the example profile (`:landing_example_profile_url`) carries the link of
+  the public-profile answer and the Markdown example of the API answer, the
+  hosting sentence is the operator's alone (`:data_location`, see
+  `data_location/0`), and the Fediverse question exists only where the
+  installation federates — with FEDIVERSE_ENABLED=false (the intranet case)
+  every endpoint behind it 404s, so promising Mastodon there would be a lie.
+
+  The deletion answer names the settings path and deliberately does not link
+  it, and the LinkedIn answer links nothing: both pages need a login, so a
+  logged-out click would trade the sign-up form for the login page. The
+  organization kinds in that question are prose, not `Organization.kinds/0`:
+  German gives every noun its own case ending.
   """
-  def landing_format_chips(assigns) do
-    assigns = assign(assigns, :base, example_profile_url())
+  def landing_faq do
+    example = example_profile_url()
+    place = data_location()
 
-    ~H"""
-    <.chip :if={@base} href={@base <> ".md"}>Markdown</.chip>
-    <.chip :if={@base} href={@base <> ".txt"}>Text</.chip>
-    <.chip :if={@base} href={@base <> ".json"}>JSON</.chip>
-    <.chip :if={@base} href={@base <> ".xml"}>XML</.chip>
-    <.chip :if={@base} href={@base <> ".vcf"}>vCard</.chip>
-    <.chip :if={@base} href={@base <> Feeds.user_feed_suffix()}>RSS</.chip>
-    <.chip href={~p"/llms.txt"}>llms.txt</.chip>
-    """
-  end
-
-  @doc """
-  One of the six promises under the sign-up form: a tile with a pictogram, a
-  title and a sentence or two, and not a technical word in it.
-
-  The tiles are a bento, not a grid of equals (Stefan picked that shape from
-  seven on 2026-09-06): the organization promise gets the width its three
-  steps need, the data promise a dark tile the eye lands on, the speed promise
-  a coral corner, the rest plain cards. `tone` picks the surface and `class`
-  the place in the six-column grid; the words live in the template and this
-  only holds the frame. Hand-written card frames rather than `<.card>`, whose
-  own `bg-white` a tinted tile could not override. `key` names the tile for
-  the tests, which assert all six by name.
-  """
-  attr(:key, :string, required: true)
-  attr(:title, :string, required: true)
-  attr(:icon, :atom, required: true, values: [:users, :shield, :bolt, :cursor, :door, :server])
-  attr(:tone, :atom, default: :card, values: [:card, :tint, :dark, :accent])
-  attr(:class, :string, default: nil)
-  slot(:inner_block, required: true)
-
-  def promise(assigns) do
-    ~H"""
-    <section data-landing-promise={@key} class={[tile_class(@tone), @class]}>
-      <div :if={@tone == :accent} aria-hidden="true" class="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-accent/20"></div>
-      <div class="flex items-center gap-3">
-        <span data-promise-icon class={disc_class(@tone)}><.promise_icon name={@icon} /></span>
-        <h3 class={["text-lg font-bold", title_class(@tone)]}>{@title}</h3>
-      </div>
-      <div class={["mt-2 text-sm leading-relaxed", body_class(@tone)]}>
-        {render_slot(@inner_block)}
-      </div>
-    </section>
-    """
-  end
-
-  defp tile_class(:card),
-    do:
-      "rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
-
-  defp tile_class(:tint), do: "rounded-2xl bg-brand-50 p-6 dark:bg-brand-800/60"
-
-  defp tile_class(:dark),
-    do: "flex flex-col rounded-2xl bg-brand-900 p-6 text-white dark:bg-brand-800"
-
-  defp tile_class(:accent), do: "relative overflow-hidden " <> tile_class(:card)
-
-  defp disc_class(tone) do
     [
-      "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-      case tone do
-        :dark -> "bg-white/15 text-white"
-        :accent -> "bg-accent/15 text-accent-dark"
-        _ -> "bg-brand-100 text-brand-700 dark:bg-brand-800/60 dark:text-brand-200"
-      end
+      entry("price", gettext("What does vutuv cost?"), [
+        gettext(
+          "Nothing. There are no paid premium accounts, every account has the same features."
+        )
+      ]),
+      entry(
+        "public",
+        gettext("Can I look at profiles and posts on vutuv without signing up?"),
+        [gettext("Yes. Every profile and every public post can be read without an account.")] ++
+          List.wrap(example && gettext("For example:")),
+        example && check_link(example_profile_label(example), example)
+      ),
+      entry(
+        "data",
+        gettext("Where does my data live?"),
+        List.wrap(
+          place && gettext("On our own servers in %{place}, in no foreign cloud.", place: place)
+        ) ++
+          [
+            gettext(
+              "vutuv sets a single cookie, the one that keeps you signed in, and loads nothing from anybody else's server."
+            )
+          ]
+      ),
+      entry("linkedin", gettext("Can I bring my LinkedIn profile along?"), [
+        gettext(
+          "Yes. The import reads the data export LinkedIn hands you and takes over your CV; you check and save."
+        )
+      ]),
+      entry(
+        "organizations",
+        gettext(
+          "How does my organization (a business, an association, a public authority …) get a page?"
+        ),
+        [
+          gettext(
+            "First you create your own account. Signed in, you then create the organization and give yourself and other members rights within it, for example admin or editorial."
+          )
+        ]
+      ),
+      fediverse_entry(),
+      entry(
+        "open_source",
+        gettext("Is vutuv open source?"),
+        [gettext("Yes, the whole source code under the MIT license.")],
+        check_link(gettext("Source code"), SourceRepo.url(), external: true)
+      ),
+      entry(
+        "api",
+        gettext("Is there an API?"),
+        [
+          gettext("Every public page is also served as Markdown, JSON or vCard, plus a REST API.")
+        ],
+        example && check_link(gettext("Example"), example <> ".md")
+      ),
+      entry("delete", gettext("Can I delete my account again?"), [
+        gettext("Any time, yourself, under %{path}. Nobody asks why.", path: ~p"/settings/delete")
+      ])
     ]
+    |> Enum.reject(&is_nil/1)
   end
 
-  defp title_class(:dark), do: "text-white"
-  defp title_class(:tint), do: "text-brand-800 dark:text-brand-100"
-  defp title_class(_), do: "text-slate-900 dark:text-white"
+  defp entry(key, question, sentences, link \\ nil),
+    do: %{key: key, question: question, answer: Enum.join(sentences, " "), link: link}
 
-  # The dark tile is a flex column so its place line can sit at the bottom
-  # (`mt-auto` needs a flex parent); the legacy `p { margin-bottom }` is
-  # zeroed there because flex items do not collapse it into the gap.
-  defp body_class(:dark), do: "flex flex-1 flex-col gap-2 text-brand-100 [&>p]:mb-0"
-  defp body_class(_), do: "space-y-2 text-slate-700 dark:text-slate-300"
+  defp check_link(label, href, opts \\ []),
+    do: %{label: label, href: href, external: Keyword.get(opts, :external, false)}
 
-  @doc """
-  The pictogram of a promise tile: heroicons outline, drawn inline so the
-  page ships no sprite for six glyphs.
-  """
-  attr(:name, :atom, required: true)
-
-  def promise_icon(assigns) do
-    ~H"""
-    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d={icon_path(@name)} />
-    </svg>
-    """
+  # The closing sentence is Stefan's own line and the whole stance: plenty of
+  # people want a business network and no Fediverse at all, and they need to
+  # read that it is a choice, not something that happens to them.
+  defp fediverse_entry do
+    if Fediverse.enabled?() do
+      entry("fediverse", gettext("What does vutuv have to do with the Fediverse?"), [
+        gettext(
+          "vutuv is part of it, as Mastodon is. Whether your posts take part is your choice at sign-up, and one switch in the settings later. Each to their own."
+        )
+      ])
+    end
   end
 
-  defp icon_path(:users),
-    do:
-      "M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
-
-  defp icon_path(:shield),
-    do:
-      "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
-
-  defp icon_path(:bolt), do: "m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"
-
-  defp icon_path(:cursor),
-    do:
-      "M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672Zm-7.518-.267A8.25 8.25 0 1 1 20.25 10.5M8.288 14.212A5.25 5.25 0 1 1 17.25 10.5"
-
-  defp icon_path(:door),
-    do:
-      "M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"
-
-  defp icon_path(:server),
-    do:
-      "M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 0 6h13.5a3 3 0 1 0 0-6m-16.5-3a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3m-19.5 0a4.5 4.5 0 0 1 .9-2.7L5.737 5.1a3.375 3.375 0 0 1 2.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 0 1 .9 2.7m0 0a3 3 0 0 1-3 3m0 3h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Zm-3 6h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Z"
-
   @doc """
-  One line of the technical section: the claim in bold, then the sentence or
-  two behind it and whatever links let the reader check.
+  One question with its answer: the question as a heading, the answer as one
+  paragraph, and the link that lets the reader check it at the end of that
+  paragraph. An external link wears ↗, a page on this site ›.
   """
-  attr(:title, :string, required: true)
-  slot(:inner_block, required: true)
+  attr(:entry, :map, required: true)
 
-  def technical_line(assigns) do
+  def faq_entry(assigns) do
     ~H"""
-    <li class="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-      <span class="font-semibold text-slate-900 dark:text-white">{@title}</span>
-      {render_slot(@inner_block)}
-    </li>
+    <div data-landing-faq-entry={@entry.key}>
+      <h3 class="font-semibold text-slate-900 dark:text-white">{@entry.question}</h3>
+      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {@entry.answer}
+        <a :if={@entry.link} href={@entry.link.href} class={link_class()}>
+          {@entry.link.label}
+          <span aria-hidden="true">{if @entry.link.external, do: "↗", else: "›"}</span>
+        </a>
+      </p>
+    </div>
     """
   end
 

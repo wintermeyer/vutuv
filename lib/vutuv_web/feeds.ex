@@ -26,8 +26,7 @@ defmodule VutuvWeb.Feeds do
   What a member's feed path adds to their profile path.
 
   Split out so a caller holding a profile *URL* rather than a `%User{}` can
-  reach the same feed — the landing page's RSS chip hangs off the configured
-  example-profile URL, which may point at another installation entirely.
+  reach the same feed, which may live on another installation entirely.
   """
   def user_feed_suffix, do: "/posts/feed.xml"
 

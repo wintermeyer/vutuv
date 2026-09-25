@@ -389,13 +389,13 @@ config :vutuv, :ads_vat_percent, 19
 # Runtime override: DATA_LOCATION (config/runtime.exs).
 config :vutuv, :data_location, "Deutschland"
 
-# The one profile the logged-out start page offers as "try it out" beside the
-# screenshots of a filled-in profile. A full URL, because the point is a page
-# somebody can open and read without an account, and because the default has to
-# keep working on an installation that has no members yet — pointing at the
-# reference installation is more useful there than a dead local link.
-# Set it to one of your own members once you have one, or to "" to drop the
-# line. Runtime override: LANDING_EXAMPLE_PROFILE_URL (config/runtime.exs).
+# The one profile the logged-out start page's questions point at as the
+# example (and whose Markdown sibling the API answer links). A full URL, because
+# the point is a page somebody can open and read without an account, and because
+# the default has to keep working on an installation that has no members yet —
+# pointing at the reference installation is more useful there than a dead local
+# link. Set it to one of your own members once you have one, or to "" to drop
+# both links. Runtime override: LANDING_EXAMPLE_PROFILE_URL (config/runtime.exs).
 config :vutuv, :landing_example_profile_url, "https://vutuv.de/wintermeyer"
 
 # The teaser video in the start page's hero, a silent film of vutuv in use

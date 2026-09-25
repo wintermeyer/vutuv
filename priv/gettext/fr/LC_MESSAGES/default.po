@@ -1615,7 +1615,7 @@ msgstr "Consultez votre boîte de réception"
 #: lib/vutuv_web/templates/member_card/card.html.heex:17
 #: lib/vutuv_web/templates/remote_actor_card/card.html.heex:28
 #: lib/vutuv_web/views/layout_html.ex:142
-#: lib/vutuv_web/views/page_html.ex:467
+#: lib/vutuv_web/views/page_html.ex:374
 #, elixir-autogen, elixir-format
 msgid "Close"
 msgstr "Fermer"
@@ -2939,7 +2939,6 @@ msgstr "Harcèlement ou intimidation"
 #: lib/vutuv_web/controllers/page_controller.ex:54
 #: lib/vutuv_web/templates/layout/app.html.heex:115
 #: lib/vutuv_web/templates/page/community.html.heex:4
-#: lib/vutuv_web/templates/page/index.html.heex:218
 #, elixir-autogen, elixir-format
 msgid "Community guidelines"
 msgstr "Règles de la communauté"
@@ -16586,7 +16585,7 @@ msgstr "Vous avez redirigé vos abonnés du Fédiverse vers un autre compte, cel
 msgid "Your account move"
 msgstr "Votre déménagement de compte"
 
-#: lib/vutuv_web/views/page_html.ex:23
+#: lib/vutuv_web/views/page_html.ex:22
 #, elixir-autogen, elixir-format
 msgid "“LinkedIn is annoying. vutuv is not.”"
 msgstr "« LinkedIn est pénible. vutuv non. »"
@@ -17335,12 +17334,7 @@ msgstr "Ceci est la copie que vutuv détient d'une publication parue sur %{host}
 msgid "Subscribe to this feed in your RSS reader"
 msgstr "S'abonner à ce flux dans votre lecteur RSS"
 
-#: lib/vutuv_web/templates/page/index.html.heex:312
-#, elixir-autogen, elixir-format
-msgid "Developer documentation"
-msgstr "Documentation pour développeurs"
-
-#: lib/vutuv_web/templates/page/index.html.heex:309
+#: lib/vutuv_web/views/page_html.ex:245
 #, elixir-autogen, elixir-format
 msgid "Source code"
 msgstr "Code source"
@@ -20684,6 +20678,7 @@ msgid "A few of the newest members. Following them is a warm welcome."
 msgstr "Quelques-uns des membres les plus récents. Les suivre est un accueil chaleureux."
 
 #: lib/vutuv_web/templates/settings/preferences.html.heex:209
+#: lib/vutuv_web/views/page_html.ex:251
 #, elixir-autogen, elixir-format
 msgid "Example"
 msgstr "Exemple"
@@ -20901,12 +20896,12 @@ msgstr "Le profil a été créé. Saviez-vous que le code source de vutuv se tro
 msgid "That alternative name is no longer on record."
 msgstr "Ce nom alternatif n'est plus consigné."
 
-#: lib/vutuv_web/views/page_html.ex:105
+#: lib/vutuv_web/views/page_html.ex:104
 #, elixir-autogen, elixir-format
 msgid "Fast."
 msgstr "Rapide."
 
-#: lib/vutuv_web/views/page_html.ex:106
+#: lib/vutuv_web/views/page_html.ex:105
 #, elixir-autogen, elixir-format
 msgid "No paid premium accounts."
 msgstr "Pas de comptes premium payants."
@@ -22601,161 +22596,6 @@ msgstr "Masquer seulement ce que d'autres republient"
 msgid "Reposts by other people only"
 msgstr "Republications par d'autres uniquement"
 
-#: lib/vutuv_web/templates/page/index.html.heex:94
-#, elixir-autogen, elixir-format
-msgid "A business network for people and organizations. Profiles, posts and messages, and every profile readable by anyone, entirely without an account."
-msgstr "Un réseau professionnel pour les personnes et les organisations. Profils, publications et messages, et chaque profil peut être lu par n'importe qui, entièrement sans compte."
-
-#: lib/vutuv_web/templates/page/index.html.heex:129
-#, elixir-autogen, elixir-format
-msgid "A profile for you, a page for your organization, and the order is always the same:"
-msgstr "Un profil pour vous, une page pour votre organisation, et l'ordre est toujours le même :"
-
-#: lib/vutuv_web/templates/page/index.html.heex:267
-#, elixir-autogen, elixir-format
-msgid "An account takes a minute. If you do not like it here, you delete it yourself. Nobody asks why, and you are welcome back any time."
-msgstr "Un compte se crée en une minute. Si cela ne vous plaît pas ici, vous le supprimez vous-même. Personne ne demande pourquoi, et vous êtes de nouveau bienvenu à tout moment."
-
-#: lib/vutuv_web/templates/page/index.html.heex:329
-#, elixir-autogen, elixir-format
-msgid "By emailed PIN, passkey, authenticator app or a printed list of codes."
-msgstr "Par PIN reçu par e-mail, passkey, application d'authentification ou liste de codes imprimée."
-
-#: lib/vutuv_web/views/page_html.ex:202
-#, elixir-autogen, elixir-format
-msgid "Curious? Have a look at a real profile: {profile}. With or without a vutuv account of your own."
-msgstr "Curieux ? Jetez un œil à un vrai profil : {profile}. Avec ou sans compte vutuv à vous."
-
-#: lib/vutuv_web/views/page_html.ex:198
-#, elixir-autogen, elixir-format
-msgid "Curious? Have a look at the profile of vutuv founder Stefan Wintermeyer: {profile}. With or without a vutuv account of your own."
-msgstr "Curieux ? Jetez un œil au profil du fondateur de vutuv, Stefan Wintermeyer : {profile}. Avec ou sans compte vutuv à vous."
-
-#: lib/vutuv_web/templates/page/index.html.heex:320
-#, elixir-autogen, elixir-format
-msgid "Every public page is also served as Markdown, plain text, JSON, XML and vCard under the same address, plus RSS, a sitemap, JSON-LD and a REST API with OAuth 2. No scraping, no API key, no account."
-msgstr "Chaque page publique est aussi servie en Markdown, texte brut, JSON, XML et vCard sous la même adresse, plus RSS, un plan du site, JSON-LD et une API REST avec OAuth 2. Pas de scraping, pas de clé d'API, pas de compte."
-
-#: lib/vutuv_web/templates/page/index.html.heex:235
-#, elixir-autogen, elixir-format
-msgid "Fast, even on a poor connection"
-msgstr "Rapide, même avec une mauvaise connexion"
-
-#: lib/vutuv_web/templates/page/index.html.heex:209
-#, elixir-autogen, elixir-format
-msgid "Fit for the family and for the workplace"
-msgstr "Convient à la famille comme au travail"
-
-#: lib/vutuv_web/templates/page/index.html.heex:282
-#, elixir-autogen, elixir-format
-msgid "For the technically minded"
-msgstr "Pour les esprits techniques"
-
-#: lib/vutuv_web/templates/page/index.html.heex:283
-#, elixir-autogen, elixir-format
-msgid "If you want to know exactly"
-msgstr "Si vous voulez le savoir précisément"
-
-#: lib/vutuv_web/templates/page/index.html.heex:188
-#, elixir-autogen, elixir-format
-msgid "No third-party cookies, no tracking: vutuv sets a single cookie, the one that keeps you signed in, and loads nothing from anybody else's server."
-msgstr "Pas de cookies tiers, pas de pistage : vutuv pose un seul cookie, celui qui vous garde connecté, et ne charge rien depuis le serveur de quelqu'un d'autre."
-
-#: lib/vutuv_web/templates/page/index.html.heex:182
-#, elixir-autogen, elixir-format
-msgid "On our own servers in %{place}, in no foreign cloud, and nothing of it is stored abroad."
-msgstr "Sur nos propres serveurs en %{place}, dans aucun nuage étranger, et rien de tout cela n'est stocké à l'étranger."
-
-#: lib/vutuv_web/templates/page/index.html.heex:303
-#, elixir-autogen, elixir-format
-msgid "Open source."
-msgstr "Open source."
-
-#: lib/vutuv_web/templates/page/index.html.heex:126
-#, elixir-autogen, elixir-format
-msgid "People and organizations"
-msgstr "Personnes et organisations"
-
-#: lib/vutuv_web/templates/page/index.html.heex:319
-#, elixir-autogen, elixir-format
-msgid "Readable by machines."
-msgstr "Lisible par les machines."
-
-#: lib/vutuv_web/templates/page/index.html.heex:328
-#, elixir-autogen, elixir-format
-msgid "Sign in without a password."
-msgstr "Se connecter sans mot de passe."
-
-#: lib/vutuv_web/templates/page/index.html.heex:140
-#, elixir-autogen, elixir-format
-msgid "Signed in, you then create the page of your organization: a business, an association, a school, a public authority or any other group."
-msgstr "Une fois connecté, vous créez la page de votre organisation : entreprise, association, école, administration ou tout autre groupe."
-
-#: lib/vutuv_web/templates/page/index.html.heex:247
-#, elixir-autogen, elixir-format
-msgid "Simple"
-msgstr "Simple"
-
-#: lib/vutuv_web/templates/page/index.html.heex:304
-#, elixir-autogen, elixir-format
-msgid "The whole source code is public under the MIT license, so everything said above can be read rather than taken on trust. Run it yourself for a company, an association or a school, on the internet or air-gapped inside your own network."
-msgstr "Tout le code source est public sous la licence MIT, donc tout ce qui est dit ci-dessus se lit plutôt que de devoir être cru. Exploitez-le vous-même, pour une entreprise, une association ou une école, sur internet ou isolé dans votre propre réseau."
-
-#: lib/vutuv_web/templates/page/index.html.heex:143
-#, elixir-autogen, elixir-format
-msgid "Then you bring colleagues on board who help run it."
-msgstr "Ensuite, vous y associez des collègues qui la gèrent avec vous."
-
-#: lib/vutuv_web/templates/page/index.html.heex:264
-#, elixir-autogen, elixir-format
-msgid "Try it, and leave if you like"
-msgstr "Essayer, et partir si vous le voulez"
-
-#: lib/vutuv_web/templates/page/index.html.heex:92
-#, elixir-autogen, elixir-format
-msgid "What vutuv does differently"
-msgstr "Ce que vutuv fait autrement"
-
-#: lib/vutuv_web/templates/page/index.html.heex:91
-#, elixir-autogen, elixir-format
-msgid "What vutuv is"
-msgstr "Ce qu'est vutuv"
-
-#: lib/vutuv_web/templates/page/index.html.heex:295
-#, elixir-autogen, elixir-format
-msgid "With or without the Fediverse."
-msgstr "Avec ou sans le Fédiverse."
-
-#: lib/vutuv_web/templates/page/index.html.heex:139
-#, elixir-autogen, elixir-format
-msgid "You create your own account, as a person."
-msgstr "Vous créez votre propre compte, en tant que personne."
-
-#: lib/vutuv_web/templates/page/index.html.heex:179
-#, elixir-autogen, elixir-format
-msgid "Your data stays here"
-msgstr "Vos données restent ici"
-
-#: lib/vutuv_web/templates/page/index.html.heex:212
-#, elixir-autogen, elixir-format
-msgid "vutuv is a professional network, and one you can show your children. Everything here should be fine for a colleague, your boss and a twelve-year-old to read."
-msgstr "vutuv est un réseau professionnel, et un réseau que vous pouvez montrer à vos enfants. Tout ici devrait pouvoir être lu par une collègue, votre patron et un enfant de douze ans."
-
-#: lib/vutuv_web/templates/page/index.html.heex:238
-#, elixir-autogen, elixir-format
-msgid "vutuv is fast. And where the connection is poor, in the countryside, on the train or abroad, the low-bandwidth mode keeps it usable: switch it on once, and vutuv loads noticeably less."
-msgstr "vutuv est rapide. Et là où la connexion est mauvaise, à la campagne, dans le train ou à l'étranger, le mode économie de données le garde utilisable : activez-le une fois, et vutuv charge sensiblement moins."
-
-#: lib/vutuv_web/templates/page/index.html.heex:249
-#, elixir-autogen, elixir-format
-msgid "vutuv is for everyone. Simple, logical handling of every feature matters to us. On the phone and on the desktop, of course."
-msgstr "vutuv s'adresse à tout le monde. Une utilisation simple et logique de chaque fonction nous importe. Sur le téléphone comme sur l'ordinateur, bien sûr."
-
-#: lib/vutuv_web/templates/page/index.html.heex:296
-#, elixir-autogen, elixir-format
-msgid "vutuv is part of the Fediverse, the union of independent networks that Mastodon belongs to as well. Whether your posts take part is your choice at sign-up, and one switch in the settings later. We are not religious about it: each to their own."
-msgstr "vutuv fait partie du Fédiverse, l'ensemble de réseaux indépendants auquel appartient aussi Mastodon. Que vos publications y participent, vous le décidez à l'inscription, puis avec un interrupteur dans les paramètres. Nous ne sommes pas dogmatiques là-dessus : à chacun comme il veut."
-
 #: lib/vutuv_web/live/shell_live.ex:1880
 #, elixir-autogen, elixir-format
 msgid "All notifications"
@@ -23146,7 +22986,7 @@ msgstr "Nous n'avons pas pu confirmer votre signalement"
 msgid "Your report was upheld"
 msgstr "Nous avons confirmé votre signalement"
 
-#: lib/vutuv_web/views/page_html.ex:104
+#: lib/vutuv_web/views/page_html.ex:103
 #, elixir-autogen, elixir-format
 msgid "Easy LinkedIn profile import."
 msgstr "Import facile du profil LinkedIn."
@@ -26244,24 +26084,24 @@ msgstr "Aucune limite"
 msgid "The first 10 likes of a post each get a notification, after that only 25, 50, 100 and so on. At this number you get a last notification, and further likes of that post stay quiet. They still show on the post and on your notifications page."
 msgstr "Les 10 premiers j'aime d'une publication vous sont signalés un par un, ensuite seulement à 25, 50, 100 et ainsi de suite. À ce nombre, vous recevez une dernière notification, et les j'aime suivants de cette publication restent silencieux. Ils restent visibles sur la publication et sur votre page de notifications."
 
-#: lib/vutuv_web/views/page_html.ex:482
+#: lib/vutuv_web/views/page_html.ex:389
 #, elixir-autogen, elixir-format
 msgid "Full resolution"
 msgstr "Pleine résolution"
 
-#: lib/vutuv_web/views/page_html.ex:415
-#: lib/vutuv_web/views/page_html.ex:429
+#: lib/vutuv_web/views/page_html.ex:322
+#: lib/vutuv_web/views/page_html.ex:336
 #, elixir-autogen, elixir-format
 msgid "Play the video"
 msgstr "Lire la vidéo"
 
-#: lib/vutuv_web/views/page_html.ex:449
+#: lib/vutuv_web/views/page_html.ex:356
 #, elixir-autogen, elixir-format
 msgctxt "video quality"
 msgid "Quality"
 msgstr "Qualité"
 
-#: lib/vutuv_web/views/page_html.ex:481
+#: lib/vutuv_web/views/page_html.ex:388
 #, elixir-autogen, elixir-format
 msgctxt "video quality"
 msgid "Standard"
@@ -26411,3 +26251,113 @@ msgstr "Seulement les réponses et mentions"
 #, elixir-autogen, elixir-format
 msgid "Who reacted"
 msgstr "Qui a réagi"
+
+#: lib/vutuv_web/views/page_html.ex:254
+#, elixir-autogen, elixir-format
+msgid "Any time, yourself, under %{path}. Nobody asks why."
+msgstr "À tout moment, vous-même, sous %{path}. Personne ne demande pourquoi."
+
+#: lib/vutuv_web/views/page_html.ex:224
+#, elixir-autogen, elixir-format
+msgid "Can I bring my LinkedIn profile along?"
+msgstr "Puis-je reprendre mon profil LinkedIn ?"
+
+#: lib/vutuv_web/views/page_html.ex:253
+#, elixir-autogen, elixir-format
+msgid "Can I delete my account again?"
+msgstr "Puis-je supprimer mon compte ?"
+
+#: lib/vutuv_web/views/page_html.ex:207
+#, elixir-autogen, elixir-format
+msgid "Can I look at profiles and posts on vutuv without signing up?"
+msgstr "Puis-je consulter des profils et des publications sur vutuv sans m'inscrire ?"
+
+#: lib/vutuv_web/views/page_html.ex:250
+#, elixir-autogen, elixir-format
+msgid "Every public page is also served as Markdown, JSON or vCard, plus a REST API."
+msgstr "Chaque page publique existe aussi en Markdown, JSON ou vCard, plus une API REST."
+
+#: lib/vutuv_web/views/page_html.ex:235
+#, elixir-autogen, elixir-format
+msgid "First you create your own account. Signed in, you then create the organization and give yourself and other members rights within it, for example admin or editorial."
+msgstr "Vous créez d'abord votre propre compte. Une fois connecté, vous créez l'organisation et y donnez des droits, à vous-même et à d'autres membres, par exemple admin ou rédaction."
+
+#: lib/vutuv_web/views/page_html.ex:209
+#, elixir-autogen, elixir-format
+msgid "For example:"
+msgstr "Par exemple :"
+
+#: lib/vutuv_web/templates/page/index.html.heex:100
+#, elixir-autogen, elixir-format
+msgid "Frequently asked questions"
+msgstr "Questions fréquentes"
+
+#: lib/vutuv_web/views/page_html.ex:249
+#, elixir-autogen, elixir-format
+msgid "Is there an API?"
+msgstr "Y a-t-il une API ?"
+
+#: lib/vutuv_web/views/page_html.ex:243
+#, elixir-autogen, elixir-format
+msgid "Is vutuv open source?"
+msgstr "vutuv est-il open source ?"
+
+#: lib/vutuv_web/views/page_html.ex:203
+#, elixir-autogen, elixir-format
+msgid "Nothing. There are no paid premium accounts, every account has the same features."
+msgstr "Rien. Il n'y a pas de comptes premium payants, chaque compte a les mêmes fonctions."
+
+#: lib/vutuv_web/views/page_html.ex:216
+#, elixir-autogen, elixir-format
+msgid "On our own servers in %{place}, in no foreign cloud."
+msgstr "Sur nos propres serveurs en %{place}, dans aucun cloud étranger."
+
+#: lib/vutuv_web/views/page_html.ex:202
+#, elixir-autogen, elixir-format
+msgid "What does vutuv cost?"
+msgstr "Combien coûte vutuv ?"
+
+#: lib/vutuv_web/views/page_html.ex:271
+#, elixir-autogen, elixir-format
+msgid "What does vutuv have to do with the Fediverse?"
+msgstr "Quel rapport entre vutuv et le Fédiverse ?"
+
+#: lib/vutuv_web/views/page_html.ex:214
+#, elixir-autogen, elixir-format
+msgid "Where does my data live?"
+msgstr "Où sont mes données ?"
+
+#: lib/vutuv_web/views/page_html.ex:244
+#, elixir-autogen, elixir-format
+msgid "Yes, the whole source code under the MIT license."
+msgstr "Oui, tout le code source sous licence MIT."
+
+#: lib/vutuv_web/views/page_html.ex:208
+#, elixir-autogen, elixir-format
+msgid "Yes. Every profile and every public post can be read without an account."
+msgstr "Oui. Chaque profil et chaque publication publique se lisent sans compte."
+
+#: lib/vutuv_web/views/page_html.ex:225
+#, elixir-autogen, elixir-format
+msgid "Yes. The import reads the data export LinkedIn hands you and takes over your CV; you check and save."
+msgstr "Oui. L'import lit l'export de données que LinkedIn vous remet et reprend votre CV ; vous vérifiez et enregistrez."
+
+#: lib/vutuv_web/views/page_html.ex:272
+#, elixir-autogen, elixir-format
+msgid "vutuv is part of it, as Mastodon is. Whether your posts take part is your choice at sign-up, and one switch in the settings later. Each to their own."
+msgstr "vutuv en fait partie, comme Mastodon. Que vos publications y participent est votre choix à l'inscription, puis un interrupteur dans les réglages. Chacun comme il veut."
+
+#: lib/vutuv_web/views/page_html.ex:219
+#, elixir-autogen, elixir-format
+msgid "vutuv sets a single cookie, the one that keeps you signed in, and loads nothing from anybody else's server."
+msgstr "vutuv pose un seul cookie, celui qui vous garde connecté, et ne charge rien depuis le serveur de quelqu'un d'autre."
+
+#: lib/vutuv_web/templates/page/index.html.heex:40
+#, elixir-autogen, elixir-format
+msgid "A business network for people and organizations (businesses, public authorities, associations, universities …)."
+msgstr "Un réseau professionnel pour les personnes et les organisations (entreprises, administrations, associations, universités …)."
+
+#: lib/vutuv_web/views/page_html.ex:231
+#, elixir-autogen, elixir-format
+msgid "How does my organization (a business, an association, a public authority …) get a page?"
+msgstr "Comment mon organisation (une entreprise, une association, une administration …) obtient-elle une page ?"

@@ -136,8 +136,10 @@ crawlers and declares draft
 (`VutuvWeb.ContentPolicy`, config `:ai_crawler_policy` — flips robots.txt and
 the response headers together), `Link` headers advertise
 llms.txt/sitemap/per-page alternates (`VutuvWeb.Plug.AgentLinks`), schema.org
-JSON-LD (Person on profiles, BlogPosting on permalinks, WebSite+SearchAction on
-the homepage — `VutuvWeb.JsonLd`, drift-tested against the doc builders), and
+JSON-LD (Person on profiles, BlogPosting on permalinks, WebSite+SearchAction
+and the FAQPage of the questions under the sign-up form on the homepage —
+`VutuvWeb.JsonLd`, drift-tested against the doc builders, the FAQ against
+the rendered page), and
 `/.well-known/` serves agent-skills discovery (Cloudflare draft, digest-verified
 `SKILL.md`) plus `security.txt`
 

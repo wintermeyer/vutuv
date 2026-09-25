@@ -1,18 +1,22 @@
 defmodule VutuvWeb.LandingPageTest do
   @moduledoc """
-  The logged-out landing page's marketing copy: the hero's three claims, and
-  the two blocks under the sign-up form — six promises anybody can read without
-  knowing a technical word, then one short section for the technically minded.
+  The logged-out landing page's marketing copy: the hero's quote, sentence and
+  three claims, and under the sign-up form the questions a visitor has before
+  signing up, each answered in a sentence or two, open on the page.
 
   This file is all render assertions and holds no fixtures: nothing under the
-  form depends on a member or a post. Two earlier shapes of that block are
-  gone and asserted against below, because both are recurring ideas: a wall of
-  real, current posts behind a cached snapshot and an embedded LiveView, and
-  four fanned screenshot decks of a profile, the CV builder, the Arbeitszeugnis
-  review and the Fediverse feed. The wall cost a socket on the most requested
-  page in the app; the decks, with the three product sections around them,
-  made the page a feature catalogue nobody outside the project read to the end
-  (Stefan, 2026-09-06).
+  form depends on a member or a post. Three earlier shapes of that block are
+  gone and asserted against below, because all three are recurring ideas: a
+  wall of real, current posts behind a cached snapshot and an embedded
+  LiveView; four fanned screenshot decks of a profile, the CV builder, the
+  Arbeitszeugnis review and the Fediverse feed; and six promise tiles with a
+  "for the technically minded" section after them. The wall cost a socket on
+  the most requested page in the app; the decks, with the three product
+  sections around them, made the page a feature catalogue nobody outside the
+  project read to the end (Stefan, 2026-09-06); the tiles were our claims
+  without the visitor's question in front of them, and half of them
+  ("Simple", a how-to for organization pages) were no reason to join
+  (Stefan, 2026-09-25).
 
   Anything that depends on an installation switch lives in
   `VutuvWeb.LandingConfigurationTest` instead, which is `async: false` because
@@ -30,6 +34,12 @@ defmodule VutuvWeb.LandingPageTest do
   end
 
   defp at(html, marker), do: :binary.match(html, marker) |> elem(0)
+
+  defp faq_keys(html) do
+    html
+    |> elements("[data-landing-faq-entry]")
+    |> Enum.map(&attribute(&1, "data-landing-faq-entry"))
+  end
 
   # The heading as a reader sees it: the short sentences sit in spans of their
   # own, so the markup no longer holds the quote as one string.
@@ -100,163 +110,105 @@ defmodule VutuvWeb.LandingPageTest do
       refute html =~ ~s(href="/import/linkedin")
     end
 
-    # The six promises, each a card with a title and a sentence or two, and
-    # every one of them readable by somebody who has never heard the word
-    # "Fediverse". Asserted as German literals for the reason the hero test is,
-    # and by name, so a seventh card or a renamed one is a decision and not a
-    # drift.
-    test "makes six promises anybody can read", %{conn: conn} do
+    # The one sentence saying what vutuv is, in the hero under the signature.
+    # The quote alone says only that vutuv is like LinkedIn without the
+    # annoyance, which tells a visitor who never used LinkedIn nothing.
+    test "the hero says in one sentence what vutuv is", %{conn: conn} do
       html = landing_de(conn)
 
-      assert html =~ "Was vutuv anders macht"
+      assert html =~
+               "Ein berufliches Netzwerk für Menschen und Organisationen (Firmen, Behörden, Vereine, Universitäten …)."
 
-      for key <- ~w(organizations family fast simple leave data) do
-        assert length(elements(html, "[data-landing-promise=#{key}]")) == 1
-      end
-
-      assert length(elements(html, "[data-landing-promise]")) == 6
-
-      assert html =~ "Menschen und Organisationen"
-      assert html =~ "Für Familie und Arbeitsplatz geeignet"
-      assert html =~ "Schnell, auch bei schlechtem Netz"
-      # Not "Einfach" alone: the hero's "Einfacher LinkedIn-Profil-Import."
-      # contains it.
-      assert html =~ "vutuv richtet sich an jeden."
-      assert html =~ "Ausprobieren, und gehen, wenn Sie wollen"
-      assert html =~ "Ihre Daten bleiben hier"
-
-      # Fast is the claim; the data-saving mode is what backs it for somebody
-      # on a poor connection, named by the same word the sign-up box and
-      # /settings/bandwidth use, so the reader recognizes the switch later.
-      assert html =~ "Datensparmodus"
+      assert at(html, "Ein berufliches Netzwerk") < at(html, "data-hero-points")
     end
 
-    # The order a person has to follow and nobody explains: your own account
-    # first, then a page for the organization, then the colleagues who help
-    # run it. Three numbered steps drawn as a row, and the organization is not
-    # only a company.
-    test "spells out the person-then-organization order as three steps", %{conn: conn} do
+    # Nine questions somebody has BEFORE signing up, each answered in a
+    # sentence or two, all open on the page: a collapsed block reads as
+    # something to hide, and a FAQ that grows past what a visitor asks before
+    # joining is the feature catalogue this replaced. Asserted by key, so a
+    # tenth question or a renamed one is a decision and not a drift, and as
+    # German literals for the reason the hero test gives.
+    test "answers nine questions anybody asks before signing up", %{conn: conn} do
       html = landing_de(conn)
 
-      assert html =~ "Sie legen als Person Ihr eigenes Konto an."
-      assert html =~ "Eingeloggt legen Sie dann die Seite Ihrer Organisation an"
-      assert html =~ "Behörde oder jede andere Gruppe"
-      assert html =~ "Kollegen dazu"
+      assert html =~ "Häufige Fragen"
 
-      steps = elements(html, "ol[data-landing-steps] li")
-      assert length(steps) == 3
-      assert Enum.map(steps, &text_of(&1 |> LazyHTML.to_html(), "span")) == ~w(1 2 3)
-    end
+      assert faq_keys(html) ==
+               ~w(price public data linkedin organizations fediverse open_source api delete)
 
-    # The bento (Stefan's pick of seven, 2026-09-06): the organization tile is
-    # the wide one, the data tile the tall dark one, and the pictogram is on
-    # every tile. Asserted on the grid classes because that is the whole
-    # difference between this and six equal cards.
-    test "lays the six out as a bento with the organization tile widest", %{conn: conn} do
-      html = landing(conn)
-
-      [org] = elements(html, "[data-landing-promise=organizations]")
-      assert attribute(org, "class") =~ "md:col-span-4"
-      assert attribute(org, "class") =~ "bg-brand-50"
-
-      [data] = elements(html, "[data-landing-promise=data]")
-      assert attribute(data, "class") =~ "md:row-span-2"
-      assert attribute(data, "class") =~ "bg-brand-900"
-
-      assert length(elements(html, "[data-landing-promise] [data-promise-icon] svg")) == 6
-    end
-
-    # The family-friendly promise is the house rules, a page anybody can open,
-    # in the community page's own words. Deliberately NOT the picture scan:
-    # it runs, but "every picture is checked before anyone sees it" is a
-    # guarantee this page must not give (Stefan, 2026-09-06).
-    test "says what family-friendly means and links the house rules", %{conn: conn} do
-      html = landing_de(conn)
-
-      assert html =~ "Zwölfjährigen"
-      assert html =~ ~s(href="/community")
-      refute html =~ "wird geprüft"
-    end
-
-    # Both directions of the try-it-and-leave promise, and the check behind the
-    # second: deletion cascades the addresses away, so the door really is open
-    # again (add_cascade_deletes_on_user_associations).
-    test "promises the way out as plainly as the way in", %{conn: conn} do
-      html = landing_de(conn)
-
-      assert html =~ "löschen Sie es selbst"
-      assert html =~ "Niemand fragt, warum"
-      assert html =~ "jederzeit wieder willkommen"
-    end
-
-    # Three of the four data claims are properties of the software and hold on
-    # every installation; where the servers stand is the operator's alone and
-    # is covered in the configuration test.
-    test "says what happens to the data, in plain words", %{conn: conn} do
-      html = landing_de(conn)
-
+      assert html =~ "Was kostet vutuv?"
+      assert html =~ "Nichts. Es gibt keine bezahlten Premium-Accounts"
+      assert html =~ "Kann ich mir Profile und Beiträge auf vutuv ansehen, ohne mich anzumelden?"
+      assert html =~ "Wo liegen meine Daten?"
       assert html =~ "eigenen Servern in Deutschland"
-      assert html =~ "keiner fremden Cloud"
-      assert html =~ "Keine Cookies von Dritten"
       assert html =~ "ein einziges Cookie"
+      assert html =~ "Kann ich mein LinkedIn-Profil mitnehmen?"
+      assert html =~ "Wie bekommt meine Organisation"
+      assert html =~ "Admin oder Redaktion"
+      assert html =~ "Was hat vutuv mit dem Fediverse zu tun?"
+      assert html =~ "Ist vutuv Open Source?"
+      assert html =~ "MIT-Lizenz"
+      assert html =~ "Gibt es eine API?"
+      assert html =~ "Kann ich mein Konto wieder löschen?"
+      assert html =~ "Niemand fragt, warum"
+
+      refute html =~ "<details"
     end
 
-    # The technical section: last, always visible, four lines. Whoever does not
-    # care is long past it at the form; whoever does gets the Fediverse, the
-    # source code, the machine formats and the sign-in options in one place,
-    # with the links that let them check.
-    test "closes with one section for the technically minded", %{conn: conn} do
+    # The links that let a reader check an answer: the example profile, its
+    # Markdown sibling, the source code. The deletion answer names the path
+    # and deliberately does not link it, and the LinkedIn answer links
+    # nothing: both pages need a login, so a logged-out click would trade the
+    # sign-up form for the login page.
+    test "links what can be checked and names the settings path unlinked", %{conn: conn} do
       html = landing_de(conn)
 
-      assert html =~ "data-landing-technical"
-      assert html =~ "Für Technikinteressierte"
-      assert html =~ "Mit oder ohne Fediverse"
-      assert html =~ "Mastodon"
-      assert html =~ "Open Source"
-      assert html =~ "MIT-Lizenz"
-      assert html =~ "Lesbar für Maschinen"
-      assert html =~ "Anmelden ohne Passwort"
-      assert html =~ "Passkey"
-
-      assert html =~ ~s(href="/developers")
-      assert html =~ ~s(href="/llms.txt")
+      assert html =~ ~s(href="https://vutuv.de/wintermeyer")
+      assert html =~ ~s(href="https://vutuv.de/wintermeyer.md")
       assert html =~ Vutuv.SourceRepo.url()
+
+      assert html =~ "unter /settings/delete"
+      refute html =~ ~s(href="/settings/delete")
+      refute html =~ ~s(href="/import/linkedin")
     end
 
-    # The page's argument, in order: the form, then what anybody can read, then
-    # what only some people want to know. A technical line above a plain one
-    # is exactly what puts a non-technical visitor to sleep.
-    test "the form comes first, the promises next, the technical section last", %{conn: conn} do
+    # A crawler reads the same questions as a FAQPage block, built from the
+    # list the page renders, so the two cannot drift.
+    test "carries the questions as FAQPage JSON-LD mirroring the page", %{conn: conn} do
+      html = landing_de(conn)
+
+      faq = json_ld(html, "FAQPage")
+      questions = Enum.map(faq["mainEntity"], & &1["name"])
+
+      assert questions ==
+               html
+               |> elements("[data-landing-faq-entry] h3")
+               |> Enum.map(&String.trim(LazyHTML.text(&1)))
+
+      [price | _] = faq["mainEntity"]
+      assert price["acceptedAnswer"]["@type"] == "Answer"
+      assert price["acceptedAnswer"]["text"] =~ "Premium-Accounts"
+
+      open_source = Enum.find(faq["mainEntity"], &(&1["name"] == "Ist vutuv Open Source?"))
+      assert open_source["acceptedAnswer"]["url"] == Vutuv.SourceRepo.url()
+    end
+
+    # The page's argument, in order: the form, then the questions.
+    test "the form comes first, the questions after", %{conn: conn} do
       html = landing(conn)
 
-      assert at(html, "registration-form") < at(html, "data-landing-promises")
-      assert at(html, "data-landing-promises") < at(html, "data-landing-technical")
+      assert at(html, "registration-form") < at(html, "data-landing-faq")
     end
 
-    # Nothing technical leaks into the block for everybody: the words that
-    # need a definition live in the technical section only.
-    test "keeps the technical vocabulary out of the promises", %{conn: conn} do
-      promises = conn |> landing_de() |> text_of("[data-landing-promises]")
-
-      for word <- [
-            "Fediverse",
-            "Mastodon",
-            "Markdown",
-            "JSON",
-            "API",
-            "Open Source",
-            "Passkey",
-            "MIT-"
-          ] do
-        refute promises =~ word, "#{word} is in the promises block, not the technical one"
-      end
-    end
-
-    # The screenshot decks and the three product sections that carried them
-    # are gone and stay gone (the moduledoc says why).
-    test "shows no screenshots and no product sections", %{conn: conn} do
+    # The promise tiles, the screenshot decks and the product sections that
+    # carried them are gone and stay gone (the moduledoc says why).
+    test "shows no promise tiles, no screenshots and no product sections", %{conn: conn} do
       html = landing_de(conn)
 
+      refute html =~ "data-landing-promise"
+      refute html =~ "data-landing-technical"
+      refute html =~ "Was vutuv anders macht"
+      refute html =~ "Für Technikinteressierte"
       refute html =~ "/images/landing-"
       refute html =~ "-shots"
       refute html =~ "Arbeitszeugnis"
@@ -280,14 +232,14 @@ defmodule VutuvWeb.LandingPageTest do
     # The landing page is rendered from two actions: `index`, and the rejected
     # sign-up, which shows the identical screen with the errors on it. Assigning
     # the examples in `index` alone 500ed every mistyped form.
-    test "a rejected sign-up re-renders the page with its blocks", %{conn: conn} do
+    test "a rejected sign-up re-renders the page with its questions", %{conn: conn} do
       html =
         conn
         |> post(~p"/new_registration", user: %{"first_name" => "No Email"})
         |> html_response(422)
 
-      assert html =~ "data-landing-promises"
-      assert html =~ "data-landing-technical"
+      assert html =~ "data-landing-faq"
+      assert "delete" in faq_keys(html)
     end
   end
 
@@ -407,20 +359,6 @@ defmodule VutuvWeb.LandingPageTest do
         assert html =~ ~s(src="/images/teaser/vutuv-teaser-en.av1.mp4")
         refute html =~ "vutuv-teaser-de"
       end
-    end
-  end
-
-  describe "German rendering" do
-    # The short labels are the ones `gettext.extract --merge` fuzzy-fills with
-    # something unrelated ("Job applications" once came back as "Ihre
-    # Anwendungen", i.e. software), so the two headings the other tests do not
-    # already assert by name are asserted here.
-    test "the remaining headings are German", %{conn: conn} do
-      html = landing_de(conn)
-
-      assert html =~ "Wenn Sie es genau wissen wollen"
-      assert html =~ "Neugierig? Schauen Sie sich einmal das Profil vom vutuv-Gründer"
-      assert html =~ "Mit oder ohne eigenen vutuv-Account."
     end
   end
 end
