@@ -35,8 +35,8 @@ defmodule Vutuv.NodeInfo do
   Where the servers stand is the one claim of the four that is **not** a
   property of the software, so it is not in the string: `node_description/0`
   appends it from `:data_location`, which drops out entirely for an operator on
-  rented cloud infrastructure. That is the same split the start page's "Your
-  data" cards make, and `VutuvWeb.PageHTML.data_location/0` is the single place
+  rented cloud infrastructure. That is the same split the start page's "Where
+  does my data live?" answer makes, and `VutuvWeb.PageHTML.data_location/0` is the single place
   that decides whether the claim was made at all. What this deliberately does
   **not** say is that we are the good ones: every server in that list claims as
   much, so the claim carries no information, and the facts above are the same
@@ -194,7 +194,7 @@ defmodule Vutuv.NodeInfo do
   # installation (open source, no tracking, no third-party cookies). Where the
   # servers stand is not: it is a promise only the operator can make, so it is
   # appended from `:data_location` and drops out entirely for an operator who
-  # cleared it — the same split the start page's "Your data" cards make, and
+  # cleared it — the same split the start page's data answer makes, and
   # `VutuvWeb.PageHTML.data_location/0` is the one place that decides whether
   # the claim was made at all.
   defp node_description do

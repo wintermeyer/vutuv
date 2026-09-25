@@ -131,6 +131,32 @@ defmodule VutuvWeb.JsonLd do
   end
 
   @doc """
+  The landing page's questions as a schema.org FAQPage, from the same entries
+  `VutuvWeb.PageHTML.landing_faq/0` renders, so the block cannot say something
+  the page does not (landing_page_test pins the two against each other). The
+  link a reader checks an answer with rides along as the Answer's `url`.
+  """
+  def faq_page(entries) do
+    %{
+      "@context" => "https://schema.org",
+      "@type" => "FAQPage",
+      "mainEntity" =>
+        Enum.map(entries, fn entry ->
+          %{
+            "@type" => "Question",
+            "name" => entry.question,
+            "acceptedAnswer" =>
+              compact(%{
+                "@type" => "Answer",
+                "text" => entry.answer,
+                "url" => entry.link && entry.link.href
+              })
+          }
+        end)
+    }
+  end
+
+  @doc """
   The profile as ProfilePage/Person, from the show page's assigns.
 
   `extras` carries the rest of what the page already loaded (nothing here
