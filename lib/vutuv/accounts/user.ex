@@ -404,11 +404,6 @@ defmodule Vutuv.Accounts.User do
     field(:post_lines_mobile, :integer)
     field(:post_hyphenate_desktop, :boolean)
     field(:post_hyphenate_mobile, :boolean)
-    # How many lines of a quoted post the /notifications rows show. A quote
-    # there sits beside a link to the post itself, so unlike the counts above
-    # it has no "0 = never shorten" mode. Read through
-    # notification_post_lines/1, never straight off the struct.
-    field(:notification_post_lines, :integer)
     # Whether other members may see that this member liked a post: the avatar
     # row a post permalink shows under the like count (issue #1233). Off keeps
     # the member out of that row for everybody **except the post's author**,
@@ -611,7 +606,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? browser_notifications? show_online_status? show_mastodon_feed? mastodon_clients? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale date_region time_zone tag_list auto_post_deletion? auto_post_deletion_after_days auto_post_deletion_keep_photos? auto_post_deletion_keep_answered? auto_post_deletion_keep_bookmarked? auto_post_deletion_delete_replies? auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts feed_foreign_posts feed_languages feed_tab_ticker? feed_tab_ticker_seconds feed_page_size browser_tab_teaser? low_bandwidth? like_notification_cap)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? browser_notifications? show_online_status? show_mastodon_feed? mastodon_clients? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale date_region time_zone tag_list auto_post_deletion? auto_post_deletion_after_days auto_post_deletion_keep_photos? auto_post_deletion_keep_answered? auto_post_deletion_keep_bookmarked? auto_post_deletion_delete_replies? auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts feed_foreign_posts feed_languages feed_tab_ticker? feed_tab_ticker_seconds feed_page_size browser_tab_teaser? low_bandwidth? like_notification_cap)a
 
   # The ages the automatic post deletion offers (issue #1255), in days. A fixed
   # list rather than a free number field on purpose: this setting deletes
@@ -756,27 +751,6 @@ defmodule Vutuv.Accounts.User do
     }
   end
 
-  # The SHIPPED default for the notification quote, mirrored by the
-  # `--notif-clamp` fallback in `.notif-clamp` (components.css) — the same
-  # deal `post_prefs_defaults/0` has with `.post-clamp`, so the DOM stays
-  # clean for a reader who is on the shipped value.
-  @notification_post_lines_default 5
-
-  def notification_post_lines_default, do: @notification_post_lines_default
-
-  @doc """
-  How many lines of a quoted post the reader's /notifications rows show,
-  resolved through `Vutuv.Prefs`: their own explicit value, else the
-  installation default, else the shipped 5. The single seam
-  `VutuvWeb.NotificationLive.Index` reads; never touch the raw struct field.
-  """
-  def notification_post_lines(user) when is_nil(user) or is_struct(user, __MODULE__),
-    do: Prefs.get(user, :notification_post_lines)
-
-  @doc "The bounds the notification-quote line count is validated against."
-  def notification_post_lines_min, do: Prefs.pref!(:notification_post_lines).min
-  def notification_post_lines_max, do: Prefs.pref!(:notification_post_lines).max
-
   @doc """
   The notification-email preference fields, by the param/column name a
   one-click unsubscribe link may switch off. Shared by `UnsubscribeToken`
@@ -851,12 +825,6 @@ defmodule Vutuv.Accounts.User do
     |> validate_number(:post_lines_mobile,
       greater_than_or_equal_to: 0,
       less_than_or_equal_to: post_lines_max()
-    )
-    # The notification quote has no "no truncation" mode (see the schema note),
-    # so its floor is 1, not 0; a cleared field stays nil = inherit.
-    |> validate_number(:notification_post_lines,
-      greater_than_or_equal_to: notification_post_lines_min(),
-      less_than_or_equal_to: notification_post_lines_max()
     )
     # The feed's page size, bounded by its registry entry so nobody stores a
     # feed of 4000 cards. A cleared field stays nil = inherit, like the counts

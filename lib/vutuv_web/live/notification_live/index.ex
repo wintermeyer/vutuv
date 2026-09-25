@@ -350,6 +350,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     |> assign(:blocks, blocks)
     |> assign(:empty?, not Enum.any?(blocks, &match?({:row, _}, &1)))
     |> assign(:day_visits, Enum.filter(visits, &(ViewerClock.date(&1.at) == top_day)))
+    |> assign_paths()
   end
 
   defp last_at([]), do: nil
@@ -479,7 +480,7 @@ defmodule VutuvWeb.NotificationLive.Index do
             </h1>
             <.link
               id="only-words"
-              patch={page_path(assigns, only_words?: !@only_words?)}
+              patch={@paths.toggle}
               role="switch"
               aria-checked={to_string(@only_words?)}
               class="inline-flex min-h-10 items-center gap-2.5 text-sm font-medium text-slate-700 dark:text-slate-300"
@@ -500,7 +501,19 @@ defmodule VutuvWeb.NotificationLive.Index do
           <%!-- The phone has no rail column: the calendar and the looks of the
           day sit above the list, folded. --%>
           <div class="mt-4 md:hidden">
-            <.time_travel id="phone" {rail(assigns)} />
+            <.time_travel
+              id="phone"
+              cal_open?={@cal_open?}
+              cal_month={@cal_month}
+              cal_counts={@cal_counts}
+              cal_capped?={@cal_capped?}
+              day={@day}
+              today={@today}
+              top_day={@top_day}
+              looks={@paths.looks}
+              now_path={@paths.now}
+              now?={@paths.now?}
+            />
           </div>
 
           <div
@@ -513,7 +526,7 @@ defmodule VutuvWeb.NotificationLive.Index do
               {gettext("This is the list as it stood when you were here. Everything that came later is hidden.")}
             </p>
             <.link
-              patch={page_path(assigns, day: nil, at: nil)}
+              patch={@paths.now}
               class="inline-flex h-9 items-center rounded-lg bg-amber-600 px-3 text-sm font-semibold text-white hover:bg-amber-700"
             >
               {gettext("Back to now")}
@@ -540,7 +553,7 @@ defmodule VutuvWeb.NotificationLive.Index do
           <div class="mt-6 flex justify-center">
             <.link
               id="earlier-days"
-              patch={page_path(assigns, day: Date.add(@top_day, -2), at: nil)}
+              patch={@paths.earlier}
               class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
             >
               {gettext("Earlier days")}
@@ -549,28 +562,41 @@ defmodule VutuvWeb.NotificationLive.Index do
         </div>
 
         <aside class="hidden min-w-0 md:block">
-          <.time_travel id="desktop" {rail(assigns)} />
+          <.time_travel
+            id="desktop"
+            cal_open?={@cal_open?}
+            cal_month={@cal_month}
+            cal_counts={@cal_counts}
+            cal_capped?={@cal_capped?}
+            day={@day}
+            today={@today}
+            top_day={@top_day}
+            looks={@paths.looks}
+            now_path={@paths.now}
+            now?={@paths.now?}
+          />
         </aside>
       </div>
     </div>
     """
   end
 
-  # What the rail draws, the links to each look built here with the page's own
-  # URL rule.
-  defp rail(assigns) do
-    assigns
-    |> Map.take([:cal_open?, :cal_month, :cal_counts, :cal_capped?, :day, :today, :top_day])
-    |> Map.put(:now_path, page_path(assigns, day: nil, at: nil))
-    |> Map.put(:now?, present?(assigns))
-    |> Map.put(
-      :looks,
-      assigns.day_visits
-      |> Enum.reverse()
-      |> Enum.map(
-        &%{visit: &1, path: page_path(assigns, at: &1.at), current?: assigns.travel == &1.at}
-      )
-    )
+  # Every link the page draws, built once per rebuild with the page's own URL
+  # rule, so the template reads plain assigns: a function handed `assigns` in
+  # the template would switch change tracking off for everything it feeds.
+  defp assign_paths(socket) do
+    a = socket.assigns
+
+    assign(socket, :paths, %{
+      toggle: page_path(a, only_words?: !a.only_words?),
+      now: page_path(a, day: nil, at: nil),
+      now?: present?(a),
+      earlier: page_path(a, day: Date.add(a.top_day, -2), at: nil),
+      looks:
+        a.day_visits
+        |> Enum.reverse()
+        |> Enum.map(&%{visit: &1, path: page_path(a, at: &1.at), current?: a.travel == &1.at})
+    })
   end
 
   # The calendar and the looks of the shown day.

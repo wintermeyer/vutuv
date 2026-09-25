@@ -69,7 +69,6 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Hyphenate on mobile"),
       gettext("Default map"),
       gettext("No map link"),
-      gettext("Lines in notifications"),
       gettext("Show my name on posts I like"),
       gettext(
         "When off, other members no longer see you among the likes of a post. The author of the post still does: we named you in the notification they got when you liked it. Either way the post keeps the same number of likes."
@@ -114,7 +113,6 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("For members on a slow connection."),
       gettext("Between 4 and 20 seconds."),
       gettext("0 means posts are never shortened."),
-      gettext("How much of a post a notification quotes before it is cut off."),
       gettext("Addresses on profiles link to this map service."),
       gettext("Posts"),
       gettext("Maps"),

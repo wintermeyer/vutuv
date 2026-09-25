@@ -634,7 +634,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/preferences.html.heex:87
 #: lib/vutuv_web/templates/settings/preferences.html.heex:132
 #: lib/vutuv_web/templates/settings/preferences.html.heex:204
-#: lib/vutuv_web/templates/settings/preferences.html.heex:337
+#: lib/vutuv_web/templates/settings/preferences.html.heex:316
 #: lib/vutuv_web/templates/settings/privacy.html.heex:69
 #: lib/vutuv_web/templates/settings/saved_searches.html.heex:61
 #: lib/vutuv_web/templates/user/edit.html.heex:492
@@ -2087,7 +2087,7 @@ msgid "Edit post"
 msgstr ""
 
 #: lib/vutuv_web/components/organization_components.ex:274
-#: lib/vutuv_web/gettext_extraction_anchors.ex:85
+#: lib/vutuv_web/gettext_extraction_anchors.ex:84
 #: lib/vutuv_web/live/organization_live/feed.ex:203
 #: lib/vutuv_web/live/post_live/feed.ex:377
 #: lib/vutuv_web/live/post_live/feed.ex:3412
@@ -2171,7 +2171,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/post_controller.ex:110
 #: lib/vutuv_web/controllers/post_controller.ex:136
 #: lib/vutuv_web/controllers/user_controller.ex:78
-#: lib/vutuv_web/gettext_extraction_anchors.ex:119
+#: lib/vutuv_web/gettext_extraction_anchors.ex:117
 #: lib/vutuv_web/live/admin/dashboard_live.ex:266
 #: lib/vutuv_web/live/fediverse_account_live.ex:475
 #: lib/vutuv_web/live/organization_live/show.ex:756
@@ -5339,7 +5339,7 @@ msgid "Photos"
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:5882
-#: lib/vutuv_web/gettext_extraction_anchors.ex:77
+#: lib/vutuv_web/gettext_extraction_anchors.ex:76
 #, elixir-autogen, elixir-format
 msgid "Privacy"
 msgstr ""
@@ -5671,7 +5671,7 @@ msgid_plural "%{count} minutes ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:1070
+#: lib/vutuv_web/controllers/settings_controller.ex:1061
 #, elixir-autogen, elixir-format
 msgid "All other devices have been logged out."
 msgstr ""
@@ -5711,7 +5711,7 @@ msgstr ""
 msgid "Signed-in devices"
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:1057
+#: lib/vutuv_web/controllers/settings_controller.ex:1048
 #, elixir-autogen, elixir-format
 msgid "That device has been logged out."
 msgstr ""
@@ -6079,7 +6079,7 @@ msgstr ""
 msgid "Map preferences saved."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:120
+#: lib/vutuv_web/gettext_extraction_anchors.ex:118
 #: lib/vutuv_web/templates/settings/preferences.html.heex:112
 #, elixir-autogen, elixir-format
 msgid "Maps"
@@ -9218,7 +9218,7 @@ msgstr ""
 msgid "Employment status"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1310
+#: lib/vutuv/accounts/user.ex:1278
 #: lib/vutuv_web/gettext_extraction_anchors.ex:47
 #, elixir-autogen, elixir-format
 msgid "Looking for a job"
@@ -9229,7 +9229,7 @@ msgstr ""
 msgid "Not open to work"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1307
+#: lib/vutuv/accounts/user.ex:1275
 #: lib/vutuv_web/gettext_extraction_anchors.ex:46
 #, elixir-autogen, elixir-format
 msgid "Open to offers"
@@ -10211,7 +10211,7 @@ msgid_plural "You have %{formatted} new messages."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/settings/preferences.html.heex:321
+#: lib/vutuv_web/templates/settings/preferences.html.heex:300
 #, elixir-autogen, elixir-format
 msgid "Break long words at syllable points so the text wraps evenly. Helpful in the narrow phone column."
 msgstr ""
@@ -10222,18 +10222,18 @@ msgid "How posts you read are shortened in your feed and on profiles. These are 
 msgstr ""
 
 #: lib/vutuv_web/gettext_extraction_anchors.ex:68
-#: lib/vutuv_web/templates/settings/preferences.html.heex:328
+#: lib/vutuv_web/templates/settings/preferences.html.heex:307
 #, elixir-autogen, elixir-format
 msgid "Hyphenate on desktop"
 msgstr ""
 
 #: lib/vutuv_web/gettext_extraction_anchors.ex:69
-#: lib/vutuv_web/templates/settings/preferences.html.heex:332
+#: lib/vutuv_web/templates/settings/preferences.html.heex:311
 #, elixir-autogen, elixir-format
 msgid "Hyphenate on mobile"
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/preferences.html.heex:318
+#: lib/vutuv_web/templates/settings/preferences.html.heex:297
 #, elixir-autogen, elixir-format
 msgid "Hyphenation"
 msgstr ""
@@ -10304,7 +10304,7 @@ msgstr ""
 msgid "Installation default (%{value})"
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:899
+#: lib/vutuv_web/controllers/settings_controller.ex:890
 #, elixir-autogen, elixir-format
 msgid "Map preferences reset to the site defaults."
 msgstr ""
@@ -10319,7 +10319,7 @@ msgstr ""
 msgid "Own value; blank the field to go back to the installation default."
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:895
+#: lib/vutuv_web/controllers/settings_controller.ex:886
 #, elixir-autogen, elixir-format
 msgid "Post display settings reset to the site defaults."
 msgstr ""
@@ -10352,7 +10352,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/preferences.html.heex:104
 #: lib/vutuv_web/templates/settings/preferences.html.heex:149
 #: lib/vutuv_web/templates/settings/preferences.html.heex:234
-#: lib/vutuv_web/templates/settings/preferences.html.heex:352
+#: lib/vutuv_web/templates/settings/preferences.html.heex:331
 #, elixir-autogen, elixir-format
 msgid "Reset to the site defaults"
 msgstr ""
@@ -10383,17 +10383,17 @@ msgstr ""
 msgid "What every member gets until they choose for themselves on their settings pages, and what logged-out visitors see. Changes apply immediately; members who set their own value are not affected."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:116
+#: lib/vutuv_web/gettext_extraction_anchors.ex:115
 #, elixir-autogen, elixir-format
 msgid "0 means posts are never shortened."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:122
+#: lib/vutuv_web/gettext_extraction_anchors.ex:120
 #, elixir-autogen, elixir-format
 msgid "Off"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:121
+#: lib/vutuv_web/gettext_extraction_anchors.ex:119
 #, elixir-autogen, elixir-format
 msgid "On"
 msgstr ""
@@ -10530,19 +10530,19 @@ msgstr ""
 msgid "\"Signed-in members only\" is the default. It reduces who sees your availability but cannot guarantee it, since anyone can create an account. Choose \"No one\" to keep the status saved without showing it."
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1348
+#: lib/vutuv/accounts/user.ex:1316
 #: lib/vutuv_web/gettext_extraction_anchors.ex:50
 #, elixir-autogen, elixir-format
 msgid "Everyone, including logged-out visitors"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1353
+#: lib/vutuv/accounts/user.ex:1321
 #: lib/vutuv_web/gettext_extraction_anchors.ex:52
 #, elixir-autogen, elixir-format
 msgid "No one"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1351
+#: lib/vutuv/accounts/user.ex:1319
 #: lib/vutuv_web/gettext_extraction_anchors.ex:51
 #: lib/vutuv_web/live/job_posting_live/form.ex:823
 #, elixir-autogen, elixir-format
@@ -11824,7 +11824,7 @@ msgstr ""
 msgid "How to apply"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1322
+#: lib/vutuv/accounts/user.ex:1290
 #: lib/vutuv/jobs/job_posting.ex:165
 #, elixir-autogen, elixir-format
 msgid "Hybrid"
@@ -11943,7 +11943,7 @@ msgstr ""
 msgid "Offer the machine-readable formats (.md/.txt/.json/.xml) to AI agents."
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1321
+#: lib/vutuv/accounts/user.ex:1289
 #: lib/vutuv/jobs/job_posting.ex:164
 #, elixir-autogen, elixir-format
 msgid "On-site"
@@ -12026,7 +12026,7 @@ msgstr ""
 msgid "Publish"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1323
+#: lib/vutuv/accounts/user.ex:1291
 #: lib/vutuv/jobs/job_posting.ex:166
 #: lib/vutuv/notifications/emailer.ex:613
 #: lib/vutuv_web/agent_docs/markdown.ex:576
@@ -13039,7 +13039,7 @@ msgstr ""
 msgid "This screenshot was captured automatically from the link in your post. If it turned out wrong (for example a cookie banner covering the page), you can remove it."
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1366
+#: lib/vutuv/accounts/user.ex:1334
 #: lib/vutuv_web/gettext_extraction_anchors.ex:56
 #, elixir-autogen, elixir-format
 msgid "Age only, without the date"
@@ -13050,19 +13050,19 @@ msgstr ""
 msgid "Choose how much of your birthday your profile shows. \"Age only\" hides the exact date, \"Day and month\" hides the year (and your age), and \"Do not show\" keeps it saved but off your profile."
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1369
+#: lib/vutuv/accounts/user.ex:1337
 #: lib/vutuv_web/gettext_extraction_anchors.ex:57
 #, elixir-autogen, elixir-format
 msgid "Day and month, without the year"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1372
+#: lib/vutuv/accounts/user.ex:1340
 #: lib/vutuv_web/gettext_extraction_anchors.ex:58
 #, elixir-autogen, elixir-format
 msgid "Do not show my birthday"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1363
+#: lib/vutuv/accounts/user.ex:1331
 #: lib/vutuv_web/gettext_extraction_anchors.ex:55
 #, elixir-autogen, elixir-format
 msgid "Full date and age"
@@ -13620,27 +13620,6 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/text.ex:793
 #, elixir-autogen, elixir-format
 msgid "proof document"
-msgstr ""
-
-#: lib/vutuv_web/gettext_extraction_anchors.ex:72
-#: lib/vutuv_web/templates/settings/preferences.html.heex:306
-#, elixir-autogen, elixir-format
-msgid "Lines in notifications"
-msgstr ""
-
-#: lib/vutuv_web/gettext_extraction_anchors.ex:117
-#, elixir-autogen, elixir-format
-msgid "How much of a post a notification quotes before it is cut off."
-msgstr ""
-
-#: lib/vutuv_web/templates/settings/preferences.html.heex:297
-#, elixir-autogen, elixir-format
-msgid "Quoted posts in notifications"
-msgstr ""
-
-#: lib/vutuv_web/templates/settings/preferences.html.heex:300
-#, elixir-autogen, elixir-format
-msgid "Your notifications quote the post someone liked or replied to. Leave the field empty to follow the site default."
 msgstr ""
 
 #: lib/vutuv_web/components/welcome_components.ex:94
@@ -15004,7 +14983,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: lib/vutuv_web/components/post_components.ex:7459
-#: lib/vutuv_web/live/notification_live/index.ex:1194
+#: lib/vutuv_web/live/notification_live/index.ex:1195
 #, elixir-autogen, elixir-format
 msgid "%{formatted} like"
 msgid_plural "%{formatted} likes"
@@ -15013,7 +14992,7 @@ msgstr[1] ""
 
 #: lib/vutuv_web/components/post_components.ex:7463
 #: lib/vutuv_web/live/investors_reach_live.ex:318
-#: lib/vutuv_web/live/notification_live/index.ex:1198
+#: lib/vutuv_web/live/notification_live/index.ex:1199
 #, elixir-autogen, elixir-format
 msgid "%{formatted} repost"
 msgid_plural "%{formatted} reposts"
@@ -17401,17 +17380,17 @@ msgstr ""
 msgid "Reset to the site default"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:73
+#: lib/vutuv_web/gettext_extraction_anchors.ex:72
 #, elixir-autogen, elixir-format
 msgid "Show my name on posts I like"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:74
+#: lib/vutuv_web/gettext_extraction_anchors.ex:73
 #, elixir-autogen, elixir-format
 msgid "When off, other members no longer see you among the likes of a post. The author of the post still does: we named you in the notification they got when you liked it. Either way the post keeps the same number of likes."
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:1004
+#: lib/vutuv_web/controllers/settings_controller.ex:995
 #, elixir-autogen, elixir-format
 msgid "Your likes follow the site default again."
 msgstr ""
@@ -18273,17 +18252,17 @@ msgstr ""
 msgid "PIN not arriving? Is the email address {email} correct? Have you checked your spam folder?"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1469
+#: lib/vutuv/accounts/user.ex:1437
 #, elixir-autogen, elixir-format
 msgid "Diverse"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1467
+#: lib/vutuv/accounts/user.ex:1435
 #, elixir-autogen, elixir-format
 msgid "Female"
 msgstr ""
 
-#: lib/vutuv/accounts/user.ex:1468
+#: lib/vutuv/accounts/user.ex:1436
 #, elixir-autogen, elixir-format
 msgid "Male"
 msgstr ""
@@ -19874,27 +19853,27 @@ msgstr ""
 msgid "Feed languages"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:81
+#: lib/vutuv_web/gettext_extraction_anchors.ex:80
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Hide them"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:79
+#: lib/vutuv_web/gettext_extraction_anchors.ex:78
 #, elixir-autogen, elixir-format
 msgid "Posts in other languages"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:80
+#: lib/vutuv_web/gettext_extraction_anchors.ex:79
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Translate into my language"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:82
+#: lib/vutuv_web/gettext_extraction_anchors.ex:81
 #, elixir-autogen, elixir-format
 msgid "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:126
+#: lib/vutuv_web/gettext_extraction_anchors.ex:124
 #, elixir-autogen, elixir-format
 msgid "Date & time"
 msgstr ""
@@ -19904,12 +19883,12 @@ msgstr ""
 msgid "Date and time settings reset to the site defaults."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:124
+#: lib/vutuv_web/gettext_extraction_anchors.ex:122
 #, elixir-autogen, elixir-format
 msgid "Date format"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:134
+#: lib/vutuv_web/gettext_extraction_anchors.ex:132
 #, elixir-autogen, elixir-format
 msgid "Germany, Austria, Switzerland"
 msgstr ""
@@ -19919,27 +19898,27 @@ msgstr ""
 msgid "Language and region saved."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:130
+#: lib/vutuv_web/gettext_extraction_anchors.ex:128
 #, elixir-autogen, elixir-format
 msgid "Posts, messages and notifications are stamped in this zone. New accounts take it from the browser."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:127
+#: lib/vutuv_web/gettext_extraction_anchors.ex:125
 #, elixir-autogen, elixir-format
 msgid "The order and punctuation of every date you read here, and whether times run on a 12- or 24-hour clock."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:125
+#: lib/vutuv_web/gettext_extraction_anchors.ex:123
 #, elixir-autogen, elixir-format
 msgid "Time zone"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:135
+#: lib/vutuv_web/gettext_extraction_anchors.ex:133
 #, elixir-autogen, elixir-format
 msgid "United Kingdom, France, Brazil"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:136
+#: lib/vutuv_web/gettext_extraction_anchors.ex:134
 #, elixir-autogen, elixir-format
 msgid "United States"
 msgstr ""
@@ -19949,7 +19928,7 @@ msgstr ""
 msgid "Your browser says: {zone}"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:137
+#: lib/vutuv_web/gettext_extraction_anchors.ex:135
 #, elixir-autogen, elixir-format, fuzzy
 msgid "ISO 8601 (Sweden, Japan, China)"
 msgstr ""
@@ -20707,7 +20686,7 @@ msgstr ""
 msgid "Example"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:93
+#: lib/vutuv_web/gettext_extraction_anchors.ex:92
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Feed tabs"
 msgstr ""
@@ -20722,22 +20701,22 @@ msgstr ""
 msgid "Play the example"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:115
+#: lib/vutuv_web/gettext_extraction_anchors.ex:114
 #, elixir-autogen, elixir-format
 msgid "Between 4 and 20 seconds."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:95
+#: lib/vutuv_web/gettext_extraction_anchors.ex:94
 #, elixir-autogen, elixir-format
 msgid "How long the quote stands"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:94
+#: lib/vutuv_web/gettext_extraction_anchors.ex:93
 #, elixir-autogen, elixir-format
 msgid "Quote what arrives on the other tab"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:96
+#: lib/vutuv_web/gettext_extraction_anchors.ex:95
 #, elixir-autogen, elixir-format
 msgid "When off, a tab holding something new wears its dot and says nothing more."
 msgstr ""
@@ -20864,28 +20843,28 @@ msgid_plural "+%{formatted} more posts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:98
+#: lib/vutuv_web/gettext_extraction_anchors.ex:97
 #: lib/vutuv_web/templates/settings/preferences.html.heex:185
 #, elixir-autogen, elixir-format
 msgid "Browser tab"
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:929
+#: lib/vutuv_web/controllers/settings_controller.ex:920
 #, elixir-autogen, elixir-format
 msgid "Browser tab settings reset to the site defaults."
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:913
+#: lib/vutuv_web/controllers/settings_controller.ex:904
 #, elixir-autogen, elixir-format
 msgid "Browser tab settings saved."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:100
+#: lib/vutuv_web/gettext_extraction_anchors.ex:99
 #, elixir-autogen, elixir-format
 msgid "Only while you are looking at another tab, and only for a few seconds. The tab title also shows up in screenshots, in your window switcher and in a screen share."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:99
+#: lib/vutuv_web/gettext_extraction_anchors.ex:98
 #, elixir-autogen, elixir-format
 msgid "Tease new posts in the browser tab"
 msgstr ""
@@ -21634,19 +21613,19 @@ msgstr ""
 msgid "Describe the organization. Markdown is supported."
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:943
+#: lib/vutuv_web/controllers/settings_controller.ex:934
 #: lib/vutuv_web/templates/settings/bandwidth.html.heex:9
 #: lib/vutuv_web/templates/settings/bandwidth.html.heex:16
 #, elixir-autogen, elixir-format
 msgid "Bandwidth"
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:993
+#: lib/vutuv_web/controllers/settings_controller.ex:984
 #, elixir-autogen, elixir-format
 msgid "Bandwidth settings reset to the site defaults."
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:953
+#: lib/vutuv_web/controllers/settings_controller.ex:944
 #, elixir-autogen, elixir-format
 msgid "Bandwidth settings saved."
 msgstr ""
@@ -21656,7 +21635,7 @@ msgstr ""
 msgid "If you are on a slow or metered connection, vutuv can leave out the parts of the page that cost the most to download."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:113
+#: lib/vutuv_web/gettext_extraction_anchors.ex:112
 #, elixir-autogen, elixir-format
 msgid "Low-bandwidth mode"
 msgstr ""
@@ -21997,7 +21976,7 @@ msgid_plural "%{formatted} new posts in your feed"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:114
+#: lib/vutuv_web/gettext_extraction_anchors.ex:113
 #, elixir-autogen, elixir-format
 msgid "For members on a slow connection."
 msgstr ""
@@ -22356,17 +22335,17 @@ msgstr ""
 msgid "The posts written that month, by day."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:87
+#: lib/vutuv_web/gettext_extraction_anchors.ex:86
 #, elixir-autogen, elixir-format
 msgid "Feed length"
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:987
+#: lib/vutuv_web/controllers/settings_controller.ex:978
 #, elixir-autogen, elixir-format
 msgid "Feed length reset to the site default."
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:981
+#: lib/vutuv_web/controllers/settings_controller.ex:972
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Feed settings saved."
 msgstr ""
@@ -22376,19 +22355,19 @@ msgstr ""
 msgid "How many load at once, and how many “Load more” adds"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:89
+#: lib/vutuv_web/gettext_extraction_anchors.ex:88
 #, elixir-autogen, elixir-format
 msgid "How many posts your feed shows before the “Load more” button, and how many that button adds. More posts mean a longer wait for the page."
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:5867
-#: lib/vutuv_web/controllers/settings_controller.ex:971
+#: lib/vutuv_web/controllers/settings_controller.ex:962
 #: lib/vutuv_web/templates/settings/feed.html.heex:12
 #, elixir-autogen, elixir-format
 msgid "Posts in your feed"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:88
+#: lib/vutuv_web/gettext_extraction_anchors.ex:87
 #, elixir-autogen, elixir-format
 msgid "Posts loaded at once"
 msgstr ""
@@ -26031,7 +26010,7 @@ msgstr ""
 msgid "the site and www., no other subdomain"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:118
+#: lib/vutuv_web/gettext_extraction_anchors.ex:116
 #, elixir-autogen, elixir-format
 msgid "Addresses on profiles link to this map service."
 msgstr ""
@@ -26203,7 +26182,7 @@ msgstr ""
 msgid "If you list a Mastodon, Friendica, Bluesky or BookWyrm account, your profile can show your latest public posts or book reviews from it."
 msgstr ""
 
-#: lib/vutuv_web/controllers/settings_controller.ex:922
+#: lib/vutuv_web/controllers/settings_controller.ex:913
 #, elixir-autogen, elixir-format
 msgid "Like notifications reset to the site default."
 msgstr ""
@@ -26243,22 +26222,22 @@ msgstr ""
 msgid "Your post now has %{formatted} likes. We will not notify you about further likes of it."
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:107
+#: lib/vutuv_web/gettext_extraction_anchors.ex:106
 #, elixir-autogen, elixir-format
 msgid "%{count} likes"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:105
+#: lib/vutuv_web/gettext_extraction_anchors.ex:104
 #, elixir-autogen, elixir-format
 msgid "Announce likes of one post up to"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:106
+#: lib/vutuv_web/gettext_extraction_anchors.ex:105
 #, elixir-autogen, elixir-format
 msgid "No limit"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:108
+#: lib/vutuv_web/gettext_extraction_anchors.ex:107
 #, elixir-autogen, elixir-format
 msgid "The first 10 likes of a post each get a notification, after that only 25, 50, 100 and so on. At this number you get a last notification, and further likes of that post stay quiet. They still show on the post and on your notifications page."
 msgstr ""

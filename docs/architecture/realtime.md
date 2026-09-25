@@ -372,20 +372,9 @@ then carries links of its own, the quote is a block with the permalink as a
 Inline image references are dropped before the quote is cut: the quote is text,
 so a picture must not eat a line of the budget.
 
-**How long a quote is was the reader's own setting** (the 2026-09 timeline shows
-the feed's cards instead, so nothing reads it now): `:notification_post_lines`
-(`Vutuv.Prefs`, shipped default 5 lines, an installation default an admin can
-change at `/admin/preferences`, a member's own value on `/settings/preferences`).
-It cuts the quote twice over — server-side to that many source lines (blank
-lines between them kept, so the Markdown blocks still parse), so the rest of a
-body never reaches the DOM, and visually through the `.notif-clamp` CSS clamp
-fed by the inline `--notif-clamp` custom property (nothing inline while the
-reader is on the shipped default, exactly like `.post-clamp`). The one-line
-context excerpts (the "Your post:" breadcrumb above a reply, the handle-change
-list) stay one line whatever the setting: they are index lines, not the quote.
-They sit *inside* the row's own link, so they cannot carry links of their own —
-`VutuvWeb.Markdown.to_plain_text/1` flattens their Markdown to plain text
-instead, so no `**marker**` shows there either.
+**How long a quote is** follows the feed's own line counts: /notifications shows
+the feed's cards since its 2026-09 rebuild, and the separate quote length it
+once had (`:notification_post_lines`) is gone.
 
 **Thread participation** is its own kind (`"thread"`): once a member writes in
 a thread (they rooted it or replied in it), every later reply **anywhere** in

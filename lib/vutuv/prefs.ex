@@ -37,9 +37,8 @@ defmodule Vutuv.Prefs do
   # ── The registry ──
   #
   # Grouped in display order. The post-display values mirror the CSS fallbacks
-  # in assets/css/components.css (.post-clamp / .markdown--post / .notif-clamp)
-  # — see Vutuv.Accounts.User.post_prefs_defaults/0 and
-  # notification_post_lines_default/0; the map default is Google Maps, and
+  # in assets/css/components.css (.post-clamp / .markdown--post) — see
+  # Vutuv.Accounts.User.post_prefs_defaults/0; the map default is Google Maps, and
   # "none" links addresses nowhere (Vutuv.Maps).
   @registry [
     %Pref{
@@ -60,17 +59,6 @@ defmodule Vutuv.Prefs do
     },
     %Pref{key: :post_hyphenate_desktop, type: :boolean, default: false, group: :post_display},
     %Pref{key: :post_hyphenate_mobile, type: :boolean, default: true, group: :post_display},
-    # The quoted post body on /notifications. A quote there is context beside a
-    # link to the post, not the post itself, so the minimum is 1 line rather
-    # than the "0 = never shorten" the two counts above allow.
-    %Pref{
-      key: :notification_post_lines,
-      type: :integer,
-      default: 5,
-      min: 1,
-      max: 50,
-      group: :post_display
-    },
     # Whether a member's likes are shown with their name (issue #1233). Public
     # by default, the way a like has always been on the networks people come
     # from — and the way a reaction from another network already reads on the
@@ -212,9 +200,6 @@ defmodule Vutuv.Prefs do
 
   def label(:post_hyphenate_mobile), do: Gettext.gettext(VutuvWeb.Gettext, "Hyphenate on mobile")
 
-  def label(:notification_post_lines),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Lines in notifications")
-
   def label(:like_attribution?),
     do: Gettext.gettext(VutuvWeb.Gettext, "Show my name on posts I like")
 
@@ -275,13 +260,6 @@ defmodule Vutuv.Prefs do
 
   def hint(key) when key in [:post_lines_desktop, :post_lines_mobile],
     do: Gettext.gettext(VutuvWeb.Gettext, "0 means posts are never shortened.")
-
-  def hint(:notification_post_lines),
-    do:
-      Gettext.gettext(
-        VutuvWeb.Gettext,
-        "How much of a post a notification quotes before it is cut off."
-      )
 
   # Says out loud what the switch does **not** do, because both limits would
   # otherwise be discovered the hard way: the post's author still sees you (we
