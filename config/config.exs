@@ -377,11 +377,10 @@ config :vutuv, :ads_enabled, false
 # VAT line from the offer page, the booking form and both mails.
 config :vutuv, :ads_vat_percent, 19
 
-# Where this installation's data physically lives, named on the start page's
-# privacy section ("on our own servers in Deutschland, not in somebody else's
-# cloud"). Empty drops that whole claim and leaves only the three promises the
-# SOFTWARE makes on every installation: no third-party cookies, export your data
-# whenever you like, delete your account yourself.
+# Where this installation's data physically lives, the start page's answer to
+# "Where does my data live?" ("on our own servers in Deutschland, in no foreign
+# cloud"). Empty drops that whole question; the cookie question beside it is a
+# promise the SOFTWARE makes on every installation and stays.
 #
 # Set it only if it is true for you. An operator running vutuv on rented cloud
 # infrastructure must clear it — the sentence says "our own servers", and a
@@ -390,7 +389,7 @@ config :vutuv, :ads_vat_percent, 19
 config :vutuv, :data_location, "Deutschland"
 
 # The one profile the logged-out start page's questions point at as the
-# example (and whose Markdown sibling the API answer links). A full URL, because
+# example (and whose JSON sibling the API answer links). A full URL, because
 # the point is a page somebody can open and read without an account, and because
 # the default has to keep working on an installation that has no members yet —
 # pointing at the reference installation is more useful there than a dead local

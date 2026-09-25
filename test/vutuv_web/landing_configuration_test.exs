@@ -114,29 +114,31 @@ defmodule VutuvWeb.LandingConfigurationTest do
     # A configured URL may carry a trailing slash. The join lives in
     # `example_profile_url/0` so href and label cannot disagree about it, which
     # they did while the markup did the joining: `…/ada//cv` under `…/ada/cv`.
-    # The CV link is gone; the API answer's Markdown example appends to the
-    # same base.
+    # The CV link is gone; the API answer's JSON example appends to the same
+    # base.
     test "a trailing slash in the configured URL does not double up", %{conn: conn} do
       example("https://vutuv.example/ada/")
 
       html = conn |> get(~p"/") |> html_response(200)
 
-      assert html =~ ~s(href="https://vutuv.example/ada.md")
+      assert html =~ ~s(href="https://vutuv.example/ada.json")
     end
 
     # The installability half of the same knob. Asserted on the answer's tail,
     # not on the URL: the founder signature in the hero links to a profile too,
     # so a bare URL match would pass for the wrong reason.
-    test "drops the example and its Markdown sibling where the URL is cleared", %{conn: conn} do
+    test "drops the example and its JSON sibling where the URL is cleared", %{conn: conn} do
       example("")
 
       html = conn |> get(~p"/") |> html_response(200)
 
       refute html =~ "For example:"
       refute html =~ "vutuv.de/wintermeyer"
-      # The questions stay: their claims hold on every installation.
+      # The questions stay: their claims hold on every installation, and the
+      # developer documentation is this installation's own page.
       assert html =~ "without signing up?"
       assert html =~ "Is there an API?"
+      assert html =~ ~s(href="/developers")
     end
 
     # The founder signature in the hero linked to `https://vutuv.de/wintermeyer`
@@ -204,15 +206,19 @@ defmodule VutuvWeb.LandingConfigurationTest do
       assert html =~ ~s(data-landing-faq-entry="open_source")
     end
 
-    test "drops only the hosting claim where the operator cleared it", %{conn: conn} do
+    # "Our own servers" is a promise only the operator can make, so the whole
+    # question goes where they cleared the place; the cookie question beside it
+    # describes the software and stays.
+    test "drops the data-location question where the operator cleared it", %{conn: conn} do
       put_config(:data_location, "")
 
       html = landing_de(conn)
 
       refute html =~ "eigenen Servern in"
       refute html =~ "fremden Cloud"
-      # The software's own promise is not the operator's to lose.
-      assert html =~ "Wo liegen meine Daten?"
+      refute html =~ "Wo liegen meine Daten?"
+      refute html =~ ~s(data-landing-faq-entry="data")
+      assert html =~ ~s(data-landing-faq-entry="tracking")
       assert html =~ "ein einziges Cookie"
     end
 
