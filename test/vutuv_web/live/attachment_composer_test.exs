@@ -89,23 +89,28 @@ defmodule VutuvWeb.AttachmentComposerTest do
     assert has_element?(live, ~s|button[aria-label="Remove #{attachment.file_name}"]|)
   end
 
-  test "the composer says what is left of the budget before the file flows", %{conn: conn} do
+  test "an admin, who has no allowance, is not told so", %{conn: conn, files: files} do
     live = open_composer(conn)
+    upload!(live, Fixtures.plain_pdf(files))
 
-    # An admin has no allowance, and the line says so rather than a number.
-    assert render(live) =~ "Your uploads are not limited."
+    refute render(live) =~ "Your uploads are not limited."
   end
 
-  test "a plain member reads a formatted allowance", %{conn: _conn} do
+  test "a plain member reads a formatted allowance once a file is attached", %{
+    conn: _conn,
+    files: files
+  } do
     Fixtures.put_config(uploaders: :members, daily_budget: 100_000_000)
 
     {conn, _member} =
       build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user()
 
-    html = conn |> open_composer() |> render()
+    live = open_composer(conn)
+    refute render(live) =~ "(100 %)"
+
+    html = upload!(live, Fixtures.plain_pdf(files))
 
     assert html =~ "100 MB"
-    assert html =~ "(100 %)"
   end
 
   test "a refused PDF says which of the four things it is", %{conn: conn, files: files} do
@@ -129,7 +134,22 @@ defmodule VutuvWeb.AttachmentComposerTest do
     assert Attachments.pending_for(user, [attachment.id]) == []
   end
 
-  test "the German composer names the control and the allowance in German", %{conn: conn} do
+  test "discarding the draft takes the files along, and undo brings them back", %{
+    conn: conn,
+    files: files
+  } do
+    live = open_composer(conn)
+    upload!(live, Fixtures.plain_pdf(files))
+    assert has_element?(live, "#composer-attachments")
+
+    live |> element("#composer-discard") |> render_click()
+    refute has_element?(live, "#composer-attachments")
+
+    live |> element("[data-undo-discard]") |> render_click()
+    assert has_element?(live, "#composer-attachments")
+  end
+
+  test "the German composer names the drop area in German", %{conn: conn} do
     html =
       conn
       |> Phoenix.ConnTest.recycle()
@@ -137,8 +157,16 @@ defmodule VutuvWeb.AttachmentComposerTest do
       |> open_composer()
       |> render()
 
-    assert html =~ "Dateien hinzufügen"
-    assert html =~ "Ihre Uploads sind nicht begrenzt."
+    # Each one by name: `gettext.extract --merge` fuzzy-filled "Choose a file"
+    # with "Sprache auswählen" and "Add more" with "Notiz hinzufügen".
+    assert html =~ "Dateien hierher ziehen"
+    assert html =~ "Fotos, Videos oder Dateien"
+    assert html =~ "Zum Anhängen loslassen"
+    assert html =~ "Datei auswählen"
+    assert html =~ "Fotos, Videos, PDF, Text"
+
+    # Under an empty composer the allowance was a sentence about nothing.
+    refute html =~ "Ihre Uploads sind nicht begrenzt."
   end
 
   defp newest_attachment(user) do

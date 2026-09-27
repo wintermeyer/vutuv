@@ -246,18 +246,20 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, "#composer-add-photos")
     end
 
-    test "the picker carries a short label for the phone beside the long one", %{conn: conn} do
-      # Three controls share the bottom row (picker, ⋯, Post) and on a narrow
-      # screen "Add photos" pushed the last one onto a line of its own. The
-      # verb is what goes: beside a camera glyph, in a row whose other button
-      # publishes, the noun is unambiguous. Which of the two shows is CSS
-      # (Tailwind's `sm:` breakpoint) and not assertable here — this only
-      # guards that the short one is still rendered to swap in.
+    test "one drop area takes photos, clips and files, with a phone wording", %{conn: conn} do
+      # One picker for everything (the demo's variant E): the member picks or
+      # drops whatever they have, and the `ComposerFiles` hook sorts it into
+      # the right upload. "Drag files here" means nothing on a phone, so a
+      # second wording swaps in under Tailwind's `sm:` breakpoint — CSS, not
+      # assertable here; this guards that both are rendered.
       live = open_composer(conn)
-      picker = element(live, "#composer-add-photos") |> render()
+      zone = element(live, "#composer-drop") |> render()
 
-      assert picker =~ ">Photos<"
-      assert picker =~ ">Add photos<"
+      assert zone =~ "Drag files here"
+      assert zone =~ "Photos, videos or files"
+      assert zone =~ "Choose a file"
+      assert has_element?(live, "#composer-drop input[type=file][data-composer-pick][multiple]")
+      refute has_element?(live, "#composer-drop [data-drop-more]")
     end
 
     test "a photo grows into the grid: natural ratio, feed version, caption inline", %{
@@ -287,9 +289,9 @@ defmodule VutuvWeb.PhotoComposerTest do
       # Adding more photos sits in the row under the pictures, not as a tile
       # among them: the mosaic's cells are the arrangement, and a "+" occupying
       # one of them would be a seat the gallery does not have (issue #1892).
-      # The id is unchanged, so the feed's camera button still finds its target.
+      # The drop area folds into one "Add more" row once something is attached.
       refute has_element?(live, "[data-photo-add-tile]")
-      assert has_element?(live, "#composer-add-photos")
+      assert has_element?(live, "#composer-drop [data-drop-more]")
     end
 
     test "the alt text lives in the panel, and no second caption field appears", %{
@@ -1289,16 +1291,26 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
 
     test "the whole form is the drop zone, from the first drag on", %{live: live} do
-      # The zone and its overlay exist before any photo is attached.
-      assert has_element?(live, "#composer-form[data-composer-dropzone][phx-drop-target]")
-      assert has_element?(live, "#composer-form [data-drop-overlay]")
+      # The hook that sorts a drop into its upload sits on the form itself, so
+      # a file lands wherever over the composer it is let go.
+      assert has_element?(
+               live,
+               ~s(#composer-form[data-composer-dropzone][phx-hook="ComposerFiles"])
+             )
+
+      assert has_element?(live, "#composer-form #composer-drop [data-drop-full]")
     end
 
-    test "the photo grid carries no drop target of its own", %{live: live, user: user} do
+    test "no upload keeps LiveView's own drop target", %{live: live, user: user} do
       upload_photo!(live, user)
 
-      # A nested second zone would steal the active state from the overlay.
-      refute has_element?(live, "#composer-images[phx-drop-target]")
+      # A `phx-drop-target` would hand a drop to one upload whatever it is,
+      # past the hook that sorts it.
+      refute has_element?(live, "[phx-drop-target]")
+    end
+
+    test "the three uploads each keep their own input, hidden", %{live: live} do
+      assert has_element?(live, "#composer-add-photos input[type=file][name=images]")
     end
   end
 
@@ -1671,7 +1683,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert html =~ "Galerie"
       assert html =~ "Ein Foto auf ein anderes ziehen, um sie zu tauschen."
       assert html =~ "Foto zuschneiden"
-      assert html =~ "Fotos hier ablegen, um sie hinzuzufügen"
+      assert html =~ "Weitere hinzufügen"
 
       # …and what the sheet says once it is.
       html = open_details(live)

@@ -1629,6 +1629,7 @@ defmodule VutuvWeb.PostLive.Composer do
       tags_value: socket.assigns.tags_value,
       images: socket.assigns.images,
       video: socket.assigns.video,
+      attachments: socket.assigns.attachments,
       photos: socket.assigns.photos,
       layout: socket.assigns.layout,
       fill?: socket.assigns.fill?,
@@ -1647,6 +1648,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:tags_value, stash.tags_value)
     |> assign_images(stash.images)
     |> assign_video(stash.video)
+    |> assign(:attachments, stash.attachments)
     |> assign(:photos, stash.photos)
     |> assign(:layout, stash.layout)
     |> assign(:fill?, stash.fill?)
@@ -1669,6 +1671,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> cancel_image_uploads()
     |> assign_images([])
     |> assign_video(nil)
+    |> assign(:attachments, [])
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
     |> assign(:layout, nil)
@@ -2136,32 +2139,24 @@ defmodule VutuvWeb.PostLive.Composer do
           </div>
         </div>
 
-        <%!-- The whole composer is the drop zone: photos land here from the
-        first drag, not only once a grid exists. LiveView stamps
-        `phx-drop-target-active` on this form while files hover it, which is
-        what reveals the overlay below (components.css owns the display, so
-        no competing utilities). A drop into the prose editor is different on
-        purpose: the editor swallows it and inserts the picture inline at the
-        drop point. --%>
+        <%!-- The whole composer is the drop zone, for photos, clips and files
+        alike: `ComposerFiles` (assets/js/composer_files.js) sorts each file
+        into its upload by type and stamps `is-dragging` on this form while
+        files hover it, which is what turns the drop area below blue. A drop
+        into the prose editor is different on purpose: the editor swallows a
+        picture and inserts it inline at the drop point. --%>
         <.form
           for={to_form(%{}, as: :post)}
           id={"#{@id}-form"}
           phx-submit="save"
           phx-change="validate"
           phx-target={@myself}
-          phx-drop-target={@uploads.images.ref}
+          phx-hook="ComposerFiles"
+          data-video-uploads={to_string(@video_uploads? and @video == nil)}
+          data-file-uploads={to_string(@attachment_uploads?)}
           data-composer-dropzone
-          class="relative"
+          class="group/drop relative"
         >
-          <div
-            data-drop-overlay
-            class="pointer-events-none absolute -inset-2 z-10 items-center justify-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-50/90 dark:border-brand-400 dark:bg-brand-900/80"
-          >
-            <p class="flex items-center gap-2 text-base font-semibold text-brand-700 dark:text-brand-100">
-              <.camera_icon class="h-6 w-6" />
-              {gettext("Drop photos to add them")}
-            </p>
-          </div>
           <%!-- Header row, folded hosts only (/feed and the owner's profile):
           "Discard draft" (while there is something to lose) and the corner ✕
           that merely collapses the composer. While the restore notice above is
@@ -2308,8 +2303,6 @@ defmodule VutuvWeb.PostLive.Composer do
           single photo. The chip names what is in force, so the arrangement is
           readable without opening it. --%>
           <div :if={@images != []} class="mt-2 flex flex-wrap items-center gap-2">
-            <.add_photos_picker id={@id} upload={@uploads.images} />
-
             <button
               type="button"
               id={"#{@id}-gallery-open"}
@@ -2405,12 +2398,32 @@ defmodule VutuvWeb.PostLive.Composer do
             myself={@myself}
           />
 
+          <%!-- Only once a file is attached and only where there is a limit
+          to speak of: under an empty composer it was a sentence about
+          nothing, and "your uploads are not limited" told an admin nothing
+          they would act on. --%>
           <.attachment_budget_line
-            :if={@attachment_budget}
+            :if={@attachment_budget && @attachments != [] && !@attachment_budget.unlimited?}
             budget={@attachment_budget}
           />
 
           <.video_block :if={@video} id={@id} video={@video} editing?={@post != nil} myself={@myself} />
+
+          <%!-- The one way in for a photo, a clip or a file. The three
+          uploads stay three (each has its own limits and pipeline); the
+          `ComposerFiles` hook on the form decides which one a file joins,
+          so the member never has to. --%>
+          <.media_drop
+            id={@id}
+            uploads={@uploads}
+            video?={@video_uploads? and @video == nil}
+            files?={@attachment_uploads?}
+            has_media?={
+              @images != [] or @video != nil or @attachments != [] or
+                @uploads.images.entries != [] or @uploads.video.entries != [] or
+                @uploads.attachments.entries != []
+            }
+          />
 
           <.gallery_sheet
             :if={@gallery_open? and @images != []}
@@ -2475,19 +2488,6 @@ defmodule VutuvWeb.PostLive.Composer do
             data-composer-actions
             class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2"
           >
-            <.add_photos_picker :if={@images == []} id={@id} upload={@uploads.images} />
-            <.add_video_picker
-              :if={@video_uploads? and @video == nil}
-              id={@id}
-              upload={@uploads.video}
-              uploading?={@uploads.video.entries != []}
-            />
-            <.add_files_picker
-              :if={@attachment_uploads? and length(@attachments) < Attachments.max_per_post()}
-              id={@id}
-              upload={@uploads.attachments}
-            />
-
             <%!-- The author's declaration of what language this post is
             written in (issue #1489, Mastodon's model): preset to the UI
             locale, and a **code chip** — two letters wide, at every width.
@@ -2813,26 +2813,6 @@ defmodule VutuvWeb.PostLive.Composer do
   # here is a complete name for the control, so nothing has to be kept back for
   # a screen reader.
 
-  # The clip's picker, beside the photos' (issue #1907): one file, and only
-  # while there is none — a post carries at most one clip.
-  # The file input stays in the DOM while the clip is on its way up (the
-  # progress row above says so): LiveView drives the upload through that
-  # input, and removing it mid-flight cancels the upload. Only the label
-  # steps out of sight.
-  attr(:id, :string, required: true)
-  attr(:upload, :any, required: true)
-  attr(:uploading?, :boolean, default: false)
-
-  defp add_video_picker(assigns) do
-    ~H"""
-    <label id={"#{@id}-add-video"} class={[picker_label_class(), @uploading? && "sr-only"]}>
-      🎬 <span class="sm:hidden">{gettext("Video")}</span>
-      <span class="hidden sm:inline">{gettext("Add video")}</span>
-      <.live_file_input upload={@upload} class="sr-only" />
-    </label>
-    """
-  end
-
   # The clip in the composer (issues #1907, #1909, #1911): the tile with its
   # stage, the strip of stills to pick the cover from once the frames exist,
   # the alt text, and the way to take it out again. The stage line moves by
@@ -2932,26 +2912,6 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  # The two pickers side by side share one look, so they cannot drift apart.
-  defp picker_label_class,
-    do:
-      "inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-
-  # The files' picker, beside the photos' and the clip's (issue #2104). It
-  # steps out of sight once the post is carrying as many files as it may.
-  attr(:id, :string, required: true)
-  attr(:upload, :any, required: true)
-
-  defp add_files_picker(assigns) do
-    ~H"""
-    <label id={"#{@id}-add-files"} class={picker_label_class()}>
-      📎 <span class="sm:hidden">{gettext("Files")}</span>
-      <span class="hidden sm:inline">{gettext("Add files")}</span>
-      <.live_file_input upload={@upload} class="sr-only" />
-    </label>
-    """
-  end
-
   # The files this post is carrying: a chip each with its name and size, and
   # the way to take one out again. The hidden inputs are what a reconnect
   # brings back (`adopt_recovered_attachments/2`) — the same trick the photos
@@ -3028,16 +2988,128 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp percent_left(_window), do: 0
 
+  # The drop area under the text (the demo's variant E): one picker and one
+  # drop target for photos, clips and files. Empty, it is a dashed field
+  # that says what it takes; once something is attached it folds into one
+  # "Add more" row, and while files hover the form (`is-dragging`, set by the
+  # `ComposerFiles` hook) the full field comes back in blue.
+  #
+  # The three live file inputs sit here hidden, one per upload: LiveView
+  # drives each upload through its own input and the hook hands every file to
+  # the right one, so they must always be in the DOM. Their wrappers keep the
+  # old picker ids, present exactly when that kind may be uploaded.
   attr(:id, :string, required: true)
-  attr(:upload, :any, required: true)
+  attr(:uploads, :map, required: true)
+  attr(:video?, :boolean, required: true)
+  attr(:files?, :boolean, required: true)
+  attr(:has_media?, :boolean, required: true)
 
-  defp add_photos_picker(assigns) do
+  defp media_drop(assigns) do
+    assigns =
+      assigns
+      |> assign(:pick_id, "#{assigns.id}-pick")
+      |> assign(:hint, media_hint(assigns.video?, assigns.files?))
+      |> assign(:accept, media_accept(assigns.video?, assigns.files?))
+
     ~H"""
-    <label id={"#{@id}-add-photos"} class={picker_label_class()}>
-      📷 <span class="sm:hidden">{gettext("Photos")}</span>
-      <span class="hidden sm:inline">{gettext("Add photos")}</span>
-      <.live_file_input upload={@upload} class="sr-only" />
-    </label>
+    <div id={"#{@id}-drop"} data-drop-zone class="mt-3">
+      <div class="hidden">
+        <span id={"#{@id}-add-photos"}><.live_file_input upload={@uploads.images} /></span>
+        <span :if={@video?} id={"#{@id}-add-video"}>
+          <.live_file_input upload={@uploads.video} />
+        </span>
+        <span :if={@files?} id={"#{@id}-add-files"}>
+          <.live_file_input upload={@uploads.attachments} />
+        </span>
+      </div>
+      <input
+        type="file"
+        multiple
+        id={@pick_id}
+        accept={@accept}
+        data-composer-pick
+        class="sr-only"
+        tabindex="-1"
+      />
+      <label
+        for={@pick_id}
+        data-drop-full
+        class={[
+          "cursor-pointer flex-col items-center gap-1.5 rounded-[14px] border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-slate-700 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-200",
+          "group-[.is-dragging]/drop:border-sky-600 group-[.is-dragging]/drop:bg-sky-50 group-[.is-dragging]/drop:text-sky-700 dark:group-[.is-dragging]/drop:border-sky-400 dark:group-[.is-dragging]/drop:bg-sky-950 dark:group-[.is-dragging]/drop:text-sky-200",
+          if(@has_media?, do: "hidden group-[.is-dragging]/drop:flex", else: "flex")
+        ]}
+      >
+        <.upload_icon class="h-6 w-6" />
+        <span class="text-[15px] font-semibold">
+          <span class="group-[.is-dragging]/drop:hidden">
+            <span class="hidden sm:inline">{gettext("Drag files here")}</span>
+            <span class="sm:hidden">{gettext("Photos, videos or files")}</span>
+          </span>
+          <span class="hidden group-[.is-dragging]/drop:inline">{gettext("Drop to attach")}</span>
+        </span>
+        <span class="mt-0.5 inline-flex h-10 items-center rounded-[10px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 group-[.is-dragging]/drop:hidden dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+          {gettext("Choose a file")}
+        </span>
+        <span class="text-xs text-slate-500 dark:text-slate-400">{@hint}</span>
+      </label>
+      <label
+        :if={@has_media?}
+        for={@pick_id}
+        data-drop-more
+        class="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[14px] border-2 border-dashed border-slate-300 text-sm font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-800 group-[.is-dragging]/drop:hidden dark:border-slate-600 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
+      >
+        <span aria-hidden="true" class="text-lg leading-none">+</span>
+        {gettext("Add more")}
+      </label>
+    </div>
+    """
+  end
+
+  # What the field takes, in words: the kinds this member may attach here.
+  defp media_hint(video?, files?) do
+    [
+      gettext("Photos"),
+      video? && gettext("Videos"),
+      files? && Enum.member?(Attachments.extension_whitelist(), ".pdf") && "PDF",
+      files? && gettext("Text")
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(", ")
+  end
+
+  # The picker offers the union of the three uploads' extensions; each upload
+  # still refuses what is not its own.
+  defp media_accept(video?, files?) do
+    [
+      Vutuv.PostImageStore.extension_whitelist(),
+      if(video?, do: Videos.extension_whitelist(), else: []),
+      if(files?, do: Attachments.extension_whitelist(), else: [])
+    ]
+    |> List.flatten()
+    |> Enum.uniq()
+    |> Enum.join(",")
+  end
+
+  attr(:class, :string, default: "h-6 w-6")
+
+  defp upload_icon(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.8"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"
+      />
+    </svg>
     """
   end
 
@@ -3231,35 +3303,6 @@ defmodule VutuvWeb.PostLive.Composer do
     >
       <path stroke-linecap="round" stroke-linejoin="round" d="M6 2v14a2 2 0 0 0 2 2h14" />
       <path stroke-linecap="round" stroke-linejoin="round" d="M18 22V8a2 2 0 0 0-2-2H2" />
-    </svg>
-    """
-  end
-
-  # The outline camera glyph (heroicons "camera") for the dropzone and the
-  # add-more tile — an SVG rather than the 📷 emoji so it takes the text
-  # colour and reads calm at any size.
-  attr(:class, :string, default: "h-6 w-6")
-
-  defp camera_icon(assigns) do
-    ~H"""
-    <svg
-      class={@class}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="1.5"
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-      />
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"
-      />
     </svg>
     """
   end

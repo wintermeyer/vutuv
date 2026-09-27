@@ -525,7 +525,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # The normal upload feature stays: the add tile and per-image remove
       # control are still there (with a photo attached, the grid's tile owns
       # the picker).
-      assert render(live) =~ "Add photos"
+      assert render(live) =~ "Add more"
       assert has_element?(live, ~s([phx-click="remove-image"]))
 
       # The completed upload is announced to the editor hook (which decides

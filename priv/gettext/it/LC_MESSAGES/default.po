@@ -123,7 +123,7 @@ msgstr "Compleanno"
 #: lib/vutuv_web/live/notification_live/index.ex:862
 #: lib/vutuv_web/live/organization_live/edit.ex:378
 #: lib/vutuv_web/live/organization_live/new.ex:222
-#: lib/vutuv_web/live/post_live/composer.ex:2245
+#: lib/vutuv_web/live/post_live/composer.ex:2237
 #: lib/vutuv_web/live/press_kit_live.ex:754
 #: lib/vutuv_web/live/press_kit_live.ex:1164
 #: lib/vutuv_web/templates/admin/legal_page/edit.html.heex:40
@@ -209,7 +209,7 @@ msgid "Disable"
 msgstr "Disattiva"
 
 #: lib/vutuv_web/live/cv_live.ex:448
-#: lib/vutuv_web/live/post_live/composer.ex:3430
+#: lib/vutuv_web/live/post_live/composer.ex:3470
 #: lib/vutuv_web/templates/export/index.html.heex:41
 #: lib/vutuv_web/views/qualification_html.ex:354
 #, elixir-autogen
@@ -611,7 +611,7 @@ msgstr "Profili di "
 msgid "Provider"
 msgstr "Piattaforma"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2557
+#: lib/vutuv_web/live/post_live/composer.ex:2554
 #: lib/vutuv_web/live/section_reorder_live.ex:272
 #: lib/vutuv_web/templates/email/card_list.html.heex:25
 #: lib/vutuv_web/templates/email/show.html.heex:25
@@ -624,7 +624,7 @@ msgstr "Pubblico"
 #: lib/vutuv_web/components/personal_note_components.ex:252
 #: lib/vutuv_web/components/ui.ex:5190
 #: lib/vutuv_web/live/organization_live/edit.ex:376
-#: lib/vutuv_web/live/post_live/composer.ex:2572
+#: lib/vutuv_web/live/post_live/composer.ex:2569
 #: lib/vutuv_web/live/press_kit_live.ex:752
 #: lib/vutuv_web/live/press_kit_live.ex:1163
 #: lib/vutuv_web/templates/admin/pref/index.html.heex:71
@@ -1632,10 +1632,10 @@ msgstr "Controlla la tua casella di posta"
 #: lib/vutuv_web/live/admin/job_live.ex:477
 #: lib/vutuv_web/live/admin/organization_live.ex:296
 #: lib/vutuv_web/live/post_live/composer.ex:2101
-#: lib/vutuv_web/live/post_live/composer.ex:2203
-#: lib/vutuv_web/live/post_live/composer.ex:2204
-#: lib/vutuv_web/live/post_live/composer.ex:3307
-#: lib/vutuv_web/live/post_live/composer.ex:3575
+#: lib/vutuv_web/live/post_live/composer.ex:2195
+#: lib/vutuv_web/live/post_live/composer.ex:2196
+#: lib/vutuv_web/live/post_live/composer.ex:3347
+#: lib/vutuv_web/live/post_live/composer.ex:3615
 #: lib/vutuv_web/templates/layout/app.html.heex:181
 #: lib/vutuv_web/templates/layout/app.html.heex:187
 #: lib/vutuv_web/templates/member_card/card.html.heex:17
@@ -2088,7 +2088,7 @@ msgstr "Markdown è supportato: grassetto, corsivo, link ed elenchi."
 msgid "Add images"
 msgstr "Aggiungi immagini"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2686
+#: lib/vutuv_web/live/post_live/composer.ex:2683
 #, elixir-autogen, elixir-format
 msgid "As soon as anything is hidden, the post is also invisible to logged-out visitors and search engines."
 msgstr ""
@@ -2101,9 +2101,9 @@ msgstr ""
 msgid "Back to the post"
 msgstr "Torna al post"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2343
-#: lib/vutuv_web/live/post_live/composer.ex:2366
-#: lib/vutuv_web/live/post_live/composer.ex:2392
+#: lib/vutuv_web/live/post_live/composer.ex:2333
+#: lib/vutuv_web/live/post_live/composer.ex:2356
+#: lib/vutuv_web/live/post_live/composer.ex:2382
 #: lib/vutuv_web/live/press_kit_live.ex:1332
 #, elixir-autogen, elixir-format
 msgid "Cancel upload"
@@ -2149,12 +2149,12 @@ msgstr "Segui %{name} per leggerlo."
 msgid "Hidden from:"
 msgstr "Nascosto a:"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2662
+#: lib/vutuv_web/live/post_live/composer.ex:2659
 #, elixir-autogen, elixir-format
 msgid "Hide from a specific person…"
 msgstr "Nascondi a una persona specifica…"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2590
+#: lib/vutuv_web/live/post_live/composer.ex:2587
 #, elixir-autogen, elixir-format
 msgid "Hide this post from…"
 msgstr "Nascondi questo post a…"
@@ -2165,7 +2165,7 @@ msgstr "Nascondi questo post a…"
 msgid "Limited audience"
 msgstr "Pubblico limitato"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2632
+#: lib/vutuv_web/live/post_live/composer.ex:2629
 #, elixir-autogen, elixir-format
 msgid "Logged-out visitors"
 msgstr "Visitatori non connessi"
@@ -2188,18 +2188,18 @@ msgstr ""
 msgid "One of the images could not be attached."
 msgstr "Non è stato possibile allegare una delle immagini."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2622
+#: lib/vutuv_web/live/post_live/composer.ex:2619
 #, elixir-autogen, elixir-format
 msgid "People I don't follow"
 msgstr "Persone che non seguo"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2612
+#: lib/vutuv_web/live/post_live/composer.ex:2609
 #, elixir-autogen, elixir-format
 msgid "People who don't follow me"
 msgstr "Persone che non mi seguono"
 
 #: lib/vutuv_web/live/admin/screenshot_live.ex:652
-#: lib/vutuv_web/live/post_live/composer.ex:2574
+#: lib/vutuv_web/live/post_live/composer.ex:2571
 #, elixir-autogen, elixir-format
 msgid "Post"
 msgstr "Pubblica"
@@ -2251,7 +2251,7 @@ msgstr "Mostra meno"
 #: lib/vutuv_web/live/organization_live/domains.ex:265
 #: lib/vutuv_web/live/organization_live/edit.ex:404
 #: lib/vutuv_web/live/organization_live/roles.ex:257
-#: lib/vutuv_web/live/post_live/composer.ex:2648
+#: lib/vutuv_web/live/post_live/composer.ex:2645
 #: lib/vutuv_web/live/post_live/filter_band.ex:456
 #: lib/vutuv_web/live/post_live/saved.ex:677
 #: lib/vutuv_web/live/post_live/saved.ex:705
@@ -2271,7 +2271,7 @@ msgstr ""
 "e ai motori di ricerca."
 
 #: lib/vutuv_web/components/personal_note_components.ex:252
-#: lib/vutuv_web/live/post_live/composer.ex:2564
+#: lib/vutuv_web/live/post_live/composer.ex:2561
 #, elixir-autogen, elixir-format
 msgid "Saving…"
 msgstr "Salvataggio…"
@@ -2306,12 +2306,12 @@ msgstr "La selezione del pubblico non è valida."
 msgid "This post is for followers of %{name}"
 msgstr "Questo post è per i follower di %{name}"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3750
+#: lib/vutuv_web/live/post_live/composer.ex:3790
 #, elixir-autogen, elixir-format
 msgid "Too many files."
 msgstr "Troppi file."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3751
+#: lib/vutuv_web/live/post_live/composer.ex:3791
 #, elixir-autogen, elixir-format
 msgid "Upload failed."
 msgstr "Caricamento non riuscito."
@@ -2325,12 +2325,12 @@ msgstr "Caricamento non riuscito."
 msgid "View profile"
 msgstr "Vedi il profilo"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2780
+#: lib/vutuv_web/live/post_live/composer.ex:2777
 #, elixir-autogen, elixir-format
 msgid "What's new?"
 msgstr "Che c'è di nuovo?"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2781
+#: lib/vutuv_web/live/post_live/composer.ex:2778
 #, elixir-autogen, elixir-format
 msgid "What's new? Markdown is supported."
 msgstr "Che c'è di nuovo? Markdown è supportato."
@@ -2369,21 +2369,21 @@ msgstr "persone che non segui"
 msgid "unknown"
 msgstr "sconosciuto"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2442
+#: lib/vutuv_web/live/post_live/composer.ex:2452
 #, elixir-autogen, elixir-format
 msgid "Tags, separated by commas (max. %{max})"
 msgstr "Tag separati da virgole (max. %{max})"
 
 #: lib/vutuv_web/live/post_live/composer.ex:1800
-#: lib/vutuv_web/live/post_live/composer.ex:3717
-#: lib/vutuv_web/live/post_live/composer.ex:3735
+#: lib/vutuv_web/live/post_live/composer.ex:3757
+#: lib/vutuv_web/live/post_live/composer.ex:3775
 #, elixir-autogen, elixir-format
 msgid "File is larger than %{mb} MB."
 msgstr "Il file supera %{mb} MB."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3725
-#: lib/vutuv_web/live/post_live/composer.ex:3739
-#: lib/vutuv_web/live/post_live/composer.ex:3745
+#: lib/vutuv_web/live/post_live/composer.ex:3765
+#: lib/vutuv_web/live/post_live/composer.ex:3779
+#: lib/vutuv_web/live/post_live/composer.ex:3785
 #, elixir-autogen, elixir-format
 msgid "File type not supported (allowed: %{types})."
 msgstr "Tipo di file non supportato (ammessi: %{types})."
@@ -2545,14 +2545,14 @@ msgid "Reply to a deleted post"
 msgstr "Risposta a un post eliminato"
 
 #: lib/vutuv_web/live/post_live/composer.ex:1683
-#: lib/vutuv_web/live/post_live/composer.ex:2552
+#: lib/vutuv_web/live/post_live/composer.ex:2549
 #, elixir-autogen, elixir-format
 msgid "The audience cannot be restricted while reposts or replies exist."
 msgstr ""
 "Il pubblico non può essere limitato finché esistono ripubblicazioni o "
 "risposte."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2693
+#: lib/vutuv_web/live/post_live/composer.ex:2690
 #, elixir-autogen, elixir-format
 msgid "This post has been reposted or answered. Its audience stays public while reposts or replies exist; you can still delete the post."
 msgstr ""
@@ -2862,7 +2862,7 @@ msgstr "Ancora nessun collegamento."
 msgid "Other formats"
 msgstr "Altri formati"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2602
+#: lib/vutuv_web/live/post_live/composer.ex:2599
 #, elixir-autogen, elixir-format
 msgid "People who aren't my connections"
 msgstr "Persone che non sono miei collegamenti"
@@ -4412,7 +4412,7 @@ msgstr "di"
 msgid "Book now (binding, by invoice)"
 msgstr "Prenoti ora (vincolante, con fattura)"
 
-#: lib/vutuv_web/components/post_file_components.ex:78
+#: lib/vutuv_web/components/post_file_components.ex:83
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:999
 #: lib/vutuv_web/live/tag_new_live.ex:78
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:122
@@ -5515,7 +5515,7 @@ msgstr "Persone che non possono interagire con te."
 msgid "Personal tokens for the vutuv API."
 msgstr "Token personali per l'API di vutuv."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3037
+#: lib/vutuv_web/live/post_live/composer.ex:3069
 #: lib/vutuv_web/templates/user/edit.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "Photos"
@@ -6129,7 +6129,7 @@ msgstr "Posiziona la tua foto"
 msgid "Use photo"
 msgstr "Usa questa foto"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2247
+#: lib/vutuv_web/live/post_live/composer.ex:2239
 #: lib/vutuv_web/templates/user/edit.html.heex:66
 #: lib/vutuv_web/templates/user/edit.html.heex:151
 #, elixir-autogen, elixir-format
@@ -10913,8 +10913,8 @@ msgid "Failed"
 msgstr "Non riuscito"
 
 #: lib/vutuv_web/live/admin/screenshot_live.ex:249
-#: lib/vutuv_web/live/post_live/composer.ex:2326
-#: lib/vutuv_web/live/post_live/composer.ex:3301
+#: lib/vutuv_web/live/post_live/composer.ex:2316
+#: lib/vutuv_web/live/post_live/composer.ex:3341
 #, elixir-autogen, elixir-format
 msgid "Gallery"
 msgstr "Galleria"
@@ -13803,7 +13803,7 @@ msgstr "A tutta larghezza"
 msgid "Insert image"
 msgstr "Inserisci un'immagine"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3694
+#: lib/vutuv_web/live/post_live/composer.ex:3734
 #, elixir-autogen, elixir-format
 msgid "Insert into text"
 msgstr "Inserisci nel testo"
@@ -14098,7 +14098,7 @@ msgid "Year"
 msgstr "Anno"
 
 #: lib/vutuv_web/components/post_components.ex:7034
-#: lib/vutuv_web/components/post_file_components.ex:112
+#: lib/vutuv_web/components/post_file_components.ex:117
 #: lib/vutuv_web/views/job_reference_html.ex:180
 #, elixir-autogen, elixir-format
 msgid "%{formatted} page"
@@ -16702,7 +16702,7 @@ msgstr ""
 "profilo, come si scrive una trascrizione, e le parentesi le aggiungiamo noi. "
 "Se lo lasci vuoto non viene mostrato nulla."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3707
+#: lib/vutuv_web/live/post_live/composer.ex:3747
 #, elixir-autogen, elixir-format
 msgid "Apply these settings to all photos"
 msgstr "Applica queste impostazioni a tutte le foto"
@@ -16734,12 +16734,12 @@ msgstr "CC0 1.0 (nessun diritto riservato)"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:1469
 #: lib/vutuv_web/agent_docs/text.ex:928
-#: lib/vutuv_web/live/post_live/composer.ex:3125
+#: lib/vutuv_web/live/post_live/composer.ex:3194
 #, elixir-autogen, elixir-format
 msgid "Cover"
 msgstr "Copertina"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3545
+#: lib/vutuv_web/live/post_live/composer.ex:3585
 #, elixir-autogen, elixir-format
 msgid "Describe the photo for people who can't see it"
 msgstr "Descrivi la foto per chi non può vederla"
@@ -16751,24 +16751,24 @@ msgstr "Descrivi la foto per chi non può vederla"
 msgid "Download the original"
 msgstr "Scarica l'originale"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3644
+#: lib/vutuv_web/live/post_live/composer.ex:3684
 #, elixir-autogen, elixir-format
 msgid "Every metadata field kept, including anything your camera wrote."
 msgstr ""
 "Tutti i campi di metadati conservati, compreso ciò che ha scritto la tua "
 "fotocamera."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3600
+#: lib/vutuv_web/live/post_live/composer.ex:3640
 #, elixir-autogen, elixir-format
 msgid "Everybody may download this photo"
 msgstr "Chiunque può scaricare questa foto"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3602
+#: lib/vutuv_web/live/post_live/composer.ex:3642
 #, elixir-autogen, elixir-format
 msgid "Full resolution, straight from the post."
 msgstr "Risoluzione piena, direttamente dal post."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3621
+#: lib/vutuv_web/live/post_live/composer.ex:3661
 #, elixir-autogen, elixir-format
 msgid "Just the picture"
 msgstr "Solo l'immagine"
@@ -16778,8 +16778,8 @@ msgstr "Solo l'immagine"
 msgid "Next photo"
 msgstr "Foto successiva"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3146
-#: lib/vutuv_web/live/post_live/composer.ex:3151
+#: lib/vutuv_web/live/post_live/composer.ex:3215
+#: lib/vutuv_web/live/post_live/composer.ex:3220
 #, elixir-autogen, elixir-format
 msgid "No image description yet"
 msgstr "Ancora nessuna descrizione dell'immagine"
@@ -16801,8 +16801,8 @@ msgstr "Foto %{n} di %{total}"
 msgid "Photo is being checked"
 msgstr "La foto è in fase di controllo"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3095
-#: lib/vutuv_web/live/post_live/composer.ex:3097
+#: lib/vutuv_web/live/post_live/composer.ex:3164
+#: lib/vutuv_web/live/post_live/composer.ex:3166
 #, elixir-autogen, elixir-format
 msgid "Photo options"
 msgstr "Opzioni della foto"
@@ -16820,20 +16820,20 @@ msgstr "Foto:"
 msgid "Previous photo"
 msgstr "Foto precedente"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3161
-#: lib/vutuv_web/live/post_live/composer.ex:3162
+#: lib/vutuv_web/live/post_live/composer.ex:3230
+#: lib/vutuv_web/live/post_live/composer.ex:3231
 #, elixir-autogen, elixir-format
 msgid "Remove photo"
 msgstr "Rimuovi la foto"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3623
+#: lib/vutuv_web/live/post_live/composer.ex:3663
 #, elixir-autogen, elixir-format
 msgid "Same pixels, nothing else: location and serial numbers removed, quality untouched."
 msgstr ""
 "Gli stessi pixel e nient'altro: posizione e numeri di serie rimossi, qualità"
 " intatta."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3564
+#: lib/vutuv_web/live/post_live/composer.ex:3604
 #, elixir-autogen, elixir-format
 msgid "Show camera settings"
 msgstr "Mostra le impostazioni della fotocamera"
@@ -16845,19 +16845,19 @@ msgstr ""
 "Quel server è bloccato su questo sito, quindi non gli si può inviare alcuna "
 "risposta."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3642
+#: lib/vutuv_web/live/post_live/composer.ex:3682
 #, elixir-autogen, elixir-format
 msgid "The file exactly as I uploaded it"
 msgstr "Il file esattamente come l'ho caricato"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3678
+#: lib/vutuv_web/live/post_live/composer.ex:3718
 #, elixir-autogen, elixir-format
 msgid "This file format can only be handed out as it is. Remove the photo if that is not what you want."
 msgstr ""
 "Questo formato di file può essere consegnato solo così com'è. Rimuovi la "
 "foto se non è ciò che desideri."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3670
+#: lib/vutuv_web/live/post_live/composer.ex:3710
 #, elixir-autogen, elixir-format
 msgid "This photo carries the location it was taken at. Anyone who downloads the exact file can read it."
 msgstr ""
@@ -16889,7 +16889,7 @@ msgstr "Questo sito non partecipa al Fediverso."
 msgid "Turn on Fediverse participation to answer"
 msgstr "Attiva la partecipazione al Fediverso per rispondere"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3419
+#: lib/vutuv_web/live/post_live/composer.ex:3459
 #, elixir-autogen, elixir-format
 msgid "Who may reuse these photos"
 msgstr "Chi può riutilizzare queste foto"
@@ -16926,24 +16926,19 @@ msgstr ""
 msgid "© All rights reserved"
 msgstr "© Tutti i diritti riservati"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3038
-#, elixir-autogen, elixir-format
-msgid "Add photos"
-msgstr "Aggiungi foto"
-
-#: lib/vutuv_web/live/post_live/composer.ex:3414
+#: lib/vutuv_web/live/post_live/composer.ex:3454
 #, elixir-autogen, elixir-format
 msgid "Licence"
 msgstr "Licenza"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3534
+#: lib/vutuv_web/live/post_live/composer.ex:3574
 #, elixir-autogen, elixir-format
 msgid "Caption (optional)"
 msgstr "Didascalia (facoltativa)"
 
 #: lib/vutuv_web/live/post_live/composer.ex:2070
 #: lib/vutuv_web/live/post_live/composer.ex:2133
-#: lib/vutuv_web/live/post_live/composer.ex:2191
+#: lib/vutuv_web/live/post_live/composer.ex:2183
 #, elixir-autogen, elixir-format
 msgid "Discard draft"
 msgstr "Scarta la bozza"
@@ -16954,39 +16949,39 @@ msgstr "Scarta la bozza"
 msgid "Picked up where you left off."
 msgstr "Ripreso da dove avevi lasciato."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3467
+#: lib/vutuv_web/live/post_live/composer.ex:3507
 #, elixir-autogen, elixir-format
 msgid "A file whose format cannot be cleaned is handed out exactly as uploaded."
 msgstr ""
 "Un file il cui formato non può essere ripulito viene consegnato esattamente "
 "come caricato."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2759
+#: lib/vutuv_web/live/post_live/composer.ex:2756
 #, elixir-autogen, elixir-format
 msgid "Different per photo"
 msgstr "Diverso per ogni foto"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2758
+#: lib/vutuv_web/live/post_live/composer.ex:2755
 #, elixir-autogen, elixir-format
 msgid "Original, exactly as uploaded"
 msgstr "Originale, esattamente come caricato"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2757
+#: lib/vutuv_web/live/post_live/composer.ex:2754
 #, elixir-autogen, elixir-format
 msgid "Original, metadata removed"
 msgstr "Originale, senza metadati"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2762
+#: lib/vutuv_web/live/post_live/composer.ex:2759
 #, elixir-autogen, elixir-format
 msgid "Web versions only (%{format})"
 msgstr "Solo versioni per il web (%{format})"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3437
+#: lib/vutuv_web/live/post_live/composer.ex:3477
 #, elixir-autogen, elixir-format
 msgid "What a visitor can save"
 msgstr "Cosa può salvare un visitatore"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3456
+#: lib/vutuv_web/live/post_live/composer.ex:3496
 #, elixir-autogen, elixir-format
 msgid "This photo carries the location it was taken at, and the exact file hands it over."
 msgid_plural "Some of these photos carry the location they were taken at, and the exact file hands it over."
@@ -17110,8 +17105,8 @@ msgstr ""
 msgid "Withdrawal request"
 msgstr "Richiesta di ritiro"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2327
-#: lib/vutuv_web/live/post_live/composer.ex:3301
+#: lib/vutuv_web/live/post_live/composer.ex:2317
+#: lib/vutuv_web/live/post_live/composer.ex:3341
 #, elixir-autogen, elixir-format
 msgid "Photo details"
 msgstr "Dettagli della foto"
@@ -17950,81 +17945,76 @@ msgstr ""
 "previsti per ogni altro post da un'altra rete, e al server del suo autore "
 "non viene chiesto nient'altro."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2244
+#: lib/vutuv_web/live/post_live/composer.ex:2236
 #, elixir-autogen, elixir-format
 msgid "Apply crop"
 msgstr "Applica il ritaglio"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3207
+#: lib/vutuv_web/live/post_live/composer.ex:3276
 #, elixir-autogen, elixir-format
 msgid "Big photo left"
 msgstr "Foto grande a sinistra"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3208
+#: lib/vutuv_web/live/post_live/composer.ex:3277
 #, elixir-autogen, elixir-format
 msgid "Big photo right"
 msgstr "Foto grande a destra"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3213
+#: lib/vutuv_web/live/post_live/composer.ex:3282
 #, elixir-autogen, elixir-format
 msgid "Columns"
 msgstr "Colonne"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3210
+#: lib/vutuv_web/live/post_live/composer.ex:3279
 #, elixir-autogen, elixir-format
 msgid "Cover left"
 msgstr "Copertina a sinistra"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3211
+#: lib/vutuv_web/live/post_live/composer.ex:3280
 #, elixir-autogen, elixir-format
 msgid "Cover on top"
 msgstr "Copertina in alto"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3212
+#: lib/vutuv_web/live/post_live/composer.ex:3281
 #, elixir-autogen, elixir-format
 msgid "Cover right"
 msgstr "Copertina a destra"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2240
-#: lib/vutuv_web/live/post_live/composer.ex:3178
-#: lib/vutuv_web/live/post_live/composer.ex:3179
+#: lib/vutuv_web/live/post_live/composer.ex:2232
+#: lib/vutuv_web/live/post_live/composer.ex:3247
+#: lib/vutuv_web/live/post_live/composer.ex:3248
 #, elixir-autogen, elixir-format
 msgid "Crop photo"
 msgstr "Ritaglia la foto"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3133
+#: lib/vutuv_web/live/post_live/composer.ex:3202
 #, elixir-autogen, elixir-format
 msgid "Cropped"
 msgstr "Ritagliata"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2162
-#, elixir-autogen, elixir-format
-msgid "Drop photos to add them"
-msgstr "Trascini qui le foto per aggiungerle"
-
-#: lib/vutuv_web/live/post_live/composer.ex:3214
+#: lib/vutuv_web/live/post_live/composer.ex:3283
 #, elixir-autogen, elixir-format
 msgid "Grid"
 msgstr "Griglia"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3215
+#: lib/vutuv_web/live/post_live/composer.ex:3284
 #, elixir-autogen, elixir-format
 msgid "Mosaic"
 msgstr "Mosaico"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2242
+#: lib/vutuv_web/live/post_live/composer.ex:2234
 #, elixir-autogen, elixir-format
 msgid "Pick a shape, then drag and zoom. The framed part is what the post shows."
 msgstr ""
 "Scegli una forma, poi trascina e ingrandisci. La parte nel riquadro è quella "
 "che il post mostra."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3206
+#: lib/vutuv_web/live/post_live/composer.ex:3275
 #, elixir-autogen, elixir-format
 msgid "Side by side"
 msgstr "Affiancate"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3209
+#: lib/vutuv_web/live/post_live/composer.ex:3278
 #, elixir-autogen, elixir-format
 msgid "Stacked"
 msgstr "Impilate"
@@ -18034,24 +18024,24 @@ msgstr "Impilate"
 msgid "The photo could not be cropped."
 msgstr "Non è stato possibile ritagliare la foto."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3657
+#: lib/vutuv_web/live/post_live/composer.ex:3697
 #, elixir-autogen, elixir-format
 msgid "This photo is cropped: downloads hand out the cropped picture, and the untouched upload stays private."
 msgstr ""
 "Questa foto è ritagliata: i download consegnano l'immagine ritagliata, e il "
 "caricamento intatto resta privato."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2246
+#: lib/vutuv_web/live/post_live/composer.ex:2238
 #, elixir-autogen, elixir-format
 msgid "Whole photo"
 msgstr "Foto intera"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3404
+#: lib/vutuv_web/live/post_live/composer.ex:3444
 #, elixir-autogen, elixir-format
 msgid "Fill the tiles"
 msgstr "Riempi le caselle"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3388
+#: lib/vutuv_web/live/post_live/composer.ex:3428
 #, elixir-autogen, elixir-format
 msgid "Whole photos"
 msgstr "Foto intere"
@@ -18653,6 +18643,7 @@ msgid "Show this reference publicly on my profile"
 msgstr "Mostra pubblicamente questo attestato sul mio profilo"
 
 #: lib/vutuv_web/live/ad_booking_live.ex:641
+#: lib/vutuv_web/live/post_live/composer.ex:3072
 #: lib/vutuv_web/templates/job_reference/show.html.heex:39
 #: lib/vutuv_web/templates/job_reference/view.html.heex:86
 #: lib/vutuv_web/views/account_event_text.ex:227
@@ -20211,7 +20202,7 @@ msgstr ""
 msgid "Nothing published yet."
 msgstr "Ancora nulla di pubblicato."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2573
+#: lib/vutuv_web/live/post_live/composer.ex:2570
 #, elixir-autogen, elixir-format
 msgid "Post as %{name}"
 msgstr "Pubblica come %{name}"
@@ -20221,7 +20212,7 @@ msgstr "Pubblica come %{name}"
 msgid "You may no longer write in this organization's name."
 msgstr "Non puoi più scrivere a nome di questa organizzazione."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2550
+#: lib/vutuv_web/live/post_live/composer.ex:2547
 #, elixir-autogen, elixir-format
 msgid "A post in an organization's name is always public."
 msgstr "Un post a nome di un'organizzazione è sempre pubblico."
@@ -21082,19 +21073,19 @@ msgstr "Hai %{used} tag su %{max}."
 msgid "{n} of {max} free slots selected."
 msgstr "Selezionati {n} posti liberi su {max}."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2532
+#: lib/vutuv_web/live/post_live/composer.ex:2529
 #, elixir-autogen, elixir-format
 msgid "More languages"
 msgstr "Altre lingue"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2523
+#: lib/vutuv_web/live/post_live/composer.ex:2520
 #, elixir-autogen, elixir-format
 msgctxt "post composer"
 msgid "Language"
 msgstr "Lingua"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2519
-#: lib/vutuv_web/live/post_live/composer.ex:2520
+#: lib/vutuv_web/live/post_live/composer.ex:2516
+#: lib/vutuv_web/live/post_live/composer.ex:2517
 #, elixir-autogen, elixir-format
 msgid "The language this post is written in"
 msgstr "La lingua in cui è scritto questo post"
@@ -22935,18 +22926,18 @@ msgid "Nothing matches."
 msgstr "Nessun risultato."
 
 #: lib/vutuv_web/live/admin/screenshot_live.ex:397
-#: lib/vutuv_web/live/post_live/composer.ex:2326
-#: lib/vutuv_web/live/post_live/composer.ex:3334
+#: lib/vutuv_web/live/post_live/composer.ex:2316
+#: lib/vutuv_web/live/post_live/composer.ex:3374
 #, elixir-autogen, elixir-format
 msgid "Automatic"
 msgstr "Automatico"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2331
+#: lib/vutuv_web/live/post_live/composer.ex:2321
 #, elixir-autogen, elixir-format
 msgid "Drag one photo onto another to swap them."
 msgstr "Trascina una foto su un'altra per scambiarle."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2278
+#: lib/vutuv_web/live/post_live/composer.ex:2270
 #, elixir-autogen, elixir-format
 msgid "Not shown in the gallery — drag one into it to swap."
 msgstr "Non nella galleria — trascinane una dentro per scambiarla."
@@ -23228,11 +23219,6 @@ msgstr "Aspetto"
 msgid "About %{minutes} min of video"
 msgstr "Circa %{minutes} min di video"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2830
-#, elixir-autogen, elixir-format
-msgid "Add video"
-msgstr "Aggiungi video"
-
 #: lib/vutuv_web/components/video_components.ex:199
 #, elixir-autogen, elixir-format
 msgid "Converting · %{percent} %"
@@ -23265,7 +23251,7 @@ msgstr[1] "La nostra IA lo sta controllando, %{done} di %{total} fotogrammi veri
 msgid "Reading the frames"
 msgstr "Lettura dei fotogrammi"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2866
+#: lib/vutuv_web/live/post_live/composer.ex:2843
 #, elixir-autogen, elixir-format
 msgid "Remove it to post the text without it, or pick another file."
 msgstr ""
@@ -23276,12 +23262,12 @@ msgstr ""
 msgid "Remove the refused video to post the text without it."
 msgstr "Rimuovi il video rifiutato per pubblicare il testo senza di esso."
 
-#: lib/vutuv_web/live/post_live/composer.ex:2895
+#: lib/vutuv_web/live/post_live/composer.ex:2872
 #, elixir-autogen, elixir-format
 msgid "Remove video"
 msgstr "Rimuovi video"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2905
+#: lib/vutuv_web/live/post_live/composer.ex:2882
 #, elixir-autogen, elixir-format
 msgid "Tap a frame to make it the cover."
 msgstr "Tocca un fotogramma per usarlo come copertina."
@@ -23317,12 +23303,11 @@ msgstr "Questo video non può essere convertito."
 #: lib/vutuv_web/agent_docs/text.ex:926
 #: lib/vutuv_web/components/post_components.ex:3068
 #: lib/vutuv_web/components/video_components.ex:126
-#: lib/vutuv_web/live/post_live/composer.ex:2829
 #, elixir-autogen, elixir-format
 msgid "Video"
 msgstr "Video"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2873
+#: lib/vutuv_web/live/post_live/composer.ex:2850
 #, elixir-autogen, elixir-format
 msgid "Video description"
 msgstr "Descrizione del video"
@@ -23337,12 +23322,12 @@ msgstr "Qui non è possibile caricare video."
 msgid "Waiting in line"
 msgstr "In attesa in coda"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2880
+#: lib/vutuv_web/live/post_live/composer.ex:2857
 #, elixir-autogen, elixir-format
 msgid "What is in the video, for people who cannot watch it"
 msgstr "Cosa mostra il video, per chi non può guardarlo"
 
-#: lib/vutuv_web/live/post_live/composer.ex:2869
+#: lib/vutuv_web/live/post_live/composer.ex:2846
 #, elixir-autogen, elixir-format
 msgid "You can post now — the post appears as soon as the video is ready."
 msgstr "Puoi pubblicare subito: il post apparirà appena il video sarà pronto."
@@ -25150,14 +25135,13 @@ msgstr "Copia il link al post"
 msgid "Link copied"
 msgstr "Link copiato"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3016
+#: lib/vutuv_web/live/post_live/composer.ex:2973
 #, elixir-autogen, elixir-format
 msgid "%{left} of today's %{limit} left (%{percent} %)."
 msgstr "Restano %{left} di %{limit} per oggi (%{percent} %)."
 
 #: lib/vutuv_web/live/message_live/index.ex:1709
 #: lib/vutuv_web/live/message_live/index.ex:1713
-#: lib/vutuv_web/live/post_live/composer.ex:2949
 #, elixir-autogen, elixir-format
 msgid "Add files"
 msgstr "Aggiungi file"
@@ -25167,7 +25151,7 @@ msgstr "Aggiungi file"
 msgid "File check"
 msgstr "Controllo file"
 
-#: lib/vutuv_web/live/post_live/composer.ex:3721
+#: lib/vutuv_web/live/post_live/composer.ex:3761
 #, elixir-autogen, elixir-format
 msgid "File is larger than %{size}."
 msgstr "Il file è più grande di %{size}."
@@ -25176,7 +25160,6 @@ msgstr "Il file è più grande di %{size}."
 #: lib/vutuv_web/agent_docs/markdown.ex:184
 #: lib/vutuv_web/agent_docs/text.ex:116
 #: lib/vutuv_web/agent_docs/text.ex:149
-#: lib/vutuv_web/live/post_live/composer.ex:2948
 #, elixir-autogen, elixir-format
 msgid "Files"
 msgstr "File"
@@ -25186,7 +25169,7 @@ msgstr "File"
 msgid "Files may be up to %{size}."
 msgstr "I file possono arrivare a %{size}."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3731
+#: lib/vutuv_web/live/post_live/composer.ex:3771
 #, elixir-autogen, elixir-format
 msgid "No more than %{max} files per post."
 msgstr "Non più di %{max} file per post."
@@ -25203,7 +25186,7 @@ msgstr "Su questo sito i PDF non possono essere controllati, i file di testo e M
 
 #: lib/vutuv_web/live/message_live/index.ex:1688
 #: lib/vutuv_web/live/message_live/index.ex:1689
-#: lib/vutuv_web/live/post_live/composer.ex:2995
+#: lib/vutuv_web/live/post_live/composer.ex:2952
 #, elixir-autogen, elixir-format
 msgid "Remove %{name}"
 msgstr "Rimuovi %{name}"
@@ -25230,7 +25213,7 @@ msgstr ""
 "Hai esaurito il tuo limite di caricamento per oggi. Si libera di nuovo nel "
 "corso della giornata."
 
-#: lib/vutuv_web/live/post_live/composer.ex:3014
+#: lib/vutuv_web/live/post_live/composer.ex:2971
 #, elixir-autogen, elixir-format
 msgid "Your uploads are not limited."
 msgstr "I tuoi caricamenti non hanno limiti."
@@ -25664,7 +25647,7 @@ msgstr "Si possono allegare solo file PDF, di testo, Markdown e immagini."
 msgid "PDFs cannot be checked on this site. Text, Markdown and pictures can."
 msgstr "Su questo sito i PDF non possono essere controllati, i file di testo, Markdown e le immagini sì."
 
-#: lib/vutuv_web/components/post_file_components.ex:97
+#: lib/vutuv_web/components/post_file_components.ex:102
 #: lib/vutuv_web/live/message_live/index.ex:656
 #: lib/vutuv_web/live/message_live/index.ex:659
 #, elixir-autogen, elixir-format
@@ -27967,13 +27950,43 @@ msgstr "No. vutuv imposta un solo cookie, quello che ti tiene connesso, e non ca
 msgid "Example: %{address}"
 msgstr "Esempio: %{address}"
 
-#: lib/vutuv_web/components/post_file_components.ex:120
+#: lib/vutuv_web/components/post_file_components.ex:125
 #, elixir-autogen, elixir-format
 msgid "%{name}, page %{n} of %{total}"
 msgstr "%{name}, pagina %{n} di %{total}"
 
-#: lib/vutuv_web/components/post_file_components.ex:86
+#: lib/vutuv_web/components/post_file_components.ex:91
 #, elixir-autogen, elixir-format
 msgctxt "post file"
 msgid "Download"
 msgstr "Scarica"
+
+#: lib/vutuv_web/live/post_live/composer.ex:3060
+#, elixir-autogen, elixir-format
+msgid "Add more"
+msgstr "Aggiungi altri"
+
+#: lib/vutuv_web/live/post_live/composer.ex:3049
+#, elixir-autogen, elixir-format
+msgid "Choose a file"
+msgstr "Scegli un file"
+
+#: lib/vutuv_web/live/post_live/composer.ex:3043
+#, elixir-autogen, elixir-format
+msgid "Drag files here"
+msgstr "Trascina qui i file"
+
+#: lib/vutuv_web/live/post_live/composer.ex:3046
+#, elixir-autogen, elixir-format
+msgid "Drop to attach"
+msgstr "Rilascia per allegare"
+
+#: lib/vutuv_web/live/post_live/composer.ex:3044
+#, elixir-autogen, elixir-format
+msgid "Photos, videos or files"
+msgstr "Foto, video o file"
+
+#: lib/vutuv_web/live/post_live/composer.ex:3070
+#, elixir-autogen, elixir-format
+msgid "Videos"
+msgstr "Video"
