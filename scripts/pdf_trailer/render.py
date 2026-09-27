@@ -7,13 +7,12 @@ Reads  <out_dir>/rec/take/ (record.mjs: frames, marks.json, pos.json) and
 Writes <out_dir>/vutuv-pdf-trailer-de.mp4 (H.264, 1920x1080, silent) and a
        poster PNG.
 
-The look is the teaser's (scripts/teaser/render.py): three chapters, each on
-a colour of its own. A diagonal wipe brings the colour in with the chapter's
-word in big type; the word shrinks into a label top left while the app rises
-in a browser window. The recording runs fast between its highlights and at
-real speed on them, and the camera pushes in on each highlight. The end is the
-logo on navy. The chapters are cut on record.mjs's marks, so a new take needs
-no new numbers.
+The look is the teaser's backdrop (scripts/teaser/render.py): the app plays
+in a browser window on the vutuv blue, the logo top right, and the camera
+pushes in wherever there is something to see: the drop area, the post card,
+the pages. The recording runs fast between those moments and at real speed on
+them. It is cut on record.mjs's marks, so a new take needs no new numbers.
+The end is the logo on the same blue.
 """
 import bisect
 import json
@@ -31,18 +30,10 @@ W, H, FPS = 1920, 1080, 30
 PACE = 1.1   # one knob for the whole film's pace
 MOVE = 0.9   # how long the camera takes to push in or pull out
 
-NAVY = ((11, 16, 36), (22, 30, 64))
-COLOURS = [((29, 66, 180), (56, 110, 245)),    # Anhängen: vutuv blue
-           ((232, 72, 85), (255, 138, 91)),    # Posten: coral
-           ((8, 145, 140), (34, 197, 94))]     # Vorschau: teal to green
-WORDS = ["Anhängen.", "Posten.", "Vorschau."]
-LINES = ["Ein PDF einfach ins Schreibfeld ziehen.",
-         "Der Beitrag zeigt die Datei als kompakte Zeile.",
-         "Alle Seiten durchblättern, ohne Download."]
+BLUE = ((29, 66, 180), (56, 110, 245))
 
 L = dict(cw=1500, ch=844, bar=40, wx=210, wy=150, radius=18, rise=760,
-         word=(140, 360, 210), line=(146, 610, 50), label=(80, 58, 40), logo=(150, 62),
-         outline=(-30, H - 520, 560), wrap=1600)
+         logo=(150, 62), outline=(-30, H - 520, 560))
 CW, CH, BAR, WX, WY, RADIUS = L["cw"], L["ch"], L["bar"], L["wx"], L["wy"], L["radius"]
 
 
@@ -87,18 +78,6 @@ def rounded(w, h, r):
     m = Image.new("L", (w * 2, h * 2), 0)
     ImageDraw.Draw(m).rounded_rectangle((0, 0, w * 2 - 1, h * 2 - 1), r * 2, fill=255)
     return m.resize((w, h), Image.Resampling.LANCZOS)
-
-
-def wrap(text, f, width):
-    lines, cur = [], ""
-    for word in text.split():
-        probe = f"{cur} {word}".strip()
-        if cur and f.getlength(probe) > width:
-            lines.append(cur)
-            cur = word
-        else:
-            cur = probe
-    return lines + [cur]
 
 
 LOGO = Image.open(os.path.join(OUT, "logo_white_full.png"))
@@ -205,8 +184,9 @@ def view(frame, cx, cy, z):
     return frame.resize((CW, CH), Image.Resampling.BILINEAR, box=(x0, y0, x0 + vw, y0 + vh))
 
 
-# ---------------------------------------------------------------- titles and backdrops
+# ---------------------------------------------------------------- the backdrop
 def backdrop(colours, word):
+    """The colour, a huge outline word behind the window, the logo top right."""
     g = gradient(*colours).convert("RGBA")
     x, y, size = L["outline"]
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -217,61 +197,6 @@ def backdrop(colours, word):
     lg = logo(lw)
     g.alpha_composite(lg, (W - 80 - lg.width, ly))
     return g.convert("RGB")
-
-
-def draw_line(layer, line, dy, alpha):
-    x, y, size = L["line"]
-    f = font(size)
-    for i, part in enumerate(wrap(line, f, L["wrap"])):
-        ImageDraw.Draw(layer).text((x, y + dy + i * size * 1.3), part, font=f, fill=(255, 255, 255, alpha))
-
-
-def title(frame, word, line, k):
-    (bx, by, bs), (sx, sy, ss) = L["word"], L["label"]
-    ImageDraw.Draw(frame).text((lerp(bx, sx, k), lerp(by, sy, k)), word, font=font(int(lerp(bs, ss, k)), bold=True), fill="white")
-    a = 1 - ease(k * 2.5)
-    if a > 0:
-        layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        draw_line(layer, line, 0, int(235 * a))
-        base = frame.convert("RGBA")
-        base.alpha_composite(layer)
-        frame.paste(base.convert("RGB"))
-
-
-class Wipe:
-    """A diagonal band of the next colour sweeps over the last frame; its word lands."""
-
-    def __init__(self, T, prev, bg, word=None, line=None):
-        self.T, self.prev, self.bg, self.word, self.line = T, prev, bg, word, line
-
-    def load(self, n):
-        self.prev_im = self.prev()
-
-    def __call__(self, u):
-        t = u * self.T
-        k = ease(t / 0.45)
-        f = self.bg.copy()
-        if self.word:
-            rise = ease_out((t - 0.2) / 0.45)
-            if rise > 0:
-                x, y, size = L["word"]
-                layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                ImageDraw.Draw(layer).text((x, y + 70 * (1 - rise)), self.word, font=font(size, bold=True),
-                                           fill=(255, 255, 255, int(255 * rise)))
-                sub = ease_out((t - 0.4) / 0.4)
-                if sub > 0:
-                    draw_line(layer, self.line, 30 * (1 - sub), int(235 * sub))
-                base = f.convert("RGBA")
-                base.alpha_composite(layer)
-                f = base.convert("RGB")
-        if k >= 1:
-            return f
-        edge = lerp(-500, W + 500, k)
-        m = Image.new("L", (W, H), 0)
-        ImageDraw.Draw(m).polygon([(0, 0), (edge + 260, 0), (edge - 260, H), (0, H)], fill=255)
-        out = self.prev_im.copy()
-        out.paste(f, (0, 0), m)
-        return out
 
 
 # ---------------------------------------------------------------- the take in the window
@@ -318,12 +243,12 @@ class Part:
         return view(self.src.at(self.src_time(t)), *self.cam(t))
 
 
-class Chapter:
-    """One part in the window, which rises in at the start, under the chapter's label."""
+class Film:
+    """The whole take in one window, which rises in at the start."""
 
-    def __init__(self, i, part):
-        self.i, self.part = i, part
-        self.bg = backdrop(COLOURS[i], WORDS[i].rstrip("."))
+    def __init__(self, part):
+        self.part = part
+        self.bg = backdrop(BLUE, "PDF")
         self.T = part.T
         self.final = None
 
@@ -332,29 +257,32 @@ class Chapter:
 
     def __call__(self, u):
         t = u * self.T
-        win = window(self.part.content(t), self.part.bar)
         f = self.bg.copy()
-        title(f, WORDS[self.i], LINES[self.i], ease(t / 0.5))
-        sx, sy, ss = L["label"]
-        label = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        d = ImageDraw.Draw(label)
-        d.text((sx + d.textlength(WORDS[self.i], font=font(ss, bold=True)) + 18, sy + 12),
-               f"{self.i + 1}/3", font=font(26), fill=(255, 255, 255, int(170 * ease(t / 0.5))))
-        base = f.convert("RGBA")
-        base.alpha_composite(label)
-        f = base.convert("RGB")
-        put_window(f, win, dy=int(L["rise"] * (1 - back_out(t / 0.6))))
+        put_window(f, window(self.part.content(t), self.part.bar), dy=int(L["rise"] * (1 - back_out(t / 0.6))))
         if u >= 1:
             self.final = f
         return f
 
 
+class Fade:
+    """From one picture to another."""
+
+    def __init__(self, T, a, b):
+        self.T, self.a, self.b = T, a, b
+
+    def load(self, n):
+        self.ia, self.ib = self.a(), self.b()
+
+    def __call__(self, u):
+        return Image.blend(self.ia, self.ib, ease(u))
+
+
 class Outro:
-    """The logo on navy, and the one sentence the film is about."""
+    """The logo on the blue, and the one sentence the film is about."""
 
     def __init__(self, T):
         self.T = T
-        self.bg = gradient(*NAVY)
+        self.bg = gradient(*BLUE)
         self.logo = logo(520)
 
     def load(self, n):
@@ -386,31 +314,19 @@ URL = "vutuv.de/feed"
 zx, zy = pos["zone"]
 cardx, cardy = pos["card"]
 
-CHAPTERS = [
-    # the composer opens, the text types itself quickly, the PDF flies in at real speed
-    Chapter(0, Part(take, URL,
-                    [(m["start"] - 0.3, m["typing"], 1.4), (m["typing"], m["typed"], 3.0),
-                     (m["typed"], m["drag"], 1.6), (m["drag"], m["attached"] + 1.2, 1.0)],
-                    [(m["drag"] + 0.2, m["attached"] + 1.0, zx, zy - 60, 1.45)])),
-    # the click on Post, the post with its file row
-    Chapter(1, Part(take, URL,
-                    [(m["to_submit"] - 0.2, m["posted"], 1.5), (m["posted"], m["to_preview"], 1.0)],
-                    [(m["posted"] + 0.1, m["to_preview"] - 0.1, cardx, cardy, 1.7)])),
-    # "Vorschau": the pages in the lightbox
-    Chapter(2, Part(take, URL, [(m["to_preview"] - 0.1, m["end"], 1.1)],
-                    [(m["preview"] + 0.6, m["end"] - 0.6, W / 2, H / 2 - 30, 1.15)])),
-]
-
-navy = gradient(*NAVY)
-wipes = [Wipe(1.0, lambda: navy, CHAPTERS[0].bg, WORDS[0], LINES[0]),
-         Wipe(1.0, lambda: CHAPTERS[0].final, CHAPTERS[1].bg, WORDS[1], LINES[1]),
-         Wipe(1.0, lambda: CHAPTERS[1].final, CHAPTERS[2].bg, WORDS[2], LINES[2]),
-         Wipe(0.45, lambda: CHAPTERS[2].final, navy)]
+FILM = Film(Part(take, URL,
+    # the composer opens, the text types itself quickly, the PDF flies in at real
+    # speed; the click on Post, the post with its file row; the pages in the lightbox
+    [(m["start"] - 0.3, m["typing"], 1.4), (m["typing"], m["typed"], 3.0),
+     (m["typed"], m["drag"], 1.6), (m["drag"], m["attached"] + 1.2, 1.0),
+     (m["to_submit"] - 0.2, m["posted"], 1.5), (m["posted"], m["to_preview"], 1.0),
+     (m["to_preview"], m["end"], 1.1)],
+    [(m["drag"] + 0.2, m["attached"] + 1.0, zx, zy - 60, 1.45),
+     (m["posted"] + 0.1, m["to_preview"] - 0.1, cardx, cardy, 1.7),
+     (m["preview"] + 0.6, m["end"] - 0.6, W / 2, H / 2 - 30, 1.15)]))
 outro = Outro(3.0)
-SHOTS = [(wipes[0].T, wipes[0]), (CHAPTERS[0].T, CHAPTERS[0]),
-         (wipes[1].T, wipes[1]), (CHAPTERS[1].T, CHAPTERS[1]),
-         (wipes[2].T, wipes[2]), (CHAPTERS[2].T, CHAPTERS[2]),
-         (wipes[3].T, wipes[3]), (outro.T, outro)]
+fade = Fade(0.5, lambda: FILM.final, lambda: outro(0.0))
+SHOTS = [(FILM.T, FILM), (fade.T, fade), (outro.T, outro)]
 
 if __name__ == "__main__":
     master = os.path.join(OUT, "master.mp4")
