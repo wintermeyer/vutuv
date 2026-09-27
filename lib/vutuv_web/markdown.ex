@@ -31,6 +31,7 @@ defmodule VutuvWeb.Markdown do
   alias Vutuv.Bluesky
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
+  alias Vutuv.Mailto
   alias Vutuv.Mentions
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -80,6 +81,8 @@ defmodule VutuvWeb.Markdown do
   # Inside these elements an entity is left as plain text (a handle/hashtag in a
   # code span/block is sample text, and we never nest a link inside a link).
   @entity_skip_tags ~w(a code pre)
+  # A bare email address in rendered text, see `linkify_emails/1`.
+  @email ~r/(?<![\w.%+@-])[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}(?![\w-]|\.[A-Za-z0-9])/
 
   @doc "Render untrusted Markdown to safe HTML (`Phoenix.HTML.safe()`)."
   def render(text) when is_binary(text) do
@@ -87,6 +90,7 @@ defmodule VutuvWeb.Markdown do
     |> render_pipeline()
     |> open_links_in_new_tab()
     |> linkify_entities()
+    |> linkify_emails()
     |> Phoenix.HTML.raw()
   end
 
@@ -195,6 +199,7 @@ defmodule VutuvWeb.Markdown do
     |> open_links_in_new_tab()
     |> mark_verified_author_links(Keyword.get(opts, :verified_links, []))
     |> linkify_entities(:all, Keyword.get(opts, :mention_form, :local))
+    |> linkify_emails()
     |> inject_inline_images(replacements)
   end
 
@@ -230,6 +235,7 @@ defmodule VutuvWeb.Markdown do
       |> render_pipeline()
       |> open_links_in_new_tab()
       |> linkify_entities(:hashtags_only)
+      |> linkify_emails()
       |> mark_foreign_links()
     end)
   end
@@ -1229,6 +1235,28 @@ defmodule VutuvWeb.Markdown do
         |> IO.iodata_to_binary()
     end
   end
+
+  # A bare email address becomes a `mailto:` link that never wraps
+  # (`.email { white-space: nowrap }`): a hyphenated domain otherwise breaks at
+  # its hyphen and a reader copies half an address. It runs after the
+  # entities, so `@sw@example.org` is already a mention inside an `<a>` and is
+  # skipped with the rest of the linked, coded and preformatted text. The
+  # lookbehind keeps the tail of `@php@tags.<host>` (left plain when no such
+  # tag exists) from reading as an address, and the domain needs a letters-only
+  # top-level label, so `user@localhost` stays text. No `target`: a mail client
+  # is not a tab.
+  defp linkify_emails(html) do
+    if String.contains?(html, "@") do
+      html
+      |> tokenize_html()
+      |> map_linkable_text(fn text -> Regex.replace(@email, text, &email_anchor/1) end)
+      |> IO.iodata_to_binary()
+    else
+      html
+    end
+  end
+
+  defp email_anchor(address), do: ~s(<a href="#{Mailto.to(address)}" class="email">#{address}</a>)
 
   # Splits HTML into alternating text / tag tokens (tags kept as their own
   # tokens), so a tag-depth walk can tell text apart from markup.

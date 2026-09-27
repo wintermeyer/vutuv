@@ -517,8 +517,8 @@ defmodule VutuvWeb.MarkdownTest do
     test "does not treat an email address as a fediverse handle" do
       html = render("mail me at foo@bar.com please")
 
-      assert html =~ "foo@bar.com"
-      refute html =~ "<a"
+      assert html =~ ~s(<a href="mailto:foo@bar.com" class="email">foo@bar.com</a>)
+      refute html =~ "mention"
     end
 
     test "render_remote links a qualified handle but leaves a bare @name plain" do
