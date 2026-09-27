@@ -3,41 +3,75 @@
     python3 scripts/teaser/render.py <lang>              # 1920x1080, the desktop cut
     python3 scripts/teaser/render.py <lang> --portrait   # 1080x1920, the phone cut
 
-Reads  _build/teaser/<lang>/rec/<scene>/ (record.mjs), screens/ and ids.json,
-       _build/teaser/<lang>/portrait/rec/ and screens/ (record_portrait.mjs),
+Reads  _build/teaser/<lang>/rec/<scene>/ (record.mjs) or portrait/rec/<scene>/
+       (record_portrait.mjs), screens/ (the outro's phone shots) and
        _build/teaser/assets/ (assets.py, render_assets.mjs)
-Writes _build/teaser/<lang>/master.mp4 (near-lossless) and, via export,
-       _build/teaser/<lang>/vutuv-teaser-<lang>.mp4 plus a poster PNG;
-       the portrait cut the same under _build/teaser/<lang>/portrait/, named
+Writes _build/teaser/<lang>/master.mp4 (near-lossless), vutuv-teaser-<lang>.mp4
+       and a poster PNG; the phone cut the same under portrait/, named
        vutuv-teaser-<lang>-portrait.*
 
-The storyboard lives in SHOTS below; README.md explains each shot.
+The style: three chapters, each on a colour of its own. A diagonal wipe brings
+the colour in with the chapter's word in big type; the word shrinks into a
+label while the app rises in a floating window (a browser window on the
+desktop, a phone on the phone). The recordings run in fast-forward between
+their highlights and at real speed on them, and the camera pushes in on each
+highlight. The end fans the three chapters out as phones under the logo.
+The storyboard lives in STORY at the end; README.md explains each shot.
 """
 import bisect
-import io
+import functools
 import json
+import math
 import os
 import subprocess
 import sys
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, os.path.dirname(__file__))
 from fediverse import Fediverse  # noqa: E402
-from savepdf import SavePdf  # noqa: E402
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 PORTRAIT = "--portrait" in sys.argv
 LANG = ARGS[0] if ARGS else "de"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(ROOT, "_build", "teaser", LANG, *(["portrait"] if PORTRAIT else []))
+BASE_OUT = os.path.join(ROOT, "_build", "teaser", LANG)
+OUT = os.path.join(BASE_OUT, *(["portrait"] if PORTRAIT else []))
 NAME = f"vutuv-teaser-{LANG}" + ("-portrait" if PORTRAIT else "")
 ASSETS = os.path.join(ROOT, "_build", "teaser", "assets")
 CONTENT = json.load(open(os.path.join(os.path.dirname(__file__), f"content.{LANG}.json")))
+B = CONTENT["trailer_b"]
 W, H, FPS = (1080, 1920, 30) if PORTRAIT else (1920, 1080, 30)
-BLUE_A, BLUE_B = (29, 66, 180), (37, 92, 225)
+
+# every recording plays this much slower than its segment speeds say: one knob
+# for the whole film's pace (1.0 read as hectic, 1.18 adds about five seconds)
+PACE = 1.18
+# how long the camera takes to push in or pull out, in film time; keyed to the
+# recording, a push inside a fast-forward stretch shrank to a jolt
+MOVE = 0.9
+
+NAVY = ((11, 16, 36), (22, 30, 64))
+COLOURS = [((29, 66, 180), (56, 110, 245)),    # Profile: vutuv blue
+           ((232, 72, 85), (255, 138, 91)),    # Feed: coral
+           ((8, 145, 140), (34, 197, 94))]     # Jobs: teal to green
+
+# The layout of each format: the window the app plays in (content size, the
+# browser bar above it, where it sits, its corner), the big title and the
+# small label it shrinks into, the backdrop's outline word, the outro.
+L = {
+    False: dict(cw=1500, ch=844, bar=40, wx=210, wy=150, radius=18, rise=760,
+                word=(140, 360, 210), line=(146, 610, 50), label=(80, 58, 40), logo=(150, 62),
+                outline=(-30, H - 520, 560), wrap=1600,
+                phone_h=900, fan=540, fan_y=700, outro_logo=(380, 64)),
+    True: dict(cw=860, ch=1529, bar=0, wx=110, wy=300, radius=48, rise=1400,
+               word=(90, 640, 170), line=(96, 860, 46), label=(70, 120, 40), logo=(150, 128),
+               outline=(-20, H - 440, 400), wrap=880,
+               phone_h=860, fan=340, fan_y=1200, outro_logo=(380, 330)),
+}[PORTRAIT]
+CW, CH, BAR, WX, WY, RADIUS = L["cw"], L["ch"], L["bar"], L["wx"], L["wy"], L["radius"]
 
 
+# ---------------------------------------------------------------- basics
 def ease(t):
     t = max(0.0, min(1.0, t))
     return 4 * t**3 if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
@@ -48,8 +82,59 @@ def ease_out(t):
     return 1 - (1 - t) ** 3
 
 
+def back_out(t, s=1.4):
+    t = max(0.0, min(1.0, t)) - 1
+    return t * t * ((s + 1) * t + s) + 1
+
+
+def smooth(t):
+    t = max(0.0, min(1.0, t))
+    return 0.5 - 0.5 * math.cos(math.pi * t)
+
+
 def lerp(a, b, t):
     return a + (b - a) * t
+
+
+@functools.lru_cache(maxsize=None)
+def font(size, bold=False):
+    return ImageFont.truetype("/System/Library/Fonts/HelveticaNeue.ttc", size, index=1 if bold else 0)
+
+
+def gradient(a, b):
+    g = Image.new("RGB", (W, H))
+    d = ImageDraw.Draw(g)
+    for y in range(H):
+        d.line([(0, y), (W, y)], fill=tuple(int(lerp(a[i], b[i], y / H)) for i in range(3)))
+    return g
+
+
+def rounded(w, h, r):
+    m = Image.new("L", (w * 2, h * 2), 0)
+    ImageDraw.Draw(m).rounded_rectangle((0, 0, w * 2 - 1, h * 2 - 1), r * 2, fill=255)
+    return m.resize((w, h), Image.Resampling.LANCZOS)
+
+
+@functools.lru_cache(maxsize=None)
+def wrap(text, f, width):
+    """The line broken into lines no wider than `width`."""
+    lines, cur = [], ""
+    for word in text.split():
+        probe = f"{cur} {word}".strip()
+        if cur and f.getlength(probe) > width:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = probe
+    return tuple(lines + [cur])
+
+
+LOGO = Image.open(os.path.join(ASSETS, "logo_white_full.png"))
+LOGO = LOGO.crop(LOGO.getbbox())
+
+
+def logo(width):
+    return LOGO.resize((width, int(LOGO.height * width / LOGO.width)), Image.Resampling.LANCZOS)
 
 
 # ---------------------------------------------------------------- recordings -> clips
@@ -79,189 +164,382 @@ def clip(scene):
     return dst, float(out.strip())
 
 
-def frame_at(path, t):
-    png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.3f}", "-i", path, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True).stdout
-    return Image.open(io.BytesIO(png)).convert("RGB")
+def last_frame(path):
+    b = subprocess.run(["ffmpeg", "-v", "error", "-sseof", "-0.1", "-i", path, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                       capture_output=True).stdout
+    return Image.frombytes("RGB", (W, H), b[: W * H * 3])
 
 
-class Live:
-    """A stretch [s0, s1] of a scene clip, time-remapped onto the shot's duration."""
+class Src:
+    """Streams a scene clip frame by frame, forward only."""
 
-    def __init__(self, scene, s0, s1_from_end, fade_from=None, fade=0.4):
-        self.path, dur = clip(scene)
-        self.s0, self.s1 = s0, dur - s1_from_end
-        self.fade_from, self.fade = fade_from, fade
-        self.frames, self.prev = None, None
+    def __init__(self, scene):
+        self.path, self.dur = clip(scene)
+        rec = os.path.join(OUT, "rec", scene)
+        start = json.load(open(os.path.join(rec, "frames.json")))["frames"][0][1]
+        marks = os.path.join(rec, "marks.json")
+        # record()'s marks, as seconds into this clip
+        self.marks = {k: v - start for k, v in json.load(open(marks)).items()} if os.path.exists(marks) else {}
 
-    def load(self, n):
-        want = sorted({round((self.s0 + (self.s1 - self.s0) * i / (n - 1)) * FPS) for i in range(n)})
-        first = want[0]
-        p = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{first / FPS:.4f}", "-i", self.path, "-frames:v", str(want[-1] - first + 1),
-                              "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
-        self.frames, idx, keep = {}, first, set(want)
-        while True:
-            b = p.stdout.read(W * H * 3)
+    def open(self):
+        self.p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", self.path, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)  # closed early on purpose
+        self.idx, self.cur = -1, None
+
+    def at(self, t):
+        want = max(0, int(round(t * FPS)))
+        while self.idx < want:
+            b = self.p.stdout.read(W * H * 3)
             if len(b) < W * H * 3:
                 break
-            if idx in keep:
-                self.frames[idx] = Image.frombytes("RGB", (W, H), b)
-            idx += 1
-        p.wait()
-        self.prev = self.fade_from() if self.fade_from else None
-        self.n = n
+            self.cur, self.idx = Image.frombytes("RGB", (W, H), b), self.idx + 1
+        return self.cur
 
-    def unload(self):
-        self.frames, self.prev = None, None
-
-    def __call__(self, u):
-        want = round((self.s0 + (self.s1 - self.s0) * u) * FPS)
-        f = self.frames.get(want) or self.frames[max(k for k in self.frames if k <= want)]
-        dur = self.n / FPS
-        if self.prev is not None and u * dur < self.fade:
-            k = ease(u * dur / self.fade)
-            f = Image.blend(self.prev, f, k)
-        return f
-
-    def last(self):
-        return frame_at(self.path, self.s1)
+    def close(self):
+        self.p.stdout.close()
+        self.p.wait()
 
 
-# ---------------------------------------------------------------- drawn pieces
-def gradient():
-    g = Image.new("RGB", (W, H))
-    d = ImageDraw.Draw(g)
-    for y in range(H):
-        d.line([(0, y), (W, y)], fill=tuple(int(lerp(BLUE_A[i], BLUE_B[i], y / H)) for i in range(3)))
-    return g
+class Fedi:
+    """The fediverse map (fediverse.py), lifting the new post off the feed's last frame."""
+
+    dur = 5.0
+
+    def __init__(self, feed):
+        geometry = {}
+        if PORTRAIT:
+            # the phone's post card (record_portrait.mjs) and a narrower world
+            geometry = {"card": tuple(json.load(open(os.path.join(OUT, "screens", "card.json")))), "end_span": 300}
+        self.map = Fediverse(last_frame(feed.path), ASSETS, duration=self.dur, size=(W, H), **geometry)
+
+    def open(self):
+        pass
+
+    def at(self, t):
+        return self.map(min(1.0, t / self.dur))
+
+    def close(self):
+        pass
 
 
-BG = gradient()
-LOGO = Image.open(os.path.join(ASSETS, "logo_white_full.png"))
-LOGO = LOGO.crop(LOGO.getbbox())
+# ---------------------------------------------------------------- the window
+MASK = rounded(CW, CH + BAR, RADIUS)
+SHADOW = Image.new("L", (CW + 160, CH + BAR + 160), 0)
+ImageDraw.Draw(SHADOW).rounded_rectangle((80, 100, 80 + CW, 100 + CH + BAR), RADIUS, fill=120)
+SHADOW = SHADOW.filter(ImageFilter.GaussianBlur(34))
 
 
-def endcard(u):
-    f = BG.copy()
-    lw = int(min(760, W * 0.68) * lerp(0.9, 1.0, ease_out(u * 3.4)))
-    lh = int(LOGO.height * lw / LOGO.width)
-    lg = LOGO.resize((lw, lh), Image.Resampling.LANCZOS)
-    f.paste(lg, ((W - lw) // 2, (H - lh) // 2), lg)
-    return f
+def chrome(url):
+    """The browser bar with the page's address; the phone has none."""
+    if not BAR:
+        return None
+    bar = Image.new("RGB", (CW, BAR), (238, 241, 246))
+    d = ImageDraw.Draw(bar)
+    for i, c in enumerate([(255, 95, 87), (254, 188, 46), (40, 200, 64)]):
+        d.ellipse((18 + i * 22, 14, 30 + i * 22, 26), fill=c)
+    f = font(17)
+    tw = d.textlength(url, font=f)
+    d.rounded_rectangle(((CW - tw) / 2 - 24, 7, (CW + tw) / 2 + 24, 33), 13, fill=(255, 255, 255))
+    d.text(((CW - tw) / 2, 10), url, font=f, fill=(90, 100, 120))
+    return bar
 
 
-# the opening's phones: three side by side, as large as the frame's width allows
-PH_H = 640 if PORTRAIT else 900
-PH_W = round(PH_H * 390 / 844)
-SPREAD = 350 if PORTRAIT else 520  # how far the outer two sit from the middle one
+def window(content, bar):
+    if bar is None:
+        return content
+    win = Image.new("RGB", (CW, CH + BAR))
+    win.paste(bar, (0, 0))
+    win.paste(content, (0, BAR))
+    return win
 
 
-def rounded_mask(w, h, r):
-    m = Image.new("L", (w * 2, h * 2), 0)
-    ImageDraw.Draw(m).rounded_rectangle((0, 0, w * 2 - 1, h * 2 - 1), r * 2, fill=255)
-    return m.resize((w, h), Image.Resampling.LANCZOS)
+def put_window(frame, win, dy=0):
+    frame.paste((0, 0, 0), (WX - 80, WY - 80 + dy), SHADOW)
+    frame.paste(win, (WX, WY + dy), MASK)
 
 
-MASK = rounded_mask(PH_W, PH_H, 46)
-SHADOW = Image.new("L", (PH_W + 120, PH_H + 120), 0)
-ImageDraw.Draw(SHADOW).rounded_rectangle((60, 70, 60 + PH_W, 70 + PH_H), 46, fill=110)
-SHADOW = SHADOW.filter(ImageFilter.GaussianBlur(28))
+def view(frame, cx, cy, z):
+    vw, vh = W / z, H / z
+    x0 = min(max(0, cx - vw / 2), W - vw)
+    y0 = min(max(0, cy - vh / 2), H - vh)
+    return frame.resize((CW, CH), Image.Resampling.BILINEAR, box=(x0, y0, x0 + vw, y0 + vh))
 
 
-class PhoneMorph:
-    """Three phones; the outer ones leave while the middle one grows into the desktop feed."""
+# ---------------------------------------------------------------- titles and backdrops
+def backdrop(colours, word=None):
+    """The chapter's colour, with its word as a huge outline behind the window."""
+    g = gradient(*colours).convert("RGBA")
+    if word:
+        x, y, size = L["outline"]
+        layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        ImageDraw.Draw(layer).text((x, y), word, font=font(size, bold=True), fill=(255, 255, 255, 0),
+                                   stroke_width=3, stroke_fill=(255, 255, 255, 46))
+        g.alpha_composite(layer)
+    lw, ly = L["logo"]
+    lg = logo(lw)
+    g.alpha_composite(lg, (W - 80 - lg.width, ly))
+    return g.convert("RGB")
 
-    def __init__(self, desk, T):
-        self.T = T
-        self.shots = {n: Image.open(os.path.join(OUT, "screens", f"{n}.png")).convert("RGB") for n in ("mA", "mB", "mC")}
-        # the outer two only ever show at phone size: resize them once, not per frame
-        self.small = {n: self.shots[n].resize((PH_W, PH_H), Image.Resampling.LANCZOS) for n in ("mA", "mC")}
-        self.desk = desk
-        self.page_bg = desk.getpixel((40, 600))
+
+def draw_line(layer, line, dy, alpha):
+    x, y, size = L["line"]
+    f = font(size)
+    for i, part in enumerate(wrap(line, f, L["wrap"])):
+        ImageDraw.Draw(layer).text((x, y + dy + i * size * 1.3), part, font=f, fill=(255, 255, 255, alpha))
+
+
+def title(frame, word, line, k):
+    """k = 0: the big title; k = 1: the small label top left."""
+    (bx, by, bs), (sx, sy, ss) = L["word"], L["label"]
+    ImageDraw.Draw(frame).text((lerp(bx, sx, k), lerp(by, sy, k)), word, font=font(int(lerp(bs, ss, k)), bold=True), fill="white")
+    a = 1 - ease(k * 2.5)
+    if a > 0:
+        layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        draw_line(layer, line, 0, int(235 * a))
+        base = frame.convert("RGBA")
+        base.alpha_composite(layer)
+        frame.paste(base.convert("RGB"))
+
+
+class Wipe:
+    """A diagonal band of the next colour sweeps over the last frame; its word lands."""
+
+    def __init__(self, T, prev, bg, word=None, line=None):
+        self.T, self.prev, self.bg, self.word, self.line = T, prev, bg, word, line
+
+    def load(self, n):
+        self.prev_im = self.prev()
 
     def __call__(self, u):
         t = u * self.T
-        f = BG.copy()
-        # Something moves from the first frame on and the phones hold only half
-        # a second: a long still opening read as "nothing is going to happen".
-        arrive = ease_out(min(1, t / 0.7))
-        leave = ease((t - 1.2) / 0.8)
-        grow = ease((t - 1.4) / 1.4)
-        for name, cx, dy, dx in [("mA", W / 2 - SPREAD, 140, -1), ("mC", W / 2 + SPREAD, 300, 1)]:
-            if leave >= 1:
-                continue
-            scr = self.small[name]
-            x = int(cx - PH_W / 2 + dx * leave * 700)
-            y = int((H - PH_H) / 2 + dy * (1 - arrive))
-            layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            layer.paste((0, 0, 0, 255), (x - 60, y - 60), SHADOW)
-            layer.paste(scr, (x, y), MASK)
-            layer.putalpha(layer.getchannel("A").point(lambda v: int(v * (1 - leave))))
-            f.paste(layer, (0, 0), layer)
-        x = lerp(W / 2 - PH_W / 2, 0, grow)
-        y = lerp((H - PH_H) / 2 + 220 * (1 - arrive), 0, grow)
-        w, h = int(round(lerp(PH_W, W, grow))), int(round(lerp(PH_H, H, grow)))
-        mob = self.shots["mB"]
-        mob_s = mob.resize((w, int(mob.height * w / mob.width)), Image.Resampling.BICUBIC).crop((0, 0, w, h))
-        desk_s = Image.new("RGB", (w, h), self.page_bg)
-        desk_s.paste(self.desk.resize((w, int(self.desk.height * w / self.desk.width)), Image.Resampling.BICUBIC), (0, 0))
-        screen = Image.blend(mob_s, desk_s, ease((grow - 0.15) / 0.55))
-        if grow >= 1:
-            return screen
-        m = rounded_mask(w, h, max(1, int(lerp(46, 0, grow))))
-        if grow < 0.6:
-            sh = SHADOW.resize((w + 120, h + 120)).point(lambda v: int(v * (1 - grow / 0.6)))
-            f.paste((0, 0, 0), (int(x) - 60, int(y) - 60), sh)
-        f.paste(screen, (int(x), int(y)), m)
+        k = ease(t / 0.45)
+        f = self.bg.copy()
+        if self.word:
+            rise = ease_out((t - 0.2) / 0.45)
+            if rise > 0:
+                x, y, size = L["word"]
+                layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                ImageDraw.Draw(layer).text((x, y + 70 * (1 - rise)), self.word, font=font(size, bold=True),
+                                           fill=(255, 255, 255, int(255 * rise)))
+                sub = ease_out((t - 0.4) / 0.4)
+                if sub > 0:
+                    draw_line(layer, self.line, 30 * (1 - sub), int(235 * sub))
+                base = f.convert("RGBA")
+                base.alpha_composite(layer)
+                f = base.convert("RGB")
+        if k >= 1:
+            return f
+        edge = lerp(-500, W + 500, k)
+        m = Image.new("L", (W, H), 0)
+        ImageDraw.Draw(m).polygon([(0, 0), (edge + 260, 0), (edge - 260, H), (0, H)], fill=255)
+        out = self.prev_im.copy()
+        out.paste(f, (0, 0), m)
+        return out
+
+
+# ---------------------------------------------------------------- recordings in the window
+class Part:
+    """A stretch of one source in the window.
+
+    `segs` are (s0, s1, speed) stretches of the recording, played back to back
+    (a gap between two is a jump cut). `holds` are (s0, s1, cx, cy, zoom): the
+    camera sits pushed in on (cx, cy) while the recording is between s0 and s1,
+    moving in before and out after over MOVE seconds of film time.
+    """
+
+    def __init__(self, src, url, segs, holds=()):
+        self.src, self.bar = src, chrome(url)
+        self.segs = [(s0, s1, sp / PACE) for s0, s1, sp in segs]
+        self.T = sum((s1 - s0) / sp for s0, s1, sp in self.segs)
+        self.holds = [(self.film_time(a), self.film_time(b), cx, cy, z) for a, b, cx, cy, z in holds]
+
+    def film_time(self, st):
+        """When the film shows source time st (the next segment's start if st was jumped)."""
+        acc = 0.0
+        for s0, s1, sp in self.segs:
+            if st <= s1:
+                return acc + max(0.0, st - s0) / sp
+            acc += (s1 - s0) / sp
+        return acc
+
+    def cam(self, t):
+        cx, cy, z = W / 2, H / 2, 1.0
+        for a, b, hx, hy, hz in self.holds:
+            k = min(smooth((t - (a - MOVE)) / MOVE), 1 - smooth((t - b) / MOVE))
+            if k > 0:
+                # the zoom in log space, so the push feels even from start to end
+                cx, cy = lerp(cx, hx, k), lerp(cy, hy, k)
+                z = math.exp(lerp(math.log(z), math.log(hz), k))
+        return cx, cy, z
+
+    def src_time(self, t):
+        for s0, s1, sp in self.segs:
+            d = (s1 - s0) / sp
+            if t <= d:
+                return s0 + t * sp
+            t -= d
+        return self.segs[-1][1]
+
+    def content(self, t):
+        return view(self.src.at(self.src_time(t)), *self.cam(t))
+
+
+class Chapter:
+    """The chapter's parts back to back in one window, which rises in at the start."""
+
+    def __init__(self, i, parts):
+        self.i, self.parts = i, parts
+        self.bg = backdrop(COLOURS[i], B["words"][i].rstrip("."))
+        self.T = sum(p.T for p in parts)
+        self.final = None
+
+    def load(self, n):
+        self.cur = None
+
+    def __call__(self, u):
+        t = u * self.T
+        acc = 0.0
+        for p in self.parts:
+            if t <= acc + p.T + 1e-9 or p is self.parts[-1]:
+                break
+            acc += p.T
+        if p is not self.cur:
+            if self.cur:
+                self.cur.src.close()
+            p.src.open()
+            self.cur = p
+        win = window(p.content(t - acc), p.bar)
+        f = self.bg.copy()
+        title(f, B["words"][self.i], B["lines"][self.i], ease(t / 0.5))
+        sx, sy, ss = L["label"]
+        label = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(label)
+        d.text((sx + d.textlength(B["words"][self.i], font=font(ss, bold=True)) + 18, sy + 12),
+               f"{self.i + 1}/3", font=font(26), fill=(255, 255, 255, int(170 * ease(t / 0.5))))
+        base = f.convert("RGBA")
+        base.alpha_composite(label)
+        f = base.convert("RGB")
+        put_window(f, win, dy=int(L["rise"] * (1 - back_out(t / 0.6))))
+        if u >= 1:
+            self.cur.src.close()
+            self.cur = None
+            self.final = f
         return f
 
 
+def phone_tile(path, height):
+    """A screenshot in a dark phone frame, as an RGBA tile."""
+    w, bezel = round(height * 390 / 844), 12
+    scr = Image.open(path).convert("RGB").resize((w, height), Image.Resampling.LANCZOS)
+    tile = Image.new("RGBA", (w + 2 * bezel, height + 2 * bezel), (0, 0, 0, 0))
+    ImageDraw.Draw(tile).rounded_rectangle((0, 0, tile.width - 1, tile.height - 1), 58, fill=(20, 24, 36, 255))
+    tile.paste(scr, (bezel, bezel), rounded(w, height, 46))
+    return tile
+
+
+class Outro:
+    """The three chapters as phones fanned out on navy, a small logo over them."""
+
+    def __init__(self, T):
+        self.T = T
+        self.bg = gradient(*NAVY)
+        self.logo = logo(L["outro_logo"][0])
+
+    def load(self, n):
+        # the recorders' "outro": the profile from the top, the feed, the job results
+        shots = [os.path.join(OUT, "screens", f"o_{s}.png") for s in ("profile", "feed", "jobs")]
+        self.wins = [phone_tile(p, L["phone_h"]).rotate([7, 0, -7][i], resample=Image.Resampling.BICUBIC, expand=True)
+                     for i, p in enumerate(shots)]
+
+    def __call__(self, u):
+        t = u * self.T
+        f = self.bg.copy().convert("RGBA")
+        # the outer two first, so on the narrow phone frame the middle one sits in front
+        for i in (0, 2, 1):
+            tile = self.wins[i]
+            k = back_out((t - 0.1 - i * 0.12) / 0.6)
+            if k <= 0:
+                continue
+            cx = W / 2 + (i - 1) * L["fan"]
+            cy = L["fan_y"] + (60 if i != 1 else 0) + 700 * (1 - k)
+            f.alpha_composite(tile, (int(cx - tile.width / 2), int(cy - tile.height / 2)))
+        la = ease_out((t - 0.7) / 0.6)
+        if la > 0:
+            lg = self.logo.copy()
+            lg.putalpha(lg.getchannel("A").point(lambda v: int(v * la)))
+            f.alpha_composite(lg, ((W - lg.width) // 2, int(L["outro_logo"][1] + 30 * (1 - la))))
+        return f.convert("RGB")
+
+
 # ---------------------------------------------------------------- the storyboard
-# the feed has built itself here; the pointer comes in right after
-FEED_T0 = 1.6 if PORTRAIT else 4.0
+# All scenes are recorded in one run (run.sh), so the post shows one time of day
+# throughout. The times below are seconds into each scene's clip, measured on
+# the recordings: re-measure them when a scene's choreography changes.
+profile, feed, post, reach, jobs = Src("profile"), Src("feed"), Src("post"), Src("reach"), Src("jobs")
+URL = "vutuv.de"
 
+if not PORTRAIT:
+    STORY = [
+        [Part(profile, f"{URL}/miriam_kessler",
+              # the finished top stands a moment (a slow 3.0-3.4) so the viewer finds their feet
+              [(0.3, 3.0, 2.2), (3.0, 3.4, 0.58), (3.4, 6.3, 2.5), (6.3, 7.9, 1.0), (7.9, profile.dur - 0.1, 2.0)],
+              # push in on the tag vote: the count goes 2 -> 3, the roster opens
+              [(6.4, 7.8, 520, 300, 1.7)])],
+        [Part(feed, f"{URL}/feed",
+              # the writing in jump cuts: the first words, then the finished text; the
+              # bold quicker; the first tag, then both
+              [(2.0, 5.3, 2.5), (5.3, 8.9, 1.4), (8.9, 10.8, 3.0), (10.8, 12.3, 2.5), (14.6, 15.2, 2.0),
+               (15.2, 19.8, 3.4), (20.6, 21.8, 2.6), (23.2, 24.0, 2.0), (24.0, feed.dur - 0.1, 1.2)],
+              # the like and the repost, then the composer while she writes, bolds and tags
+              [(5.5, 8.8, 620, 640, 1.6), (11.6, 23.9, 670, 400, 1.4)]),
+         Part(Fedi(feed), f"{URL}/feed", [(0.0, 5.0, 2.4)]),
+         # the post page, pushed in on the whole card (avatar to ⋯ menu, which then
+         # opens on "Reach analysis"): the card spans x 384-1536, y 132-714
+         Part(post, f"{URL}/miriam_kessler/posts", [(0.2, post.dur - 0.1, 1.3)], [(0.0, post.dur, 960, 420, 1.5)]),
+         # a post that spread: its reach analysis, the reposters' audiences as growing bars
+         Part(reach, f"{URL}/posts/…/analytics", [(0.2, reach.dur - 0.1, 1.2)])],
+        [Part(jobs, f"{URL}/jobs",
+              # after "Search" straight to the results (the reload in between flashes the
+              # real unread badges before the recorder's CSS lands), and no scroll down
+              [(0.2, 3.8, 2.5), (3.8, 9.1, 2.4), (9.8, 11.0, 1.0)],
+              [(4.4, 8.6, 760, 400, 1.3)])],
+    ]
+else:
+    # the phone: the same beats, measured on record_portrait.mjs's takes; a phone
+    # screen is full to both edges, so only the tag vote is pushed in on (its
+    # chips sit at the left, where the push keeps them)
+    STORY = [
+        [Part(profile, "",
+              # the finished top stands a moment, the tag vote at real speed, then on
+              # down through the CV and her links to the book reviews
+              [(0.3, 2.8, 2.2), (2.8, 3.3, 0.58), (3.3, 6.0, 2.5), (6.0, 8.8, 1.0), (8.8, profile.dur - 0.1, 2.2)],
+              [(6.3, 8.6, 300, 760, 1.35)])],
+        [Part(feed, "",
+              # like and repost, the composer; the writing in jump cuts as on the desktop
+              [(1.2, 4.6, 2.5), (4.6, 8.4, 1.4), (8.4, 10.3, 3.0), (10.3, 11.2, 2.5), (12.4, 13.2, 2.0),
+               (13.2, 18.2, 3.4), (19.3, 20.4, 2.6), (21.4, 22.2, 2.0), (22.2, feed.dur - 0.1, 1.2)]),
+         Part(Fedi(feed), "", [(0.0, 5.0, 2.4)]),
+         Part(post, "", [(0.2, post.dur - 0.1, 1.3)]),
+         Part(reach, "", [(0.2, reach.dur - 0.1, 1.2)])],
+        [Part(jobs, "",
+              # a look at the list, the search, then straight to the dressed results
+              # (the reload in between flashes the real unread badges), and down to them;
+              # the recorder marks both moments, so this holds in either language
+              [(0.2, 4.4, 2.2), (4.4, jobs.marks["search"] + 0.4, 2.4), (jobs.marks["results"], jobs.dur - 0.1, 1.1)])],
+    ]
 
-def screens_json(name):
-    return json.load(open(os.path.join(OUT, "screens", name)))
-
-
-feed = Live("feed", FEED_T0, 0.3)
-feed_last = feed.last()
-# the phone's post card and a narrower world, to fill more of the tall frame
-fedi_geometry = {"card": tuple(screens_json("card.json")), "end_span": 300} if PORTRAIT else {}
-fedi = Fediverse(feed_last, ASSETS, duration=5.0, size=(W, H), **fedi_geometry)
-post = Live("post", 0.3, 0.1, fade_from=lambda: fedi(1.0), fade=0.45)
-chat = Live("chat", 0.3, 0.2)
-job = Live("job", 0.3, 0.1, fade_from=lambda: chat.last(), fade=0.35)
-jobs = Live("jobs", 0.2, 0.1, fade_from=lambda: job.last(), fade=0.35)
-owner = Live("owner", 0.3, 0.1, fade_from=lambda: jobs.last(), fade=0.35)
-cv = Live("cv", 0.2, 0.1, fade_from=lambda: owner.last(), fade=0.4)
-printv = Live("print", 0.2, 0.1, fade_from=lambda: cv.last(), fade=0.35)
-# where the printed sheet sits in the phone's print view (measured when recording)
-sheet_geometry = dict(zip(("sheet_x0", "sheet_w"), screens_json("sheet.json")), file_w=460) if PORTRAIT else {}
-save = SavePdf(os.path.join(OUT, "screens", "cv_sheet.png"), CONTENT["pdf_name"], size=(W, H), **sheet_geometry)
-print_last = printv.last()
-morph = PhoneMorph(frame_at(feed.path, FEED_T0), 3.0)
-
-
-def speed(live, factor):
-    """A shot that plays its stretch `factor` times faster than it was recorded."""
-    return ((live.s1 - live.s0) / factor, live)
-
-
-SHOTS = [
-    (morph.T, morph),                             # three phones, the middle one becomes the feed
-    speed(feed, 1.25),                            # like + repost the news, write, bold, tag, post
-    (fedi.T, fedi),                               # the post flies out to the fediverse
-    speed(post, 1.07),                            # likes, Anna's reply, a DM arrives
-    speed(chat, 1.30),                            # Anna's DM with the job link, Miriam opens it
-    speed(job, 1.28),                             # the posting, then on to the job board
-    speed(jobs, 1.29),                            # search Elixir + city + radius, then her profile
-    speed(owner, 1.21),                           # her profile builds itself, "open CV"
-    speed(cv, 1.14),                              # untick the photo, print
-    speed(printv, 1.10),                          # the print view without photo
-    (save.T, lambda u: save(u, print_last)),      # saved as PDF into the download folder
-    (2.4, endcard),                               # the logo
-]
+# each chapter comes in on a wipe from the one before (navy for the first), and
+# a last, quicker wipe to navy leads into the end
+navy = gradient(*NAVY)
+SHOTS, before = [], lambda: navy
+for i, parts in enumerate(STORY):
+    chapter = Chapter(i, parts)
+    wipe = Wipe(1.0, before, chapter.bg, B["words"][i], B["lines"][i])
+    SHOTS += [(wipe.T, wipe), (chapter.T, chapter)]
+    before = lambda ch=chapter: ch.final
+last = Wipe(0.45, before, navy)
+outro = Outro(3.4)
+SHOTS += [(last.T, last), (outro.T, outro)]
 
 if __name__ == "__main__":
     master = os.path.join(OUT, "master.mp4")
@@ -271,20 +549,19 @@ if __name__ == "__main__":
     total = 0
     for dur, fn in SHOTS:
         n = round(dur * FPS)
-        if isinstance(fn, Live):
+        if hasattr(fn, "load"):
             fn.load(n)
         for i in range(n):
             ff.stdin.write(fn(i / (n - 1)).tobytes())
-        if isinstance(fn, Live):
-            fn.unload()
         total += n
     ff.stdin.close()
     ff.wait()
     print(f"master: {total / FPS:.1f} s -> {master}")
 
-    # delivery: H.264 1080p (plays everywhere) and the poster (the three phones)
+    # delivery: H.264 (plays everywhere) and the poster (the phones under the logo)
     final = os.path.join(OUT, f"{NAME}.mp4")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", master, "-an", "-c:v", "libx264", "-preset", "veryslow", "-tune", "animation",
-                    "-crf", "24", "-pix_fmt", "yuv420p", "-movflags", "+faststart", final], check=True)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "0.9", "-i", master, "-frames:v", "1", os.path.join(OUT, f"{NAME}-poster.png")], check=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", master, "-an", "-c:v", "libx264", "-preset", "veryslow",
+                    "-crf", "22", "-pix_fmt", "yuv420p", "-movflags", "+faststart", final], check=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-sseof", "-0.1", "-i", master, "-frames:v", "1",
+                    os.path.join(OUT, f"{NAME}-poster.png")], check=True)
     print(f"final: {final}")

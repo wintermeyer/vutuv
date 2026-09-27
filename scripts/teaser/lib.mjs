@@ -17,6 +17,8 @@ export function loadContent(lang) {
 export const CSS = `
 #web-notify, #tidewave-toolbar, body > iframe, #composer-discarded { display: none !important; }
 nav[data-nav-bar="tabs"] a span.bg-accent { display: none !important; }
+/* the real unread badges carry earlier takes' counts; the scenes draw their own (.tz-badge) */
+a[href="/messages"] span.bg-accent, a[href="/notifications"] span.bg-accent, a[href="/feed"] span.bg-accent { display: none !important; }
 .tz-h { opacity: 0; }
 .tz-in { animation: tzIn .75s cubic-bezier(.2,.8,.2,1) forwards; }
 .tz-pop { animation: tzPop .6s cubic-bezier(.3,1.5,.5,1) forwards; }
@@ -31,8 +33,8 @@ nav[data-nav-bar="tabs"] a span.bg-accent { display: none !important; }
 #tz-cursor.tz-touch { width: 44px; height: 44px; margin: -22px 0 0 -22px; transform: none; border-radius: 50%;
   background: rgba(15,23,42,.28); box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 2px 10px rgba(0,0,0,.25); transition: opacity .4s, transform .12s; }
 #tz-cursor.tz-touch.tz-down { transform: scale(.8); background: rgba(15,23,42,.42); }
-#tz-cursor { position: fixed; left: 0; top: 0; width: 28px; height: 28px; z-index: 2147483647; pointer-events: none; transform: translate(-3px,-2px); transition: opacity .4s; }
-.tz-ring { position: fixed; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; border: 3px solid rgba(37,88,217,.9); z-index: 2147483646; pointer-events: none; animation: tzRing .55s ease-out forwards; }
+#tz-cursor { position: fixed; left: 0; top: 0; width: 44px; height: 44px; z-index: 2147483647; pointer-events: none; transform: translate(-5px,-3px); transition: opacity .4s; filter: drop-shadow(0 2px 3px rgba(0,0,0,.25)); }
+.tz-ring { position: fixed; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; border: 3px solid rgba(37,88,217,.9); z-index: 2147483646; pointer-events: none; animation: tzRing .55s ease-out forwards; }
 @keyframes tzRing { from { transform: scale(.3); opacity: 1 } to { transform: scale(1.5); opacity: 0 } }
 .tz-badge { position: absolute; top: 2px; right: 1px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
   background: #ef4444; color: #fff; font: 600 11px/18px system-ui, sans-serif; text-align: center; opacity: 0; }
@@ -116,9 +118,14 @@ export async function open(ctx, url, { live = true } = {}) {
 
 // Records the page with the CDP screencast. Frames carry their own timestamps;
 // render/timeline.py turns them into a constant-rate clip.
+//
+// `body` gets a `mark(name)` function: it notes the moment on the frames' own
+// clock, and marks.json beside frames.json lets render.py cut at it, in any
+// language and any take, instead of at seconds measured on one recording.
 export async function record(page, out, body, { size = FRAME.desktop } = {}) {
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
+  const marks = {};
   const cdp = await page.context().newCDPSession(page);
   let n = 0;
   const frames = [];
@@ -130,9 +137,11 @@ export async function record(page, out, body, { size = FRAME.desktop } = {}) {
   });
   await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: size[0], maxHeight: size[1] });
   await page.waitForTimeout(400);
-  await body();
+  // the newest frame's timestamp is the screencast's "now"
+  await body((name) => { marks[name] = frames.length ? frames[frames.length - 1][1] : 0; });
   await cdp.send("Page.stopScreencast");
   fs.writeFileSync(path.join(out, "frames.json"), JSON.stringify({ frames }));
+  fs.writeFileSync(path.join(out, "marks.json"), JSON.stringify(marks));
   console.log(path.basename(out), "frames", frames.length);
 }
 
@@ -150,7 +159,7 @@ export async function pointer(page, start = [1320, 640], { block = null, touch =
     } else {
       const ns = "http://www.w3.org/2000/svg";
       const svg = document.createElementNS(ns, "svg");
-      svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("width", "28"); svg.setAttribute("height", "28");
+      svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("width", "44"); svg.setAttribute("height", "44");
       const p = document.createElementNS(ns, "path");
       p.setAttribute("d", "M3 2 L3 19 L7.5 15 L10.5 22 L13.5 20.7 L10.6 14 L17 14 Z");
       p.setAttribute("fill", "#111"); p.setAttribute("stroke", "#fff"); p.setAttribute("stroke-width", "1.6"); p.setAttribute("stroke-linejoin", "round");
@@ -192,28 +201,45 @@ export const HIDE_REAL_JOBS = (orgs) => {
   document.querySelectorAll("#job-tag-filters > *").forEach((t) => { const s = t.textContent.trim(); if (/^\+/.test(s) && !/^\+?\s*(elixir|phoenix framework|postgresql|otp)$/i.test(s)) t.style.display = "none"; });
 };
 
-// The opening's three phone screenshots (Miriam's profile, her feed, her CV),
-// the same for both cuts: a tall phone at 3x, whatever the film's format.
-export async function recordPhones(browser, lang, c, { miriam, anna, screens }) {
+// The older post behind the reach analysis must not show up in her profile or
+// feed, nor her repost of the news head her profile's posts. A rule in <head>,
+// because a LiveView patch drops inline styles.
+export const hideReachPost = (page, ids) => page.addStyleTag({ content: `
+  #profile-posts div.py-4:has([id*="${ids.reach_post_id}"]),
+  #profile-posts div.py-4:has([id*="${ids.news_top_id}"]),
+  #feed-posts > div:has([id*="${ids.reach_post_id}"]) { display: none !important; }` });
+
+// The end's three phone shots (her profile from the top, the feed, the job
+// results), a tall phone at 3x whatever the film's format. Take them before the
+// scenes change what they show (the vote, the draft).
+export async function recordOutro(browser, lang, c, ids, { miriam, anna, screens }) {
   const mob = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true };
-  const needles = stammtischNeedles(c);
-  for (const [name, url, anchor, state, hideMine] of [
-    ["mA", "/miriam_kessler", null, anna, false],
-    ["mB", "/feed", null, miriam, true],
-    ["mC", "/miriam_kessler", "#profile-experience", anna, false],
+  const orgs = jobOrgs(c);
+  for (const [name, url, state] of [
+    ["o_profile", "/miriam_kessler", anna],
+    ["o_feed", "/feed", miriam],
+    ["o_jobs", `/jobs?q=${encodeURIComponent(c.search.q)}&near=${encodeURIComponent(c.search.near)}`, miriam],
   ]) {
     const ctx = await newContext(browser, lang, state, mob);
     const p = await ctx.newPage();
     await p.goto(BASE + url, { waitUntil: "networkidle" });
     await dress(p);
-    await p.evaluate(({ anchor, hideMine, needles }) => {
-      window.tzHideCounts();
-      if (hideMine) document.querySelectorAll("#feed-posts > div").forEach((d) => { if (needles.some((n) => d.textContent.includes(n))) d.style.display = "none"; });
-      if (anchor) { const h = document.querySelector(anchor); if (h) window.scrollTo(0, h.getBoundingClientRect().top + scrollY - 70); }
-    }, { anchor, hideMine, needles });
+    await hideReachPost(p, ids);
+    await p.evaluate(() => window.tzHideCounts());
+    await p.evaluate(HIDE_OTHER_STAMMTISCH, { post: ids.post_id, needles: stammtischNeedles(c) });
+    if (url.startsWith("/jobs")) {
+      await p.evaluate(HIDE_REAL_JOBS, orgs);
+      // the results, not the form: scroll to the first card
+      await p.evaluate(() => {
+        const first = [...document.querySelectorAll("main article")].find((a) => a.style.display !== "none");
+        if (first) window.scrollTo(0, first.getBoundingClientRect().top + scrollY - 120);
+      });
+    } else {
+      await p.evaluate(() => window.scrollTo(0, 0));
+    }
     await p.waitForTimeout(900);
     await p.screenshot({ path: path.join(screens, `${name}.png`) });
     await ctx.close();
   }
-  console.log("phones done");
+  console.log("outro phones done");
 }

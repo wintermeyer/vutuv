@@ -9,7 +9,6 @@
 set -eu
 cd "$(dirname "$0")/../.."
 for l in de en; do
-  scripts/teaser/run.sh "$l"
-  scripts/teaser/run.sh "$l" --portrait
+  scripts/teaser/run.sh "$l"   # both formats
 done
 scripts/teaser/web.sh
