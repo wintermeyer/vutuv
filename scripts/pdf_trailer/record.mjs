@@ -4,14 +4,17 @@
 //
 // Clara opens the composer, writes a line, a PDF flies into the drop area,
 // she posts, the post appears with the file row, and "Vorschau" opens the
-// pages in the lightbox. Writes the screencast frames and frames.json.
+// pages in the lightbox. Writes <out_dir>/rec/take/: the screencast frames,
+// frames.json, marks.json (the moments render.py cuts the chapters on) and
+// pos.json (where, in frame pixels, the camera pushes in).
 import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 
 const BASE = process.env.TRAILER_BASE || "http://localhost:4078";
 const [state, pdf, out] = process.argv.slice(2);
-const FRAMES = path.join(out, "frames");
+const TAKE = path.join(out, "rec", "take");
+const FRAMES = path.join(TAKE, "frames");
 fs.rmSync(FRAMES, { recursive: true, force: true });
 fs.mkdirSync(FRAMES, { recursive: true });
 
@@ -92,6 +95,9 @@ cdp.on("Page.screencastFrame", ({ data, metadata, sessionId }) => {
 });
 const marks = {};
 const mark = (name) => { marks[name] = Date.now() / 1000; };
+// frame pixels are 1.5x the page's CSS pixels
+const pos = {};
+const spot = async (name, loc) => { const b = await loc.boundingBox(); pos[name] = [(b.x + b.width / 2) * 1.5, (b.y + b.height / 2) * 1.5]; };
 
 await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: 1920, maxHeight: 1080 });
 await page.waitForTimeout(900);
@@ -104,7 +110,9 @@ await page.waitForTimeout(700);
 const editor = page.locator("#composer-form [contenteditable=true]:visible").first();
 const eb = await editor.boundingBox();
 await clickAt(eb.x + 40, eb.y + 30, 500);
+mark("typing");
 await page.keyboard.type(TEXT, { delay: 34 });
+mark("typed");
 await page.waitForTimeout(600);
 
 // 2. a PDF comes in from the right and is let go over the drop area
@@ -112,6 +120,8 @@ const zone = page.locator("#composer-drop [data-drop-full]");
 await zone.scrollIntoViewIfNeeded();
 await page.waitForTimeout(300);
 const [zx, zy] = await centre(zone);
+await spot("zone", zone);
+mark("drag");
 await page.evaluate(([x, y]) => {
   const f = document.createElement("div");
   f.id = "tz-file";
@@ -136,24 +146,31 @@ await page.evaluate(() => {
 });
 await page.setInputFiles("#composer-pick", pdf);
 await page.waitForSelector("[data-attachment-chip]", { timeout: 20000 });
+mark("attached");
 await page.waitForTimeout(1400);
 
 // 3. post; the post waits for its preview pages
 const submit = page.locator('#composer-form button[type="submit"]:visible').last();
 await submit.scrollIntoViewIfNeeded();
 await page.waitForTimeout(300);
+mark("to_submit");
 await clickAt(...(await centre(submit)), 900);
 await page.waitForTimeout(400);
 await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 // the file was ready before the click, so the post appears at once
 await page.waitForSelector("[data-post-files]", { timeout: 90000 });
+await page.waitForTimeout(700);
+mark("posted");
+await spot("card", page.locator("[data-post-files]").first());
 await page.waitForTimeout(1800);
 
 // 4. the preview: the pages in the lightbox
 const preview = page.locator("[data-post-files] a", { hasText: "Vorschau" }).first();
 await preview.scrollIntoViewIfNeeded();
 await page.waitForTimeout(400);
+mark("to_preview");
 await clickAt(...(await centre(preview)), 1000);
+mark("preview");
 await page.waitForTimeout(1700);
 for (let i = 0; i < 2; i++) {
   await clickAt(...(await centre(page.locator("[data-lb-next]"))), 600);
@@ -164,6 +181,8 @@ await page.waitForTimeout(900);
 mark("end");
 
 await cdp.send("Page.stopScreencast");
-fs.writeFileSync(path.join(out, "frames.json"), JSON.stringify({ frames, marks }));
-console.log("frames", frames.length, "wait", (marks.wait_end - marks.wait_start).toFixed(1), "s");
+fs.writeFileSync(path.join(TAKE, "frames.json"), JSON.stringify({ frames }));
+fs.writeFileSync(path.join(TAKE, "marks.json"), JSON.stringify(marks));
+fs.writeFileSync(path.join(TAKE, "pos.json"), JSON.stringify(pos));
+console.log("frames", frames.length, "marks", Object.keys(marks).join(" "));
 await browser.close();
