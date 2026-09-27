@@ -149,6 +149,31 @@ defmodule VutuvWeb.AttachmentComposerTest do
     assert has_element?(live, "#composer-attachments")
   end
 
+  test "posting a post that waits on its file folds the composer away", %{
+    conn: conn,
+    files: files
+  } do
+    live = open_composer(conn)
+
+    # An earlier discard's undo must not outlive the post written after it.
+    live |> form("#composer-form", %{"post" => %{"body" => "Alt"}}) |> render_change()
+    live |> element("#composer-discard") |> render_click()
+    assert has_element?(live, "[data-draft-discarded]")
+    live |> element("#open-composer") |> render_click()
+
+    upload!(live, Fixtures.plain_pdf(files))
+
+    live
+    |> form("#composer-form", %{"post" => %{"body" => "Mit Datei"}})
+    |> render_submit()
+
+    # The file is not rendered yet, so the post waits — and the composer
+    # behaves as after any post: empty, folded, no stale undo.
+    assert has_element?(live, "#composer-panel.hidden")
+    refute has_element?(live, "[data-draft-discarded]")
+    refute has_element?(live, "#composer-attachments")
+  end
+
   test "the German composer names the drop area in German", %{conn: conn} do
     html =
       conn

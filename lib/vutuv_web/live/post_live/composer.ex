@@ -1447,7 +1447,7 @@ defmodule VutuvWeb.PostLive.Composer do
   # other host goes where it would have gone — the app bar's chip leads back
   # to the feed, where the card is.
   defp handle_pending_result(_pending, socket) do
-    socket = drop_draft(socket)
+    socket = socket |> drop_draft() |> forget_old_notices()
 
     cond do
       socket.assigns[:remote_note] || socket.assigns[:remote_post] ->
@@ -1457,9 +1457,21 @@ defmodule VutuvWeb.PostLive.Composer do
         {:noreply, push_navigate(socket, to: Posts.path(socket.assigns.parent))}
 
       true ->
+        # A folded host learns about a post from the `{:new_post, …}`
+        # broadcast, which a waiting post does not send until it publishes —
+        # so it is told here, and the panel folds as after any post.
+        if collapsible_composer?(socket.assigns),
+          do: send(self(), {:composer_closed, socket.assigns.id})
+
         {:noreply, socket |> reset_composer() |> assign(:pending_notice?, true)}
     end
   end
+
+  # A post just went out: an older "Draft discarded · Undo" or "picked up where
+  # you left off" is about a draft that no longer exists, and undoing it now
+  # would bring back text the member has since replaced with a post.
+  defp forget_old_notices(socket),
+    do: socket |> assign(:discarded, nil) |> assign(:restored_draft?, false)
 
   # Anything the author has already put into the composer by hand. Attached
   # photos count: their pending rows survive a re-mount in the DB and come
@@ -1580,7 +1592,7 @@ defmodule VutuvWeb.PostLive.Composer do
     # it here rather than in each branch below covers all four: three of them
     # navigate away and would otherwise leave a draft behind that reopens the
     # composer with a copy of what was just published.
-    socket = drop_draft(socket)
+    socket = socket |> drop_draft() |> forget_old_notices()
 
     cond do
       socket.assigns.post ->
