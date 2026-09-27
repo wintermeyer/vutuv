@@ -544,6 +544,9 @@ defmodule VutuvWeb.PostFeedLiveTest do
       [image] = Vutuv.Repo.all(PostImage)
       refute has_element?(live, ~s([phx-click="insert-inline"]))
 
+      # The photo's own panel is in the composer's second step.
+      live |> element("#composer-next") |> render_click()
+
       # The scrim's ⚙ specifically — the tile's img opens the panel too, so a
       # bare [phx-click=photo-open] selector matches two elements.
       live
@@ -589,6 +592,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> render_upload("photo.png")
 
       [stored] = Vutuv.Repo.all(PostImage)
+      live |> element("#composer-next") |> render_click()
 
       live
       |> element(~s(button[phx-click="photo-open"][phx-value-id="#{stored.id}"]))

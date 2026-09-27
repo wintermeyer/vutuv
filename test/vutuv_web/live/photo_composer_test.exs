@@ -105,7 +105,17 @@ defmodule VutuvWeb.PhotoComposerTest do
       ])
 
     render_upload(input, name)
+    to_photo_step(live)
     newest_pending(user)
+  end
+
+  # The mosaic, the tiles and every photo control live in the composer's
+  # second step; step 1 lists a photo as a plain row like any other file.
+  defp to_photo_step(live) do
+    if has_element?(live, "#composer-next"),
+      do: live |> element("#composer-next") |> render_click()
+
+    live
   end
 
   defp newest_pending(user) do
@@ -488,6 +498,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, "[data-draft-discarded]")
       live |> element("[data-undo-discard]") |> render_click()
 
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
       refute has_element?(live, "[data-draft-discarded]")
 
@@ -531,6 +542,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
 
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
       assert has_element?(live, "#composer-gallery-open")
       assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
@@ -766,6 +778,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       |> element("#composer-form")
       |> render_change(%{"post" => %{"image_ids" => [image.id]}})
 
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
     end
 
@@ -888,6 +901,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
 
+      to_photo_step(live)
       assert has_element?(live, "#composer-gallery-open")
       refute has_element?(live, "#composer-gallery-license")
 
@@ -1170,6 +1184,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       # was showing is still in force underneath.
       refute has_element?(reopened, "[data-gallery-sheet]")
 
+      to_photo_step(reopened)
       reopened |> element("[data-gallery-open]") |> render_click()
       assert has_element?(reopened, ~s([data-bento-fit="fill"][aria-pressed="true"]))
       assert has_element?(reopened, ~s([data-bento-pattern="stack"][aria-pressed="true"]))
@@ -1286,6 +1301,86 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
   end
 
+  describe "two steps: attach, then the photos" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{live: open_composer(conn), user: user}
+    end
+
+    # Uploaded without leaving step 1, the way a member sees it.
+    defp upload_photo_in_step_one!(live, user) do
+      content = jpeg([])
+      name = "photo-#{System.unique_integer([:positive])}.jpg"
+
+      live
+      |> file_input("#composer-form", :images, [
+        %{name: name, content: content, type: "image/jpeg", size: byte_size(content)}
+      ])
+      |> render_upload(name)
+
+      newest_pending(user)
+    end
+
+    test "a photo is a row in step 1, like any file, and the button goes on", %{
+      live: live,
+      user: user
+    } do
+      image = upload_photo_in_step_one!(live, user)
+
+      assert has_element?(live, "#composer-row-image-#{image.id}")
+      refute has_element?(live, "[data-photo-tile]")
+      assert has_element?(live, "#composer-next")
+      refute has_element?(live, "#composer-form button[type=submit]")
+    end
+
+    test "Next opens the photo step with the text kept in the form, and Back returns", %{
+      live: live,
+      user: user
+    } do
+      image = upload_photo_in_step_one!(live, user)
+      live |> element("#composer-next") |> render_click()
+
+      assert has_element?(live, "[data-details-step]")
+      assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
+      refute has_element?(live, "#composer-row-image-#{image.id}")
+      # Still in the form, only hidden, so Post in step 2 carries them.
+      assert has_element?(live, ~s(#composer-form [name="post[tags]"]))
+      assert has_element?(live, ~s(#composer-form [name="post[language]"]))
+      assert has_element?(live, "#composer-form button[type=submit]")
+
+      live |> element("#composer-back") |> render_click()
+      refute has_element?(live, "[data-details-step]")
+      assert has_element?(live, "#composer-row-image-#{image.id}")
+    end
+
+    test "removing the last photo in step 2 lands back on step 1", %{live: live, user: user} do
+      image = upload_photo_in_step_one!(live, user)
+      live |> element("#composer-next") |> render_click()
+
+      live
+      |> element(~s([data-photo-tile="#{image.id}"] button[phx-click="remove-image"]))
+      |> render_click()
+
+      refute has_element?(live, "[data-details-step]")
+      refute has_element?(live, "#composer-next")
+      assert has_element?(live, "#composer-form button[type=submit]")
+    end
+
+    test "the German step names itself", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+      live = open_composer(conn)
+      upload_photo_in_step_one!(live, user)
+
+      assert render(live) =~ "Weiter"
+      live |> element("#composer-next") |> render_click()
+
+      html = render(live)
+      assert html =~ "Schritt 2 von 2"
+      assert html =~ "Zurück"
+    end
+  end
+
   describe "drop anywhere" do
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -1351,6 +1446,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       third = by_width[70]
 
       assert hidden_image_ids(live) == [hero.id, second.id, third.id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{hero.id}"] [data-cover-badge]))
       refute has_element?(live, ~s([data-photo-tile="#{third.id}"] [data-cover-badge]))
 
@@ -1378,6 +1474,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       by_width = pending_by_width(user)
 
       assert hidden_image_ids(live) == [by_width[90].id, by_width[80].id, by_width[70].id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{by_width[90].id}"] [data-cover-badge]))
     end
 
@@ -1429,6 +1526,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       later = pending_by_width(user)[60]
       assert hidden_image_ids(live) == [kept.id, also.id, later.id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{kept.id}"] [data-cover-badge]))
     end
   end
@@ -1627,6 +1725,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       live |> element("[data-undo-discard]") |> render_click()
       assert hidden_image_ids(live) == [hero.id, second.id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{hero.id}"] [data-cover-badge]))
 
       live |> form("#composer-form", %{"post" => %{"body" => "Kept."}}) |> render_submit()
@@ -1662,6 +1761,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       {:ok, reloaded, _html} = live(recycle(conn), ~p"/feed")
 
       assert hidden_image_ids(reloaded) == [by_width[90].id, by_width[80].id, by_width[70].id]
+      to_photo_step(reloaded)
       assert has_element?(reloaded, ~s([data-photo-tile="#{by_width[90].id}"] [data-cover-badge]))
     end
   end
