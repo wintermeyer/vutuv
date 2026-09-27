@@ -319,14 +319,15 @@ FILM = Film(Part(take, URL,
     [(m["start"] - 0.3, m["typing"], 1.4), (m["typing"], m["typed"], 3.0),
      (m["typed"], m["drag"], 2.2), (m["drag"], m["attached"] + 1.2, 1.0),
      (m["to_submit"] - 0.2, m["to_submit"] + 1.1, 1.0), (m["to_submit"] + 1.1, m["posted"], 4.0),
-     (m["posted"], m["to_preview"], 2.4),
-     (m["to_preview"], m["end"], 1.1)],
+     (m["posted"], m["to_preview"], 4.0),
+     # the pages quickly, and out before the lightbox closes (Escape: end - 0.9)
+     (m["to_preview"], m["end"] - 1.0, 2.2)],
     # pushed in on the drop area before the PDF sets off, framed wide enough
     # to hold where it starts (record.mjs: 360/150 CSS px right and below); the
     # post card and the lightbox stay whole (the lightbox's arrows sit at the
     # window's very edges), and the wait after Post runs by quickly
     [(m["typed"] + 0.3, m["attached"] + 1.0, zx + 180, zy, 1.3)]))
-outro = Outro(3.0)
+outro = Outro(2.0)
 fade = Fade(0.5, lambda: FILM.final, lambda: outro(0.0))
 SHOTS = [(FILM.T, FILM), (fade.T, fade), (outro.T, outro)]
 
