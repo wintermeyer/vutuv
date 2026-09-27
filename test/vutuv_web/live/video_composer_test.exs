@@ -61,6 +61,12 @@ defmodule VutuvWeb.VideoComposerTest do
       ])
 
     render_upload(input, name)
+
+    # The clip's tile, its cover strip and its alt text live in the
+    # composer's second step; step 1 lists it as a plain row.
+    if has_element?(live, "#composer-next"),
+      do: live |> element("#composer-next") |> render_click()
+
     newest_video(user)
   end
 

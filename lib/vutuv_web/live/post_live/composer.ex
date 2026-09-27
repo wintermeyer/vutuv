@@ -11,13 +11,12 @@ defmodule VutuvWeb.PostLive.Composer do
   the post exists. Submit attaches the pending rows; abandoned ones are
   swept after a day. Each image carries an alt-text input (stored on save).
 
-  **Inline embedding** is client-driven: every completed upload is announced
-  to the editor hook (`mde-image-uploaded` — the hook inserts files that were
-  dropped/pasted into the prose at the cursor), and each thumbnail row's
-  "Insert" button pushes `mde-insert-image` for an explicit at-cursor insert.
-  Attachments the body does not reference render as a gallery below the post
-  (`VutuvWeb.PostComponents`); referenced ones render in place
-  (`VutuvWeb.Markdown.render_post/2`, own-upload whitelist).
+  **No picture goes into the text.** A photo is an attachment and renders as
+  the gallery below the post (`VutuvWeb.PostComponents`); the editor refuses a
+  dropped or pasted file and hands it to the attachments instead. A post
+  written before that may still carry an inline reference, which renders in
+  place (`VutuvWeb.Markdown.render_post/2`, own-upload whitelist) and survives
+  an edit.
 
   **Audience:** new posts publish **public** — there is no audience picker on
   the composer. The deny model still stands behind it: an existing restricted
@@ -78,7 +77,6 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Languages
-  alias Vutuv.MarkdownContent
   alias Vutuv.Mentions
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -89,7 +87,6 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostVideo
-  alias Vutuv.Prefs
   alias Vutuv.Uploads.Spec
   alias Vutuv.Videos
   alias VutuvWeb.AttachmentText
@@ -98,7 +95,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias VutuvWeb.PostComponents
 
   import VutuvWeb.PendingPostComponents, only: [file_label: 1, file_tone: 1]
-  import VutuvWeb.VideoComponents, only: [video_tile: 1, stage_line: 1, clock: 1]
+  import VutuvWeb.VideoComponents, only: [video_tile: 1, stage_line: 1, clock: 1, stage_text: 1]
 
   @presets ~w(public followers connections only_me custom)
 
@@ -197,6 +194,9 @@ defmodule VutuvWeb.PostLive.Composer do
     # fit and the two rights questions live (issue #1892). Closed on mount and
     # after a reconnect: it holds no data of its own, only a view of assigns.
     |> assign(:gallery_open?, false)
+    # Which of the two steps is showing: `:write` (text and every attachment
+    # as a row) or `:details` (the photos and the clip). See `render/1`.
+    |> assign(:step, :write)
     |> assign(:tags_value, tags_value(post))
     # Picker order for in-flight and completed photos (issue #2158). Seeded
     # from the rows this composer already holds; pending upload refs join it
@@ -291,8 +291,8 @@ defmodule VutuvWeb.PostLive.Composer do
   defp post_video(_post), do: nil
 
   # Whether this composer offers the file picker: this member may upload
-  # (`Vutuv.Attachments.uploads_for?/1` — admins only until the installation
-  # opens it), and this is a new post.
+  # (`Vutuv.Attachments.uploads_for?/1`, which `ATTACHMENT_UPLOADERS` can
+  # narrow to admins), and this is a new post.
   defp attachment_uploads?(nil, user), do: Attachments.uploads_for?(user)
   defp attachment_uploads?(_post, _user), do: false
 
@@ -987,26 +987,6 @@ defmodule VutuvWeb.PostLive.Composer do
      assign(socket, :denied_users, Enum.reject(socket.assigns.denied_users, &(&1.id == id)))}
   end
 
-  def handle_event("insert-inline", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.images, &(&1.id == id)) do
-      nil ->
-        {:noreply, socket}
-
-      image ->
-        # A low-bandwidth composer has no editor to push the picture into, so
-        # the button would sit there doing nothing - which reads as a failed
-        # upload, not as a setting. Write the reference into the Markdown
-        # instead. Not "at the cursor": where the caret sits is the browser's
-        # business and this side cannot ask, so the honest place is the end of
-        # what the member has written, on a paragraph of its own.
-        if Prefs.low_bandwidth?(socket.assigns.current_user) do
-          {:noreply, append_image_reference(socket, image)}
-        else
-          {:noreply, push_event(socket, "mde-insert-image", editor_image_payload(socket, image))}
-        end
-    end
-  end
-
   ## Photo grid and panel (issue #1104)
 
   # The folded licence/download row (the two rights questions) opens on
@@ -1242,6 +1222,15 @@ defmodule VutuvWeb.PostLive.Composer do
   # profile define the matching handle_info: the reply, remote-reply and edit
   # pages define none at all, so an ungated `send` would crash them the moment
   # the notice's button is used there.
+  # The two steps (photos after everything else). Plain socket state: a
+  # reconnect lands on step 1, which loses nothing — every photo, its
+  # arrangement and its description are in the assigns and the draft.
+  def handle_event("details-step", _params, socket),
+    do: {:noreply, assign(socket, :step, :details)}
+
+  def handle_event("write-step", _params, socket),
+    do: {:noreply, assign(socket, :step, :write)}
+
   def handle_event("discard-draft", _params, socket) do
     if collapsible_composer?(socket.assigns) do
       send(self(), {:composer_discarded, socket.assigns.id})
@@ -1435,7 +1424,7 @@ defmodule VutuvWeb.PostLive.Composer do
   # other host goes where it would have gone — the app bar's chip leads back
   # to the feed, where the card is.
   defp handle_pending_result(_pending, socket) do
-    socket = drop_draft(socket)
+    socket = socket |> drop_draft() |> forget_old_notices()
 
     cond do
       socket.assigns[:remote_note] || socket.assigns[:remote_post] ->
@@ -1445,9 +1434,21 @@ defmodule VutuvWeb.PostLive.Composer do
         {:noreply, push_navigate(socket, to: Posts.path(socket.assigns.parent))}
 
       true ->
+        # A folded host learns about a post from the `{:new_post, …}`
+        # broadcast, which a waiting post does not send until it publishes —
+        # so it is told here, and the panel folds as after any post.
+        if collapsible_composer?(socket.assigns),
+          do: send(self(), {:composer_closed, socket.assigns.id})
+
         {:noreply, socket |> reset_composer() |> assign(:pending_notice?, true)}
     end
   end
+
+  # A post just went out: an older "Draft discarded · Undo" or "picked up where
+  # you left off" is about a draft that no longer exists, and undoing it now
+  # would bring back text the member has since replaced with a post.
+  defp forget_old_notices(socket),
+    do: socket |> assign(:discarded, nil) |> assign(:restored_draft?, false)
 
   # Anything the author has already put into the composer by hand. Attached
   # photos count: their pending rows survive a re-mount in the DB and come
@@ -1568,7 +1569,7 @@ defmodule VutuvWeb.PostLive.Composer do
     # it here rather than in each branch below covers all four: three of them
     # navigate away and would otherwise leave a draft behind that reopens the
     # composer with a copy of what was just published.
-    socket = drop_draft(socket)
+    socket = socket |> drop_draft() |> forget_old_notices()
 
     cond do
       socket.assigns.post ->
@@ -1629,6 +1630,7 @@ defmodule VutuvWeb.PostLive.Composer do
       tags_value: socket.assigns.tags_value,
       images: socket.assigns.images,
       video: socket.assigns.video,
+      attachments: socket.assigns.attachments,
       photos: socket.assigns.photos,
       layout: socket.assigns.layout,
       fill?: socket.assigns.fill?,
@@ -1647,6 +1649,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:tags_value, stash.tags_value)
     |> assign_images(stash.images)
     |> assign_video(stash.video)
+    |> assign(:attachments, stash.attachments)
     |> assign(:photos, stash.photos)
     |> assign(:layout, stash.layout)
     |> assign(:fill?, stash.fill?)
@@ -1669,6 +1672,8 @@ defmodule VutuvWeb.PostLive.Composer do
     |> cancel_image_uploads()
     |> assign_images([])
     |> assign_video(nil)
+    |> assign(:attachments, [])
+    |> assign(:step, :write)
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
     |> assign(:layout, nil)
@@ -1896,17 +1901,10 @@ defmodule VutuvWeb.PostLive.Composer do
 
         case result do
           {:ok, image} ->
-            # Announce the finished upload to the editor hook: it inserts the
-            # image at the cursor iff this file was dropped/pasted into the
-            # prose (picker-chosen files just join the thumbnail row).
             {:noreply,
              socket
              |> complete_image_upload(entry.ref, image)
              |> update(:photos, &Map.put(&1, image.id, photo_defaults(image)))
-             |> push_event(
-               "mde-image-uploaded",
-               Map.put(editor_image_payload(socket, image), :name, entry.client_name)
-             )
              |> schedule_draft_save()}
 
           {:error, _reason} ->
@@ -1916,35 +1914,6 @@ defmodule VutuvWeb.PostLive.Composer do
              |> assign(:error, gettext("That file could not be processed."))}
         end
     end
-  end
-
-  # The picture written into the Markdown itself, for the low-bandwidth
-  # composer, which has no editor to place it in. Its own paragraph at the end
-  # of what the member has written: where the caret sits is the browser's
-  # business and this side cannot ask, so the end is the honest answer.
-  # `Vutuv.MarkdownContent` owns the reference's shape, because that module's
-  # regex is what has to read it back when the post is saved.
-  defp append_image_reference(socket, image) do
-    reference = MarkdownContent.image_markdown(PostImage.url(image, "feed"), image.alt)
-
-    body =
-      case String.trim_trailing(socket.assigns.body) do
-        "" -> reference
-        written -> written <> "\n\n" <> reference
-      end
-
-    assign(socket, :body, body)
-  end
-
-  # The payload both editor-hook events share: which editor (the DOM id of
-  # this composer's markdown_editor), the served URL to embed and the alt.
-  defp editor_image_payload(socket, image) do
-    %{
-      editor: "#{socket.assigns.id}-body",
-      id: image.id,
-      url: PostImage.url(image, "feed"),
-      alt: image.alt
-    }
   end
 
   defp run_user_search(socket, term) do
@@ -2021,8 +1990,15 @@ defmodule VutuvWeb.PostLive.Composer do
   def render(assigns) do
     # Read off the per-photo state rather than kept beside it, so the select
     # and the panel can never disagree about what is in force.
+    # Photos and a clip get a step of their own (the arrangement, the crop,
+    # the descriptions); everything else is one step. Removing the last photo
+    # in step 2 lands back on step 1 by itself rather than on an empty page.
+    needs_details? = assigns.images != [] or assigns.video != nil
+
     assigns =
       assigns
+      |> assign(:needs_details?, needs_details?)
+      |> assign(:details_step?, needs_details? and assigns.step == :details)
       |> assign(:download_choice, download_selection(assigns.photos, assigns.images))
       # The live bento preview: the very arrangement the feed will show,
       # computed from the same function the post card renders with — the
@@ -2136,32 +2112,24 @@ defmodule VutuvWeb.PostLive.Composer do
           </div>
         </div>
 
-        <%!-- The whole composer is the drop zone: photos land here from the
-        first drag, not only once a grid exists. LiveView stamps
-        `phx-drop-target-active` on this form while files hover it, which is
-        what reveals the overlay below (components.css owns the display, so
-        no competing utilities). A drop into the prose editor is different on
-        purpose: the editor swallows it and inserts the picture inline at the
-        drop point. --%>
+        <%!-- The whole composer is the drop zone, for photos, clips and files
+        alike: `ComposerFiles` (assets/js/composer_files.js) sorts each file
+        into its upload by type and stamps `is-dragging` on this form while
+        files hover it, which is what turns the drop area below blue. A drop
+        into the prose editor is different on purpose: the editor swallows a
+        picture and inserts it inline at the drop point. --%>
         <.form
           for={to_form(%{}, as: :post)}
           id={"#{@id}-form"}
           phx-submit="save"
           phx-change="validate"
           phx-target={@myself}
-          phx-drop-target={@uploads.images.ref}
+          phx-hook="ComposerFiles"
+          data-video-uploads={to_string(@video_uploads? and @video == nil)}
+          data-file-uploads={to_string(@attachment_uploads?)}
           data-composer-dropzone
-          class="relative"
+          class="group/drop relative"
         >
-          <div
-            data-drop-overlay
-            class="pointer-events-none absolute -inset-2 z-10 items-center justify-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-50/90 dark:border-brand-400 dark:bg-brand-900/80"
-          >
-            <p class="flex items-center gap-2 text-base font-semibold text-brand-700 dark:text-brand-100">
-              <.camera_icon class="h-6 w-6" />
-              {gettext("Drop photos to add them")}
-            </p>
-          </div>
           <%!-- Header row, folded hosts only (/feed and the owner's profile):
           "Discard draft" (while there is something to lose) and the corner ✕
           that merely collapses the composer. While the restore notice above is
@@ -2188,7 +2156,7 @@ defmodule VutuvWeb.PostLive.Composer do
               phx-target={@myself}
               class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-red-400"
             >
-              {gettext("Discard draft")}
+              {gettext("Discard everything")}
             </button>
             <%!-- ONE button whose attributes change, not two swapping under an
             `:if`: this row sits above the editor, and a sibling appearing or
@@ -2200,18 +2168,53 @@ defmodule VutuvWeb.PostLive.Composer do
               type="button"
               phx-click={(drafting?(assigns) && "close-request") || "close-composer"}
               phx-target={drafting?(assigns) && @myself}
-              aria-label={gettext("Close")}
-              title={gettext("Close")}
+              aria-label={
+                if(drafting?(assigns),
+                  do: gettext("Close, the draft is kept"),
+                  else: gettext("Close")
+                )
+              }
+              title={
+                if(drafting?(assigns),
+                  do: gettext("Close, the draft is kept"),
+                  else: gettext("Close")
+                )
+              }
               class="-mr-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               ✕
             </button>
           </div>
 
-          <%!-- The editor is always on screen: a post is one kind, words
-          first, whether or not pictures join it below. --%>
-          <.body_editor id={@id} body={@body} post={@post} seed={@editor_seed} user={@current_user} />
+          <%!-- Step 2's own head: the way back and what this step is. The
+          wrapper always renders, so its child appearing does not relocate the
+          form below (the jumping-cursor lesson of #1130/#1143). --%>
+          <%!-- The two steps, named, from the moment a photo or a clip joins —
+          already on step 1, so nobody meets the second step by surprise. Both
+          are buttons: the member walks back and forth freely, and the one
+          they are on is marked. --%>
+          <div id={"#{@id}-step-head"}>
+            <.step_indicator
+              :if={@needs_details?}
+              id={@id}
+              details?={@details_step?}
+              details_title={details_title(@images, @video)}
+              myself={@myself}
+            />
+          </div>
 
+          <%!-- The editor, the tags and the language stay in the form in both
+          steps and are only hidden in step 2: the submit on that step still
+          carries them, and the editor keeps its prose and caret. --%>
+          <div class={@details_step? && "hidden"}>
+            <.body_editor id={@id} body={@body} post={@post} seed={@editor_seed} user={@current_user} />
+          </div>
+
+          <%!-- Step 2 (only with photos or a clip): everything that makes a
+          picture more than a file — the arrangement, the crop, the
+          descriptions, the licence, the clip's cover. Step 1 lists them as
+          plain rows like any other attachment. --%>
+          <div :if={@details_step?} id={"#{@id}-details"}>
           <%!-- **The photos ARE the gallery** (issue #1892). They used to be a
           plain grid with a small live preview of the arrangement further down,
           so the author tuned a mosaic by looking at a copy of it. Now the
@@ -2308,8 +2311,6 @@ defmodule VutuvWeb.PostLive.Composer do
           single photo. The chip names what is in force, so the arrangement is
           readable without opening it. --%>
           <div :if={@images != []} class="mt-2 flex flex-wrap items-center gap-2">
-            <.add_photos_picker id={@id} upload={@uploads.images} />
-
             <button
               type="button"
               id={"#{@id}-gallery-open"}
@@ -2331,86 +2332,74 @@ defmodule VutuvWeb.PostLive.Composer do
               {gettext("Drag one photo onto another to swap them.")}
             </p>
           </div>
-          <%!-- In-flight uploads --%>
-          <div :for={entry <- @uploads.images.entries} class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
-            <span class="truncate">{entry.client_name}</span>
-            <progress value={entry.progress} max="100" class="h-2 flex-1">{entry.progress}%</progress>
-            <button
-              type="button"
-              phx-click="cancel-upload"
-              phx-value-ref={entry.ref}
-              phx-target={@myself}
-              aria-label={gettext("Cancel upload")}
+
+          <%!-- The licence in plain sight on the photo step, not one sheet
+          deeper: it is the answer to who may reuse these pictures, and a
+          member publishing photos should see which one they are giving. --%>
+          <div :if={@images != []} class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <label for={"#{@id}-license"} class="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {gettext("Licence")}
+            </label>
+            <select
+              name="post[license]"
+              id={"#{@id}-license"}
+              title={gettext("Who may reuse these photos")}
+              class={compact_select_class()}
             >
-              ✕
-            </button>
-            <p :for={err <- upload_errors(@uploads.images, entry)} class="text-red-600">
-              {upload_error_message(err)}
-            </p>
+              <option
+                :for={license <- PhotoLicense.values()}
+                value={license}
+                selected={@license == license}
+              >
+                {PhotoLicense.label(license)}
+              </option>
+            </select>
           </div>
 
-          <%!-- The clip on its way up (issue #1907): a 500 MB file takes a
-          while over the socket, and the bar is the only thing saying so. --%>
-          <div
-            :for={entry <- @uploads.video.entries}
-            id={"#{@id}-video-upload"}
-            class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400"
-          >
-            <span class="truncate">🎬 {entry.client_name}</span>
-            <progress value={entry.progress} max="100" class="h-2 flex-1">{entry.progress}%</progress>
-            <button
-              type="button"
-              phx-click="cancel-video-upload"
-              phx-value-ref={entry.ref}
-              phx-target={@myself}
-              aria-label={gettext("Cancel upload")}
-            >
-              ✕
-            </button>
-            <p :for={err <- upload_errors(@uploads.video, entry)} class="text-red-600">
-              {upload_error_message(err, :video)}
-            </p>
+          <.video_block :if={@video} id={@id} video={@video} editing?={@post != nil} myself={@myself} />
           </div>
 
-          <%!-- The files on their way up, and the ones that landed (issue
-          #2104). The budget line stands with them rather than beside the
-          picker: it is the sentence that explains a refusal about to happen,
-          and it is only worth the row's height once somebody is actually
-          attaching something. --%>
-          <div
-            :for={entry <- @uploads.attachments.entries}
-            id={"#{@id}-attachment-#{entry.ref}"}
-            class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400"
-          >
-            <span class="truncate">📎 {entry.client_name}</span>
-            <progress value={entry.progress} max="100" class="h-2 flex-1">{entry.progress}%</progress>
-            <button
-              type="button"
-              phx-click="cancel-attachment-upload"
-              phx-value-ref={entry.ref}
-              phx-target={@myself}
-              aria-label={gettext("Cancel upload")}
-            >
-              ✕
-            </button>
-            <p :for={err <- upload_errors(@uploads.attachments, entry)} class="text-red-600">
-              {upload_error_message(err, :attachments)}
-            </p>
-          </div>
-
-          <.attachment_chips
-            :if={@attachments != []}
+          <%!-- Step 1: every attachment as the same row, whatever it is. --%>
+          <div class={@details_step? && "hidden"}>
+          <.media_rows
+            :if={not @details_step?}
             id={@id}
+            uploads={@uploads}
+            images={@images}
+            video={@video}
             attachments={@attachments}
             myself={@myself}
           />
-
+          <%!-- Only once a file is attached and only where there is a limit
+          to speak of: under an empty composer it was a sentence about
+          nothing, and "your uploads are not limited" told an admin nothing
+          they would act on. --%>
           <.attachment_budget_line
-            :if={@attachment_budget}
+            :if={@attachment_budget && @attachments != [] && !@attachment_budget.unlimited?}
             budget={@attachment_budget}
           />
 
-          <.video_block :if={@video} id={@id} video={@video} editing?={@post != nil} myself={@myself} />
+
+          <%!-- The one way in for a photo, a clip or a file. The three
+          uploads stay three (each has its own limits and pipeline); the
+          `ComposerFiles` hook on the form decides which one a file joins,
+          so the member never has to. --%>
+          <.media_drop
+            id={@id}
+            uploads={@uploads}
+            video?={@video_uploads? and @video == nil}
+            files?={@attachment_uploads?}
+          />
+          </div>
+
+          <%!-- The attached files as data, in both steps: form recovery
+          replays them after a reconnect (`adopt_recovered_attachments/2`). --%>
+          <input
+            :for={attachment <- @attachments}
+            type="hidden"
+            name="post[attachment_ids][]"
+            value={attachment.id}
+          />
 
           <.gallery_sheet
             :if={@gallery_open? and @images != []}
@@ -2433,18 +2422,21 @@ defmodule VutuvWeb.PostLive.Composer do
             myself={@myself}
           />
 
-          <%!-- Tags get their own full-width row. --%>
-          <.tag_input
-            id={"#{@id}-tags"}
-            name="post[tags]"
-            value={@tags_value}
-            placeholder={
-              gettext("Tags, separated by commas (max. %{max})", max: Posts.max_tags_per_post())
-            }
-            max={Posts.max_tags_per_post()}
-            field_class={input_class()}
-            class="mt-3"
-          />
+          <%!-- Tags get their own full-width row (step 1; kept in the form in
+          step 2 so the submit carries them). --%>
+          <div class={@details_step? && "hidden"}>
+            <.tag_input
+              id={"#{@id}-tags"}
+              name="post[tags]"
+              value={@tags_value}
+              placeholder={
+                gettext("Tags, separated by commas (max. %{max})", max: Posts.max_tags_per_post())
+              }
+              max={Posts.max_tags_per_post()}
+              field_class={input_class()}
+              class="mt-3"
+            />
+          </div>
 
           <%!-- The attached photos as data: form recovery replays these ids
           after a reconnect, and `adopt_recovered_images/2` re-adopts the
@@ -2475,19 +2467,6 @@ defmodule VutuvWeb.PostLive.Composer do
             data-composer-actions
             class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2"
           >
-            <.add_photos_picker :if={@images == []} id={@id} upload={@uploads.images} />
-            <.add_video_picker
-              :if={@video_uploads? and @video == nil}
-              id={@id}
-              upload={@uploads.video}
-              uploading?={@uploads.video.entries != []}
-            />
-            <.add_files_picker
-              :if={@attachment_uploads? and length(@attachments) < Attachments.max_per_post()}
-              id={@id}
-              upload={@uploads.attachments}
-            />
-
             <%!-- The author's declaration of what language this post is
             written in (issue #1489, Mastodon's model): preset to the UI
             locale, and a **code chip** — two letters wide, at every width.
@@ -2513,6 +2492,7 @@ defmodule VutuvWeb.PostLive.Composer do
             `<label>` carries it, and as the `title`, which is the same words
             for a pointer. Neither reaches a phone before the list is open, and
             that is the honest cost of the line this buys back. --%>
+            <span class={@details_step? && "hidden"}>
             <select
               name="post[language]"
               id={"#{@id}-language"}
@@ -2535,6 +2515,19 @@ defmodule VutuvWeb.PostLive.Composer do
                 </option>
               </optgroup>
             </select>
+            </span>
+
+            <%!-- Step 2's way back, beside the Post button where the thumb is. --%>
+            <button
+              :if={@details_step?}
+              type="button"
+              id={"#{@id}-back-bottom"}
+              phx-click="write-step"
+              phx-target={@myself}
+              class="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 px-4 text-[15px] font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              <span aria-hidden="true">‹</span> {gettext("Text & attachments")}
+            </button>
 
             <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
               <%!-- Stays in the row, deliberately: this is a STATEMENT, not a
@@ -2557,7 +2550,22 @@ defmodule VutuvWeb.PostLive.Composer do
                 🌐 {gettext("Public")}
               </span>
 
+              <%!-- Step 1 of a post with photos or a clip goes on to their
+              step rather than publishing: the arrangement and the
+              descriptions are asked for once, where they belong. --%>
               <.button
+                :if={@needs_details? and not @details_step?}
+                type="button"
+                id={"#{@id}-next"}
+                phx-click="details-step"
+                phx-target={@myself}
+                class="whitespace-nowrap px-6"
+              >
+                {gettext("Next: %{step}", step: details_title(@images, @video))} <span aria-hidden="true">›</span>
+              </.button>
+
+              <.button
+                :if={not @needs_details? or @details_step?}
                 type="submit"
                 class="whitespace-nowrap px-6"
                 disabled={@uploads.images.entries != [] or @uploads.video.entries != []}
@@ -2813,26 +2821,6 @@ defmodule VutuvWeb.PostLive.Composer do
   # here is a complete name for the control, so nothing has to be kept back for
   # a screen reader.
 
-  # The clip's picker, beside the photos' (issue #1907): one file, and only
-  # while there is none — a post carries at most one clip.
-  # The file input stays in the DOM while the clip is on its way up (the
-  # progress row above says so): LiveView drives the upload through that
-  # input, and removing it mid-flight cancels the upload. Only the label
-  # steps out of sight.
-  attr(:id, :string, required: true)
-  attr(:upload, :any, required: true)
-  attr(:uploading?, :boolean, default: false)
-
-  defp add_video_picker(assigns) do
-    ~H"""
-    <label id={"#{@id}-add-video"} class={[picker_label_class(), @uploading? && "sr-only"]}>
-      🎬 <span class="sm:hidden">{gettext("Video")}</span>
-      <span class="hidden sm:inline">{gettext("Add video")}</span>
-      <.live_file_input upload={@upload} class="sr-only" />
-    </label>
-    """
-  end
-
   # The clip in the composer (issues #1907, #1909, #1911): the tile with its
   # stage, the strip of stills to pick the cover from once the frames exist,
   # the alt text, and the way to take it out again. The stage line moves by
@@ -2932,74 +2920,310 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  # The two pickers side by side share one look, so they cannot drift apart.
-  defp picker_label_class,
-    do:
-      "inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-
-  # The files' picker, beside the photos' and the clip's (issue #2104). It
-  # steps out of sight once the post is carrying as many files as it may.
+  # Step 1's list: every attachment as the same row, whatever it is — a photo,
+  # the clip or a file, finished or still on its way up. A preview, the name,
+  # what it is and where it stands, and the ✕ that removes it or cancels its
+  # upload. What makes a photo more than a file waits for step 2, so the
+  # composer does not change shape the moment a picture joins.
   attr(:id, :string, required: true)
-  attr(:upload, :any, required: true)
-
-  defp add_files_picker(assigns) do
-    ~H"""
-    <label id={"#{@id}-add-files"} class={picker_label_class()}>
-      📎 <span class="sm:hidden">{gettext("Files")}</span>
-      <span class="hidden sm:inline">{gettext("Add files")}</span>
-      <.live_file_input upload={@upload} class="sr-only" />
-    </label>
-    """
-  end
-
-  # The files this post is carrying: a chip each with its name and size, and
-  # the way to take one out again. The hidden inputs are what a reconnect
-  # brings back (`adopt_recovered_attachments/2`) — the same trick the photos
-  # ride, and the reason a half-written post does not lose its files to a
-  # network blip.
-  attr(:id, :string, required: true)
+  attr(:uploads, :map, required: true)
+  attr(:images, :list, required: true)
+  attr(:video, :any, required: true)
   attr(:attachments, :list, required: true)
   attr(:myself, :any, required: true)
 
-  defp attachment_chips(assigns) do
+  defp media_rows(assigns) do
     ~H"""
-    <div id={"#{@id}-attachments"} class="mt-2 flex flex-wrap gap-2">
-      <input
+    <ul
+      :if={
+        @images != [] or @video != nil or @attachments != [] or @uploads.images.entries != [] or
+          @uploads.video.entries != [] or @uploads.attachments.entries != []
+      }
+      id={"#{@id}-media-rows"}
+      class="mt-3 space-y-2"
+    >
+      <.media_row
+        :for={image <- @images}
+        id={"#{@id}-row-image-#{image.id}"}
+        name={gettext("Photo")}
+        meta={photo_meta(image)}
+        remove_event="remove-image"
+        remove_value={image.id}
+        remove_label={gettext("Remove photo")}
+        myself={@myself}
+      >
+        <:thumb>
+          <img
+            src={PostImage.url(image, "thumb")}
+            alt=""
+            class="h-11 w-11 rounded-lg object-cover"
+          />
+        </:thumb>
+      </.media_row>
+
+      <.media_row
+        :if={@video}
+        id={"#{@id}-row-video"}
+        name={gettext("Video")}
+        meta={stage_text(@video)}
+        remove_event="remove-video"
+        remove_value=""
+        remove_label={gettext("Remove video")}
+        myself={@myself}
+      >
+        <:thumb><span class="text-lg" aria-hidden="true">▶</span></:thumb>
+      </.media_row>
+
+      <li
         :for={attachment <- @attachments}
-        type="hidden"
-        name="post[attachment_ids][]"
-        value={attachment.id}
-      />
-      <span
-        :for={attachment <- @attachments}
-        class="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 py-1 pl-3 pr-1 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200"
+        id={"#{@id}-attachments-#{attachment.id}"}
         data-attachment-chip={attachment.id}
         data-file-state={Pending.file_state(attachment)}
       >
-        <span class="truncate">📎 {attachment.file_name}</span>
-        <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
-          {file_size(attachment.size_bytes)}
-        </span>
-        <%!-- Where the server is with this file (issue #2106). The author is
-        about to press Post, so it says whether that will publish now or
-        park the text — "being prepared" is not decoration here. --%>
-        <span class={["shrink-0 text-xs", file_tone(Pending.file_state(attachment))]}>
-          {file_label(Pending.file_state(attachment))}
-        </span>
-        <button
-          type="button"
-          phx-click="remove-attachment"
-          phx-value-id={attachment.id}
-          phx-target={@myself}
-          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-          aria-label={gettext("Remove %{name}", name: attachment.file_name)}
+        <.media_row_body
+          name={attachment.file_name}
+          remove_event="remove-attachment"
+          remove_value={attachment.id}
+          remove_label={gettext("Remove %{name}", name: attachment.file_name)}
+          myself={@myself}
         >
-          ✕
-        </button>
+          <:thumb><span class="text-lg" aria-hidden="true">📎</span></:thumb>
+          <:meta>
+            {file_size(attachment.size_bytes)} ·
+            <%!-- Where the server is with this file (issue #2106): the author
+            is about to press Post, so it says whether that will publish now
+            or park the text. --%>
+            <span class={file_tone(Pending.file_state(attachment))}>
+              {file_label(Pending.file_state(attachment))}
+            </span>
+          </:meta>
+        </.media_row_body>
+      </li>
+
+      <.upload_row
+        :for={entry <- @uploads.images.entries}
+        id={"#{@id}-upload-#{entry.ref}"}
+        entry={entry}
+        cancel_event="cancel-upload"
+        errors={Enum.map(upload_errors(@uploads.images, entry), &upload_error_message/1)}
+        myself={@myself}
+      />
+      <.upload_row
+        :for={entry <- @uploads.video.entries}
+        id={"#{@id}-video-upload"}
+        entry={entry}
+        cancel_event="cancel-video-upload"
+        errors={Enum.map(upload_errors(@uploads.video, entry), &upload_error_message(&1, :video))}
+        myself={@myself}
+      />
+      <.upload_row
+        :for={entry <- @uploads.attachments.entries}
+        id={"#{@id}-attachment-#{entry.ref}"}
+        entry={entry}
+        cancel_event="cancel-attachment-upload"
+        errors={
+          Enum.map(upload_errors(@uploads.attachments, entry), &upload_error_message(&1, :attachments))
+        }
+        myself={@myself}
+      />
+    </ul>
+    <%!-- Kept for what already finds the files by this id. --%>
+    <span :if={@attachments != []} id={"#{@id}-attachments"} class="hidden"></span>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:name, :string, required: true)
+  attr(:meta, :string, required: true)
+  attr(:remove_event, :string, required: true)
+  attr(:remove_value, :string, required: true)
+  attr(:remove_label, :string, required: true)
+  attr(:myself, :any, required: true)
+  slot(:thumb, required: true)
+
+  defp media_row(assigns) do
+    ~H"""
+    <li id={@id}>
+      <.media_row_body
+        name={@name}
+        remove_event={@remove_event}
+        remove_value={@remove_value}
+        remove_label={@remove_label}
+        myself={@myself}
+      >
+        <:thumb>{render_slot(@thumb)}</:thumb>
+        <:meta>{@meta}</:meta>
+      </.media_row_body>
+    </li>
+    """
+  end
+
+  attr(:name, :string, required: true)
+  attr(:remove_event, :string, required: true)
+  attr(:remove_value, :string, required: true)
+  attr(:remove_label, :string, required: true)
+  attr(:myself, :any, required: true)
+  slot(:thumb, required: true)
+  slot(:meta, required: true)
+
+  defp media_row_body(assigns) do
+    ~H"""
+    <div class="flex items-center gap-3 rounded-[14px] border border-slate-200 py-1.5 pl-2.5 pr-1 dark:border-slate-700">
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
+        {render_slot(@thumb)}
       </span>
+      <span class="min-w-0 flex-1">
+        <span class="block truncate text-[15px] font-semibold text-slate-900 dark:text-slate-100">
+          {@name}
+        </span>
+        <span class="block text-[13px] text-slate-500 dark:text-slate-400">
+          {render_slot(@meta)}
+        </span>
+      </span>
+      <button
+        type="button"
+        phx-click={@remove_event}
+        phx-value-id={@remove_value}
+        phx-target={@myself}
+        aria-label={@remove_label}
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+      >
+        ✕
+      </button>
     </div>
     """
   end
+
+  # A file still on its way up: the same row with a bar under it and a ✕ that
+  # cancels the upload, so nothing in the composer is ever out of reach.
+  attr(:id, :string, required: true)
+  attr(:entry, :any, required: true)
+  attr(:cancel_event, :string, required: true)
+  attr(:errors, :list, required: true)
+  attr(:myself, :any, required: true)
+
+  defp upload_row(assigns) do
+    ~H"""
+    <li id={@id} class="relative overflow-hidden rounded-[14px]">
+      <div class="flex items-center gap-3 rounded-[14px] border border-slate-200 py-1.5 pl-2.5 pr-1 dark:border-slate-700">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-500 dark:bg-slate-800">
+          {@entry.progress}%
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-[15px] font-semibold text-slate-900 dark:text-slate-100">
+            {@entry.client_name}
+          </span>
+          <span class="block text-[13px] text-sky-700 dark:text-sky-300">
+            {gettext("Uploading")}
+          </span>
+          <span :for={error <- @errors} class="block text-[13px] text-red-600">{error}</span>
+        </span>
+        <button
+          type="button"
+          phx-click={@cancel_event}
+          phx-value-ref={@entry.ref}
+          phx-target={@myself}
+          aria-label={gettext("Cancel upload")}
+          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        >
+          ✕
+        </button>
+      </div>
+      <progress
+        value={@entry.progress}
+        max="100"
+        class="absolute inset-x-0 bottom-0 h-1 w-full appearance-none"
+      >
+        {@entry.progress}%
+      </progress>
+    </li>
+    """
+  end
+
+  defp photo_meta(%PostImage{size_bytes: size}) when is_integer(size),
+    do: file_size(size)
+
+  defp photo_meta(_image), do: ""
+
+  # The two steps as one bar of two buttons: the number, the name, the one the
+  # member is on filled in. Clicking either goes there, which is the whole
+  # promise of "you can go back and forth". `data-details-step` marks step 2
+  # being shown, for the tests and nothing else.
+  attr(:id, :string, required: true)
+  attr(:details?, :boolean, required: true)
+  attr(:details_title, :string, required: true)
+  attr(:myself, :any, required: true)
+
+  defp step_indicator(assigns) do
+    ~H"""
+    <nav
+      aria-label={gettext("Steps")}
+      class="mb-3 flex items-center gap-2"
+      data-step-indicator
+      data-details-step={@details?}
+    >
+      <.step_button
+        id={"#{@id}-step-write"}
+        number={1}
+        label={gettext("Text & attachments")}
+        current?={not @details?}
+        event="write-step"
+        myself={@myself}
+      />
+      <span aria-hidden="true" class="h-px min-w-4 flex-1 bg-slate-300 dark:bg-slate-600"></span>
+      <.step_button
+        id={"#{@id}-step-details"}
+        number={2}
+        label={@details_title}
+        current?={@details?}
+        event="details-step"
+        myself={@myself}
+      />
+    </nav>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:number, :integer, required: true)
+  attr(:label, :string, required: true)
+  attr(:current?, :boolean, required: true)
+  attr(:event, :string, required: true)
+  attr(:myself, :any, required: true)
+
+  defp step_button(assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={@id}
+      phx-click={@event}
+      phx-target={@myself}
+      aria-current={@current? && "step"}
+      class={[
+        "inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-1.5 pr-3 text-[15px]",
+        if(@current?,
+          do: "font-semibold text-slate-900 dark:text-slate-100",
+          else: "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+        )
+      ]}
+    >
+      <span class={[
+        "flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+        if(@current?,
+          do: "bg-brand-700 text-white",
+          else: "border border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
+        )
+      ]}>
+        {@number}
+      </span>
+      {@label}
+    </button>
+    """
+  end
+
+  # What step 2 is about, named by what it holds.
+  defp details_title(images, nil) when images != [], do: gettext("Photos")
+  defp details_title([], _video), do: gettext("Video")
+  defp details_title(_images, _video), do: gettext("Photos and video")
 
   # What is left of the member's allowance, before the next file flows. Both
   # numbers are formatted (`VutuvWeb.UI.file_size/1`, and a percent that is a
@@ -3028,16 +3252,117 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp percent_left(_window), do: 0
 
+  # The drop area under the text (the demo's variant E): one picker and one
+  # drop target for photos, clips and files, a dashed field that says what it
+  # takes. It keeps that shape once something is attached — the composer does
+  # not change under the member's hands — and turns blue while files hover the
+  # form (`is-dragging`, set by the `ComposerFiles` hook).
+  #
+  # The three live file inputs sit here hidden, one per upload: LiveView
+  # drives each upload through its own input and the hook hands every file to
+  # the right one, so they must always be in the DOM. Their wrappers keep the
+  # old picker ids, present exactly when that kind may be uploaded.
   attr(:id, :string, required: true)
-  attr(:upload, :any, required: true)
+  attr(:uploads, :map, required: true)
+  attr(:video?, :boolean, required: true)
+  attr(:files?, :boolean, required: true)
 
-  defp add_photos_picker(assigns) do
+  defp media_drop(assigns) do
+    assigns =
+      assigns
+      |> assign(:pick_id, "#{assigns.id}-pick")
+      |> assign(:hint, media_hint(assigns.video?, assigns.files?))
+      |> assign(:accept, media_accept(assigns.video?, assigns.files?))
+
     ~H"""
-    <label id={"#{@id}-add-photos"} class={picker_label_class()}>
-      📷 <span class="sm:hidden">{gettext("Photos")}</span>
-      <span class="hidden sm:inline">{gettext("Add photos")}</span>
-      <.live_file_input upload={@upload} class="sr-only" />
-    </label>
+    <div id={"#{@id}-drop"} data-drop-zone class="mt-3">
+      <div class="hidden">
+        <span id={"#{@id}-add-photos"}><.live_file_input upload={@uploads.images} /></span>
+        <span :if={@video?} id={"#{@id}-add-video"}>
+          <.live_file_input upload={@uploads.video} />
+        </span>
+        <span :if={@files?} id={"#{@id}-add-files"}>
+          <.live_file_input upload={@uploads.attachments} />
+        </span>
+      </div>
+      <input
+        type="file"
+        multiple
+        id={@pick_id}
+        accept={@accept}
+        data-composer-pick
+        class="sr-only"
+        tabindex="-1"
+      />
+      <label
+        for={@pick_id}
+        data-drop-full
+        class={[
+          "flex cursor-pointer flex-col items-center gap-1.5 rounded-[14px] border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-slate-700 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-200",
+          "group-[.is-dragging]/drop:border-sky-600 group-[.is-dragging]/drop:bg-sky-50 group-[.is-dragging]/drop:text-sky-700 dark:group-[.is-dragging]/drop:border-sky-400 dark:group-[.is-dragging]/drop:bg-sky-950 dark:group-[.is-dragging]/drop:text-sky-200"
+        ]}
+      >
+        <.upload_icon class="h-6 w-6" />
+        <span class="text-[15px] font-semibold">
+          <span class="group-[.is-dragging]/drop:hidden">
+            <span class="hidden sm:inline">{gettext("Drag files here")}</span>
+            <span class="sm:hidden">{gettext("Photos, videos or files")}</span>
+          </span>
+          <span class="hidden group-[.is-dragging]/drop:inline">{gettext("Drop to attach")}</span>
+        </span>
+        <span class="mt-0.5 inline-flex h-10 items-center rounded-[10px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 group-[.is-dragging]/drop:hidden dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+          {gettext("Choose a file")}
+        </span>
+        <span class="text-xs text-slate-500 dark:text-slate-400">{@hint}</span>
+      </label>
+    </div>
+    """
+  end
+
+  # What the field takes, in words: the kinds this member may attach here.
+  defp media_hint(video?, files?) do
+    [
+      gettext("Photos"),
+      video? && gettext("Videos"),
+      files? && Enum.member?(Attachments.extension_whitelist(), ".pdf") && "PDF",
+      files? && gettext("Text")
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(", ")
+  end
+
+  # The picker offers the union of the three uploads' extensions; each upload
+  # still refuses what is not its own.
+  defp media_accept(video?, files?) do
+    [
+      Vutuv.PostImageStore.extension_whitelist(),
+      if(video?, do: Videos.extension_whitelist(), else: []),
+      if(files?, do: Attachments.extension_whitelist(), else: [])
+    ]
+    |> List.flatten()
+    |> Enum.uniq()
+    |> Enum.join(",")
+  end
+
+  attr(:class, :string, default: "h-6 w-6")
+
+  defp upload_icon(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.8"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M7 9l5-5 5 5" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"
+      />
+    </svg>
     """
   end
 
@@ -3235,35 +3560,6 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  # The outline camera glyph (heroicons "camera") for the dropzone and the
-  # add-more tile — an SVG rather than the 📷 emoji so it takes the text
-  # colour and reads calm at any size.
-  attr(:class, :string, default: "h-6 w-6")
-
-  defp camera_icon(assigns) do
-    ~H"""
-    <svg
-      class={@class}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="1.5"
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-      />
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"
-      />
-    </svg>
-    """
-  end
-
   @doc """
   Everything that belongs to the SET of photos rather than to one of them
   (issue #1892): the arrangement, how the pictures sit in it, and the two
@@ -3409,22 +3705,6 @@ defmodule VutuvWeb.PostLive.Composer do
         "mt-4 space-y-2",
         @bento && "border-t border-slate-200 pt-3 dark:border-slate-700"
       ]}>
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <label for={"#{@id}-license"} class="text-sm font-medium text-slate-600 dark:text-slate-400">
-            {gettext("Licence")}
-          </label>
-          <select
-            name="post[license]"
-            id={"#{@id}-license"}
-            title={gettext("Who may reuse these photos")}
-            class={compact_select_class()}
-          >
-            <option :for={license <- PhotoLicense.values()} value={license} selected={@license == license}>
-              {PhotoLicense.label(license)}
-            </option>
-          </select>
-        </div>
-
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
           <label for={"#{@id}-download"} class="text-sm font-medium text-slate-600 dark:text-slate-400">
             {gettext("Download")}
@@ -3683,20 +3963,10 @@ defmodule VutuvWeb.PostLive.Composer do
         </div>
       </div>
 
-      <div class="mt-4 flex flex-wrap items-center gap-3">
+      <%!-- The shortcut that keeps a ten-photo set from being twenty taps.
+      Only shown when there is more than one photo to apply to. --%>
+      <div :if={@many?} class="mt-4 flex flex-wrap items-center gap-3">
         <button
-          type="button"
-          phx-click="insert-inline"
-          phx-value-id={@image.id}
-          phx-target={@myself}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-        >
-          ↳ {gettext("Insert into text")}
-        </button>
-        <%!-- The shortcut that keeps a ten-photo set from being twenty taps.
-        Only shown when there is more than one photo to apply to. --%>
-        <button
-          :if={@many?}
           type="button"
           phx-click="photo-apply-all"
           phx-value-id={@image.id}

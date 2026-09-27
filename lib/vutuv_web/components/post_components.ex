@@ -26,6 +26,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.PostFileComponents, only: [post_files: 1]
   import VutuvWeb.VideoComponents, only: [clock: 1, post_video: 1]
 
   alias Phoenix.LiveView.JS
@@ -304,6 +305,9 @@ defmodule VutuvWeb.PostComponents do
       # The clip (issue #1906): preloaded by `post_preloads/0`, absent on a
       # nested parent card's shorter chain — which then simply shows none.
       |> assign(:video, card_video(post))
+      # Its files (issue #2108), under the same rule: a chain that did not
+      # preload them shows none rather than tripping over `NotLoaded`.
+      |> assign(:files, card_files(post))
       # The authored inline placement owns the media layout: the float-a-photo
       # and screenshot-beside-the-text automatics stay off when the body embeds
       # pictures itself.
@@ -5115,6 +5119,16 @@ defmodule VutuvWeb.PostComponents do
             before that tap. --%>
             <.post_video :if={@video} video={@video} />
 
+            <%!-- Its files (issue #2108): the first pages as pictures and a
+            chip that hands the file over, in both modes. --%>
+            <.post_files
+              :if={@files != []}
+              files={@files}
+              id={@body_id}
+              permalink={@permalink}
+              report?={@viewer_id != nil and not @author?}
+            />
+
             <%!-- The book/film review card (the post's structured sidecar,
             Vutuv.Posts.PostReview): cover or kind glyph, title, creator, year
             and the shop/IMDb link. Rendered in both modes, outside the clamp,
@@ -6552,6 +6566,9 @@ defmodule VutuvWeb.PostComponents do
   # template would trip over.
   defp card_video(%Post{video: %PostVideo{} = video}), do: video
   defp card_video(_post), do: nil
+
+  defp card_files(%Post{attachments: files}) when is_list(files), do: files
+  defp card_files(_post), do: []
 
   # Whether to render the author's amber progress panel. It keys on the
   # post-level flag rather than on the individual pictures, so it cannot

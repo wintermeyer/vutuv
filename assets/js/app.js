@@ -72,6 +72,9 @@ import { AdCalendar } from "./ad_calendar"
 import { AdDraft } from "./ad_draft"
 // Hover preview of a reply on /notifications.
 import { InlineReply } from "./inline_reply"
+// The post composer's one picker and drop area, sorting each file into the
+// photo, clip or file upload (see composer_files.js).
+import { ComposerFiles } from "./composer_files"
 // The card behind a `@user@host` mention in a post: who that is, and a Follow
 // button, instead of leaving the site for their server (self-contained; its
 // panel lives on <body>, outside every LiveView root. See mention_card.js).
@@ -1290,6 +1293,7 @@ const TagComma = {
 }
 
 const Hooks = {
+  ComposerFiles,
   MarkdownEditor,
   TagInput,
   TagComma,

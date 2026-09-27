@@ -23,6 +23,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   """
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments
   alias Vutuv.Fediverse.Actor
   alias Vutuv.Mentions
   alias Vutuv.Organizations
@@ -60,7 +61,9 @@ defmodule VutuvWeb.Fediverse.Docs do
   ]
 
   @doc "The associations `note/2` needs loaded on a post."
-  def note_preloads, do: @note_preloads
+  # The files (issue #2111) are the ones a reader may be handed, which is a
+  # query of the context's and so cannot sit in the attribute.
+  def note_preloads, do: @note_preloads ++ [attachments: Attachments.shown_query()]
 
   # A topic's actor lives on the tag host, and its id is the slug itself
   # (issue #1330). It has to be **that** host: Mastodon confirms an account by
@@ -1180,7 +1183,7 @@ defmodule VutuvWeb.Fediverse.Docs do
         |> put_name(image.alt)
         |> put_size(width, height)
         |> put_license(post.license)
-      end) ++ video_attachments(post) ++ cover_attachments(post)
+      end) ++ video_attachments(post) ++ cover_attachments(post) ++ file_attachments(post)
 
     case attachments do
       [] -> note
@@ -1229,6 +1232,23 @@ defmodule VutuvWeb.Fediverse.Docs do
   end
 
   defp video_attachments(%Post{}), do: []
+
+  # A post's files (issue #2111), each at the one address that hands it out.
+  # Mastodon skips a media type it does not display rather than drawing an
+  # empty frame, so it costs its readers nothing; a server that shows files
+  # gets the name and the link.
+  defp file_attachments(%Post{attachments: files}) when is_list(files) do
+    Enum.map(files, fn file ->
+      %{
+        "type" => "Document",
+        "mediaType" => file.content_type,
+        "url" => base() <> Attachments.file_url(file),
+        "name" => file.file_name
+      }
+    end)
+  end
+
+  defp file_attachments(%Post{}), do: []
 
   defp put_name(attachment, alt) when is_binary(alt) and alt != "",
     do: Map.put(attachment, "name", alt)

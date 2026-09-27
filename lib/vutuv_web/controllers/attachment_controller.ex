@@ -1,7 +1,7 @@
 defmodule VutuvWeb.AttachmentController do
   @moduledoc """
-  The one address a file a **message** carries has (issue #2110): the file
-  itself, and the pictures of its first pages.
+  The one address a file has, under a message (issue #2110) or a post (issue
+  #2108): the file itself, and the pictures of its first pages.
 
   Neither tree gets a `Plug.Static` mount or an nginx location
   (`Vutuv.AttachmentStore`), so every byte comes through here and every request
@@ -13,18 +13,13 @@ defmodule VutuvWeb.AttachmentController do
   Denied and unknown are the same 404 (`VutuvWeb.ImageProxy.not_found/1`), so a
   token cannot be used to find out that a file exists.
 
-  A file under a **post** has no address here. #2108 owns what a post shows and
-  hands out, and a check that has not been written is not a check that passed —
-  `readable_by?/2` answers false for that half until it is.
+  A file under a **post** follows the post's audience, so an anonymous reader
+  fetches a public post's file here too. That is why the login check is
+  `readable_by?/2`'s rather than a plug: it answers false for an anonymous
+  reader everywhere else, with the same 404.
   """
 
   use VutuvWeb, :controller
-
-  # `RequireLoginOr404` rather than the redirecting `RequireLogin`: this module
-  # answers a denied token with the same 404 an unknown one gets, and a preview
-  # page is fetched by an `<img src>`, where a redirect to the landing page
-  # would queue a flash per picture on an expired session.
-  plug(VutuvWeb.Plug.RequireLoginOr404)
 
   alias Vutuv.Attachments
   alias Vutuv.Attachments.Attachment
@@ -70,20 +65,31 @@ defmodule VutuvWeb.AttachmentController do
          {index, ""} when index >= 0 <- Integer.parse(position),
          path when is_binary(path) <-
            AttachmentStore.page_version_path(attachment.token, index, version) do
-      conn
-      # `no-store` like the file, and this was **measured** rather than assumed
-      # (2026-09-11): a `private, max-age=30` here — meant to save a thread of
-      # pictures from re-fetching every thumbnail — served a stranger's browser
-      # a 200 for a picture they had no right to, because `private` means "one
-      # user's cache" and a browser profile does not know the session changed.
-      # A shared computer is exactly where that lands. The re-fetch is the
-      # price of a picture whose permission can be revoked.
-      |> ImageProxy.put_no_store()
-      |> put_resp_content_type(MIME.from_path(path), nil)
-      |> send_file(200, path)
+      send_page(conn, attachment, path)
     else
       _denied_or_missing -> ImageProxy.not_found(conn)
     end
+  end
+
+  # A post's page is a size of a picture a feed renders, so it takes the photo
+  # proxy's five-minute tier: a scroll past the same card costs no request, and
+  # narrowing the post still reaches a browser that holds it within five
+  # minutes (`VutuvWeb.ImageProxy`, issue #2170).
+  defp send_page(conn, %Attachment{post_id: id}, path) when is_binary(id),
+    do: ImageProxy.send_version(conn, path)
+
+  defp send_page(conn, _message_file, path) do
+    conn
+    # `no-store` like the file, and this was **measured** rather than assumed
+    # (2026-09-11): a `private, max-age=30` here — meant to save a thread of
+    # pictures from re-fetching every thumbnail — served a stranger's browser
+    # a 200 for a picture they had no right to, because `private` means "one
+    # user's cache" and a browser profile does not know the session changed.
+    # A shared computer is exactly where that lands. The re-fetch is the
+    # price of a picture whose permission can be revoked.
+    |> ImageProxy.put_no_store()
+    |> put_resp_content_type(MIME.from_path(path), nil)
+    |> send_file(200, path)
   end
 
   # The whole authorization, in one place for both actions: the row, then the

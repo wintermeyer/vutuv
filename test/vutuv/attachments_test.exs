@@ -39,7 +39,13 @@ defmodule Vutuv.AttachmentsTest do
   defp upload(user, path), do: Attachments.create_pending(user, path, Path.basename(path))
 
   describe "who may upload" do
+    test "a plain member may upload by default", %{files: files} do
+      member = insert_activated_user()
+      assert {:ok, %Attachment{}} = upload(member, Fixtures.plain_pdf(files))
+    end
+
     test "a plain member is refused while uploads are for admins", %{files: files} do
+      Fixtures.put_config(uploaders: :admins)
       member = insert_activated_user()
       assert {:error, :disabled} = upload(member, Fixtures.plain_pdf(files))
     end

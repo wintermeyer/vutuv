@@ -53,30 +53,20 @@ defmodule Vutuv.PostsTest do
       assert %{body: ["can't be blank"]} = errors_on(changeset)
     end
 
-    test "accepts a body that embeds an own-upload image reference" do
-      body = "hi ![x](/post_images/t/large.avif)"
-      assert {:ok, post} = Posts.create_post(user(), %{body: body})
-      assert post.body == body
-    end
+    # No picture goes into a post's text any more, not even an own upload
+    # (Vutuv.Posts.NoInlineImagesTest has the edit half).
+    for body <- [
+          "hi ![x](/post_images/t/large.avif)",
+          "hi ![x](/post_images/t/feed.avif#left)",
+          "hi ![x](https://evil.example/pixel.png)",
+          "hi ![x](/post_images/t/feed.avif#sparkle)"
+        ] do
+      test "rejects a body embedding #{body}" do
+        assert {:error, %Ecto.Changeset{} = changeset} =
+                 Posts.create_post(user(), %{body: unquote(body)})
 
-    test "accepts an alignment fragment on an inline image reference" do
-      body = "hi ![x](/post_images/t/feed.avif#left)"
-      assert {:ok, post} = Posts.create_post(user(), %{body: body})
-      assert post.body == body
-    end
-
-    test "rejects a body that embeds a remote (hotlinked) image" do
-      assert {:error, %Ecto.Changeset{} = changeset} =
-               Posts.create_post(user(), %{body: "hi ![x](https://evil.example/pixel.png)"})
-
-      assert "may only embed images uploaded to this post" in errors_on(changeset).body
-    end
-
-    test "rejects an inline reference with an unknown alignment fragment" do
-      assert {:error, %Ecto.Changeset{} = changeset} =
-               Posts.create_post(user(), %{body: "hi ![x](/post_images/t/feed.avif#sparkle)"})
-
-      assert "may only embed images uploaded to this post" in errors_on(changeset).body
+        assert "must not contain images" in errors_on(changeset).body
+      end
     end
 
     test "allows remote image Markdown shown inside a code sample" do

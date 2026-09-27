@@ -141,7 +141,7 @@ defmodule VutuvWeb.PendingPostComponents do
   # German for the clip one says "Video".
   defp waiting_headline(:refused, _files), do: gettext("This post is still waiting for you")
 
-  # A stalled row must not promise "as soon as its files are ready": nothing is
+  # A stalled row must not promise "preview images are being created and checked": nothing is
   # working on them, and that promise is the whole complaint in issue #2149.
   defp waiting_headline(:stalled, _files),
     do: gettext("This post is waiting for a check that cannot run")
@@ -150,7 +150,7 @@ defmodule VutuvWeb.PendingPostComponents do
     do: gettext("Your post appears as soon as the video is ready")
 
   defp waiting_headline(_working, _files),
-    do: gettext("Your post appears as soon as its files are ready")
+    do: gettext("Preview images are being created and checked.")
 
   ## The waiting card
 

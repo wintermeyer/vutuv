@@ -105,7 +105,17 @@ defmodule VutuvWeb.PhotoComposerTest do
       ])
 
     render_upload(input, name)
+    to_photo_step(live)
     newest_pending(user)
+  end
+
+  # The mosaic, the tiles and every photo control live in the composer's
+  # second step; step 1 lists a photo as a plain row like any other file.
+  defp to_photo_step(live) do
+    if has_element?(live, "#composer-next"),
+      do: live |> element("#composer-next") |> render_click()
+
+    live
   end
 
   defp newest_pending(user) do
@@ -218,7 +228,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       # The two rights questions are about photos; without one they would be
       # controls about nothing.
       refute has_element?(live, "[data-gallery-open]")
-      refute has_element?(live, "#composer-gallery-license")
+      refute has_element?(live, "#composer-license")
       refute has_element?(live, "#composer-gallery-download")
     end
   end
@@ -246,18 +256,20 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, "#composer-add-photos")
     end
 
-    test "the picker carries a short label for the phone beside the long one", %{conn: conn} do
-      # Three controls share the bottom row (picker, ⋯, Post) and on a narrow
-      # screen "Add photos" pushed the last one onto a line of its own. The
-      # verb is what goes: beside a camera glyph, in a row whose other button
-      # publishes, the noun is unambiguous. Which of the two shows is CSS
-      # (Tailwind's `sm:` breakpoint) and not assertable here — this only
-      # guards that the short one is still rendered to swap in.
+    test "one drop area takes photos, clips and files, with a phone wording", %{conn: conn} do
+      # One picker for everything (the demo's variant E): the member picks or
+      # drops whatever they have, and the `ComposerFiles` hook sorts it into
+      # the right upload. "Drag files here" means nothing on a phone, so a
+      # second wording swaps in under Tailwind's `sm:` breakpoint — CSS, not
+      # assertable here; this guards that both are rendered.
       live = open_composer(conn)
-      picker = element(live, "#composer-add-photos") |> render()
+      zone = element(live, "#composer-drop") |> render()
 
-      assert picker =~ ">Photos<"
-      assert picker =~ ">Add photos<"
+      assert zone =~ "Drag files here"
+      assert zone =~ "Photos, videos or files"
+      assert zone =~ "Choose a file"
+      assert has_element?(live, "#composer-drop input[type=file][data-composer-pick][multiple]")
+      assert has_element?(live, "#composer-drop [data-drop-full]")
     end
 
     test "a photo grows into the grid: natural ratio, feed version, caption inline", %{
@@ -287,9 +299,11 @@ defmodule VutuvWeb.PhotoComposerTest do
       # Adding more photos sits in the row under the pictures, not as a tile
       # among them: the mosaic's cells are the arrangement, and a "+" occupying
       # one of them would be a seat the gallery does not have (issue #1892).
-      # The id is unchanged, so the feed's camera button still finds its target.
+      # The drop area keeps its full shape once something is attached: the
+      # composer does not change under the member's hands.
       refute has_element?(live, "[data-photo-add-tile]")
-      assert has_element?(live, "#composer-add-photos")
+      assert has_element?(live, "#composer-drop [data-drop-full]")
+      refute has_element?(live, "[data-drop-more]")
     end
 
     test "the alt text lives in the panel, and no second caption field appears", %{
@@ -484,6 +498,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, "[data-draft-discarded]")
       live |> element("[data-undo-discard]") |> render_click()
 
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
       refute has_element?(live, "[data-draft-discarded]")
 
@@ -527,6 +542,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
 
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
       assert has_element?(live, "#composer-gallery-open")
       assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
@@ -762,6 +778,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       |> element("#composer-form")
       |> render_change(%{"post" => %{"image_ids" => [image.id]}})
 
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
     end
 
@@ -824,16 +841,15 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       upload_photo!(live, user)
 
-      # The row is there, its answers are named on the fold, but the selects
-      # stay away until the author opens it.
+      # The licence is in plain sight on the photo step; the download answer
+      # stays in the sheet until the author opens it.
       assert has_element?(live, "#composer-gallery-open")
-      assert render(live) =~ "All rights reserved"
+      assert has_element?(live, ~s(#composer-license option[value="arr"][selected]))
       refute has_element?(live, "#composer-gallery-license")
       refute has_element?(live, "#composer-gallery-download")
 
       open_details(live)
 
-      assert has_element?(live, "#composer-gallery-license")
       assert has_element?(live, "#composer-gallery-download")
     end
 
@@ -884,8 +900,10 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
 
+      to_photo_step(live)
       assert has_element?(live, "#composer-gallery-open")
-      refute has_element?(live, "#composer-gallery-license")
+      # The visible licence shows the stored answer, so saving keeps it.
+      assert has_element?(live, ~s(#composer-license option[value="cc-by-sa-4.0"][selected]))
 
       live |> form("#composer-form", %{"post" => %{"body" => "Andere Worte."}}) |> render_submit()
 
@@ -1166,6 +1184,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       # was showing is still in force underneath.
       refute has_element?(reopened, "[data-gallery-sheet]")
 
+      to_photo_step(reopened)
       reopened |> element("[data-gallery-open]") |> render_click()
       assert has_element?(reopened, ~s([data-bento-fit="fill"][aria-pressed="true"]))
       assert has_element?(reopened, ~s([data-bento-pattern="stack"][aria-pressed="true"]))
@@ -1282,6 +1301,104 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
   end
 
+  describe "two steps: attach, then the photos" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{live: open_composer(conn), user: user}
+    end
+
+    # Uploaded without leaving step 1, the way a member sees it.
+    defp upload_photo_in_step_one!(live, user) do
+      content = jpeg([])
+      name = "photo-#{System.unique_integer([:positive])}.jpg"
+
+      live
+      |> file_input("#composer-form", :images, [
+        %{name: name, content: content, type: "image/jpeg", size: byte_size(content)}
+      ])
+      |> render_upload(name)
+
+      newest_pending(user)
+    end
+
+    test "a photo is a row in step 1, like any file, and the button goes on", %{
+      live: live,
+      user: user
+    } do
+      image = upload_photo_in_step_one!(live, user)
+
+      assert has_element?(live, "#composer-row-image-#{image.id}")
+      refute has_element?(live, "[data-photo-tile]")
+      assert has_element?(live, "#composer-next")
+      refute has_element?(live, "#composer-form button[type=submit]")
+    end
+
+    test "Next opens the photo step with the text kept in the form, and Back returns", %{
+      live: live,
+      user: user
+    } do
+      image = upload_photo_in_step_one!(live, user)
+      live |> element("#composer-next") |> render_click()
+
+      assert has_element?(live, "[data-details-step]")
+      assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
+      refute has_element?(live, "#composer-row-image-#{image.id}")
+      # Still in the form, only hidden, so Post in step 2 carries them.
+      assert has_element?(live, ~s(#composer-form [name="post[tags]"]))
+      assert has_element?(live, ~s(#composer-form [name="post[language]"]))
+      assert has_element?(live, "#composer-form button[type=submit]")
+
+      live |> element("#composer-back-bottom") |> render_click()
+      refute has_element?(live, "[data-details-step]")
+      assert has_element?(live, "#composer-row-image-#{image.id}")
+    end
+
+    test "removing the last photo in step 2 lands back on step 1", %{live: live, user: user} do
+      image = upload_photo_in_step_one!(live, user)
+      live |> element("#composer-next") |> render_click()
+
+      live
+      |> element(~s([data-photo-tile="#{image.id}"] button[phx-click="remove-image"]))
+      |> render_click()
+
+      refute has_element?(live, "[data-details-step]")
+      refute has_element?(live, "#composer-next")
+      assert has_element?(live, "#composer-form button[type=submit]")
+    end
+
+    test "the German step names itself", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+      live = open_composer(conn)
+      upload_photo_in_step_one!(live, user)
+
+      # The steps are named on step 1 already, so step 2 is no surprise.
+      html = render(live)
+      assert html =~ "Text &amp; Anhänge"
+      assert html =~ "Weiter: Fotos"
+      assert html =~ "Alles verwerfen"
+      assert html =~ "Schließen, der Entwurf bleibt erhalten"
+
+      live |> element("#composer-next") |> render_click()
+      assert has_element?(live, ~s(#composer-step-details[aria-current="step"]))
+    end
+
+    test "the step bar walks both ways", %{live: live, user: user} do
+      upload_photo_in_step_one!(live, user)
+      assert has_element?(live, ~s(#composer-step-write[aria-current="step"]))
+
+      live |> element("#composer-step-details") |> render_click()
+      assert has_element?(live, "[data-details-step]")
+
+      live |> element("#composer-step-write") |> render_click()
+      refute has_element?(live, "[data-details-step]")
+    end
+
+    test "a post without photos shows no steps at all", %{live: live} do
+      refute has_element?(live, "[data-step-indicator]")
+    end
+  end
+
   describe "drop anywhere" do
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -1289,16 +1406,26 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
 
     test "the whole form is the drop zone, from the first drag on", %{live: live} do
-      # The zone and its overlay exist before any photo is attached.
-      assert has_element?(live, "#composer-form[data-composer-dropzone][phx-drop-target]")
-      assert has_element?(live, "#composer-form [data-drop-overlay]")
+      # The hook that sorts a drop into its upload sits on the form itself, so
+      # a file lands wherever over the composer it is let go.
+      assert has_element?(
+               live,
+               ~s(#composer-form[data-composer-dropzone][phx-hook="ComposerFiles"])
+             )
+
+      assert has_element?(live, "#composer-form #composer-drop [data-drop-full]")
     end
 
-    test "the photo grid carries no drop target of its own", %{live: live, user: user} do
+    test "no upload keeps LiveView's own drop target", %{live: live, user: user} do
       upload_photo!(live, user)
 
-      # A nested second zone would steal the active state from the overlay.
-      refute has_element?(live, "#composer-images[phx-drop-target]")
+      # A `phx-drop-target` would hand a drop to one upload whatever it is,
+      # past the hook that sorts it.
+      refute has_element?(live, "[phx-drop-target]")
+    end
+
+    test "the three uploads each keep their own input, hidden", %{live: live} do
+      assert has_element?(live, "#composer-add-photos input[type=file][name=images]")
     end
   end
 
@@ -1337,6 +1464,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       third = by_width[70]
 
       assert hidden_image_ids(live) == [hero.id, second.id, third.id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{hero.id}"] [data-cover-badge]))
       refute has_element?(live, ~s([data-photo-tile="#{third.id}"] [data-cover-badge]))
 
@@ -1364,6 +1492,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       by_width = pending_by_width(user)
 
       assert hidden_image_ids(live) == [by_width[90].id, by_width[80].id, by_width[70].id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{by_width[90].id}"] [data-cover-badge]))
     end
 
@@ -1415,6 +1544,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       later = pending_by_width(user)[60]
       assert hidden_image_ids(live) == [kept.id, also.id, later.id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{kept.id}"] [data-cover-badge]))
     end
   end
@@ -1613,6 +1743,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       live |> element("[data-undo-discard]") |> render_click()
       assert hidden_image_ids(live) == [hero.id, second.id]
+      to_photo_step(live)
       assert has_element?(live, ~s([data-photo-tile="#{hero.id}"] [data-cover-badge]))
 
       live |> form("#composer-form", %{"post" => %{"body" => "Kept."}}) |> render_submit()
@@ -1648,6 +1779,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       {:ok, reloaded, _html} = live(recycle(conn), ~p"/feed")
 
       assert hidden_image_ids(reloaded) == [by_width[90].id, by_width[80].id, by_width[70].id]
+      to_photo_step(reloaded)
       assert has_element?(reloaded, ~s([data-photo-tile="#{by_width[90].id}"] [data-cover-badge]))
     end
   end
@@ -1671,7 +1803,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert html =~ "Galerie"
       assert html =~ "Ein Foto auf ein anderes ziehen, um sie zu tauschen."
       assert html =~ "Foto zuschneiden"
-      assert html =~ "Fotos hier ablegen, um sie hinzuzufügen"
+      assert html =~ "Datei auswählen"
 
       # …and what the sheet says once it is.
       html = open_details(live)

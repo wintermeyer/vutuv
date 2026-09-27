@@ -23,21 +23,6 @@ defmodule Vutuv.MarkdownContent do
   @own_upload_src ~r{\A/post_images/[A-Za-z0-9_-]+/(thumb|feed|large)\.(avif|webp)(\?v=[A-Za-z0-9_-]+)?(#(left|right|center))?\z}
 
   @doc """
-  The Markdown for an embedded image, in the one shape `@image_markdown` above
-  can read back.
-
-  Lives here rather than at the call site because that regex is the definition
-  of "an image reference" for every stored body, and it takes no `]` inside the
-  label at all — escaped or not. So an alt text is stripped of brackets rather
-  than escaped: `![a\]b](…)` is invisible to `validate_own_images_only/2`
-  while Earmark renders it happily, which is a body whose pictures nothing
-  checked.
-  """
-  def image_markdown(url, alt) do
-    "![#{String.replace(alt || "", ["[", "]"], "")}](#{url})"
-  end
-
-  @doc """
   Reject a body that embeds an image. Code samples are exempt: `![](x)` inside a
   fenced or inline code span renders as literal text, not an image (the same
   distinction `VutuvWeb.Markdown` makes at render time), so it stays allowed.
@@ -46,7 +31,7 @@ defmodule Vutuv.MarkdownContent do
   this stops the Markdown from ever being **stored**, that stops any already
   stored `![](…)` from ever **displaying**. Message, organization and job
   posting bodies stay image-free; post bodies use
-  `validate_own_images_only/2` instead.
+  `validate_no_new_images/2` instead.
   """
   def validate_no_images(changeset, field \\ :body) do
     body = get_field(changeset, field) || ""
@@ -59,28 +44,34 @@ defmodule Vutuv.MarkdownContent do
   end
 
   @doc """
-  Allow only inline images that reference an **uploaded post image** (the
-  `/post_images/<token>/<version>` proxy URL scheme, plus an optional
-  alignment fragment). A hotlinked remote image is rejected — it would leak
-  every reader's IP to a third party — and so is any other src form. Code
-  samples stay exempt, like in `validate_no_images/2`.
+  A post body takes no new picture: a photo is an attachment, and the editor
+  refuses a dropped or pasted file. What stays allowed is a reference the
+  **stored** body already carries — a post written before this rule keeps its
+  inline pictures through an edit — and only in the own-upload form
+  (`/post_images/<token>/<version>`), never a hotlink that would leak every
+  reader's IP. Code samples stay exempt, like in `validate_no_images/2`.
   """
-  def validate_own_images_only(changeset, field \\ :body) do
-    body = get_field(changeset, field) || ""
+  def validate_no_new_images(changeset, field \\ :body) do
+    stored = changeset.data |> Map.get(field) |> image_srcs() |> MapSet.new()
 
-    foreign? =
-      @image_markdown
-      |> Regex.scan(strip_code(body))
-      |> Enum.any?(fn [markdown] ->
-        src = image_src(markdown)
-        not Regex.match?(@own_upload_src, src)
-      end)
+    added? =
+      (get_field(changeset, field) || "")
+      |> image_srcs()
+      |> Enum.any?(&(not MapSet.member?(stored, &1) or not Regex.match?(@own_upload_src, &1)))
 
-    if foreign? do
-      add_error(changeset, field, "may only embed images uploaded to this post")
+    if added? do
+      add_error(changeset, field, "must not contain images")
     else
       changeset
     end
+  end
+
+  defp image_srcs(nil), do: []
+
+  defp image_srcs(body) do
+    @image_markdown
+    |> Regex.scan(strip_code(body))
+    |> Enum.map(fn [markdown] -> image_src(markdown) end)
   end
 
   defp image_src(markdown) do

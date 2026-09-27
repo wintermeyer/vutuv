@@ -54,7 +54,9 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Images
   alias Vutuv.Images.Image
   alias Vutuv.MediaJobs
+  alias Vutuv.Posts
   alias Vutuv.Posts.Pending
+  alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Uploads.PdfGate
   alias Vutuv.Uploads.Spec
@@ -369,8 +371,12 @@ defmodule Vutuv.Attachments do
       stayed readable would leave exactly the unsolicited file from a stranger
       the whole rule exists to keep out. Nothing is deleted, so connecting
       again brings it back.
-    * a file under a **post** has no address yet (#2108 gives it one), and a
-      check that cannot be made is a check that failed;
+    * a file under a **post** follows the post's audience
+      (`Vutuv.Posts.visible_to?/2`, issue #2108), the way `/post_images`
+      guards its photos, so an anonymous reader fetches a public post's file
+      and narrowing the post shuts every URL already handed out. A post only
+      ever claims a file once it is done, and a refused one never, so the
+      pipeline is not asked again;
     * a file with **neither** parent is the composer's own — its uploader sees
       it in the strip they are about to send it from, and nobody else.
   """
@@ -382,8 +388,16 @@ defmodule Vutuv.Attachments do
       read_reason(attachment, viewer, Pending.file_state(attachment)) == :ok
   end
 
-  def readable_by?(%Attachment{post_id: id}, _viewer) when is_binary(id), do: false
   def readable_by?(%Attachment{frozen_at: %NaiveDateTime{}}, _viewer), do: false
+
+  def readable_by?(%Attachment{post_id: id, refused_at: nil}, viewer) when is_binary(id) do
+    case Repo.get(Post, id) do
+      %Post{} = post -> Posts.visible_to?(post, viewer)
+      nil -> false
+    end
+  end
+
+  def readable_by?(%Attachment{post_id: id}, _viewer) when is_binary(id), do: false
   def readable_by?(%Attachment{user_id: id}, %User{id: id}), do: true
   def readable_by?(%Attachment{}, _viewer), do: false
 
@@ -438,6 +452,14 @@ defmodule Vutuv.Attachments do
     do: Repo.one(from(a in Attachment, where: a.token == ^token))
 
   def get_by_token(_token), do: nil
+
+  @doc """
+  The files of a post a reader may be shown (issue #2108), as the query a post
+  preload takes: a file a case holds is frozen out of the card as it is out of
+  the proxy, and a refused one never hangs off a post in the first place.
+  """
+  def shown_query,
+    do: from(a in Attachment, where: is_nil(a.frozen_at) and is_nil(a.refused_at))
 
   @doc """
   Where this file is handed out — **the one function that owns the address**,

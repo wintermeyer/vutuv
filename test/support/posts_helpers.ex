@@ -23,6 +23,20 @@ defmodule Vutuv.PostsHelpers do
   end
 
   @doc """
+  A post as one written before pictures left the text: created through the
+  context, then given a `body` that references its own photos inline — which
+  `Vutuv.MarkdownContent.validate_no_new_images/2` no longer lets a new post
+  store, but which older posts still carry and the renderers still draw.
+  Hands back the post preloaded like `Posts.get_post/1`.
+  """
+  def create_legacy_post!(author, attrs) do
+    body = Map.fetch!(attrs, :body)
+    post = create_post!(author, Map.put(attrs, :body, "Vorher"))
+    Repo.update_all(from(p in Post, where: p.id == ^post.id), set: [body: body])
+    Posts.get_post(post.id)
+  end
+
+  @doc """
   Moves `post` `seconds` into the past and hands back the updated struct.
 
   Every timestamp the feed compares has **second** precision, so a test whose

@@ -12,6 +12,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
@@ -125,6 +126,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # The clip (issue #1906): the file every player decodes, its cover and
       # its length — nil for the many posts without one.
       video: video_entry(post),
+      # Its files (issue #2108), the ones the card shows, each at the address
+      # the proxy hands it out at.
+      files: file_entries(post),
       # The licence the photos are published under (issue #1104), as both the
       # human label and the SPDX identifier — a machine deciding whether it may
       # reuse a picture should not have to parse a translated sentence.
@@ -230,6 +234,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # The clip (issue #1906): the file every player decodes, its cover and
       # its length — nil for the many posts without one.
       video: video_entry(post),
+      # Its files (issue #2108), the ones the card shows, each at the address
+      # the proxy hands it out at.
+      files: file_entries(post),
       license: license_entry(post),
       # Counted off the two loaded lists rather than re-queried, the same way
       # `build/3` does it, so the figure and the entries under it cannot drift.
@@ -658,6 +665,20 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   end
 
   defp video_entry(_post), do: nil
+
+  defp file_entries(%Post{attachments: files}) when is_list(files) do
+    Enum.map(files, fn file ->
+      %{
+        name: file.file_name,
+        content_type: file.content_type,
+        size_bytes: file.size_bytes,
+        pages: file.page_count,
+        url: absolutize(Attachments.file_url(file))
+      }
+    end)
+  end
+
+  defp file_entries(_post), do: []
 
   defp image_entry(%PostImage{} = image) do
     %{

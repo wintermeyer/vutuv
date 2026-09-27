@@ -989,8 +989,11 @@ if config_env() == :prod do
                value -> value != "false"
              end,
            uploaders:
-             (System.get_env("ATTACHMENT_UPLOADERS") == "members" && :members) ||
-               attachment_defaults[:uploaders],
+             case System.get_env("ATTACHMENT_UPLOADERS") do
+               "members" -> :members
+               "admins" -> :admins
+               _unset -> attachment_defaults[:uploaders]
+             end,
            max_filesize: env_mb.("ATTACHMENT_MAX_MB") || attachment_defaults[:max_filesize],
            max_per_post: env_int.("ATTACHMENTS_PER_POST") || attachment_defaults[:max_per_post],
            daily_budget: env_mb.("ATTACHMENT_DAILY_MB") || attachment_defaults[:daily_budget],

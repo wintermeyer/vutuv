@@ -869,9 +869,9 @@ config :vutuv, :press_kit, max_filesize: 30_000_000, max_photos: 10, max_logos: 
 
 # Files on posts and messages (issue #2104, Vutuv.Attachments). `enabled` is
 # the product switch an installation that wants no files turns off
-# (ATTACHMENT_UPLOADS); `uploaders` is :admins while the milestone is being
-# built and :members once a post can actually carry a file, exactly as video
-# was introduced.
+# (ATTACHMENT_UPLOADS); `uploaders` is :members since a post shows and hands
+# out its files (issue #2108), and :admins keeps the picker to admins on an
+# installation that wants to try files first (ATTACHMENT_UPLOADERS).
 #
 # 20 MB is a scanned twenty-page contract or a deck with pictures, and small
 # enough that five of them still fit one composer session over a phone
@@ -890,7 +890,7 @@ config :vutuv, :press_kit, max_filesize: 30_000_000, max_photos: 10, max_logos: 
 # neither is on the box the file simply has no preview.
 config :vutuv, :attachments,
   enabled: true,
-  uploaders: :admins,
+  uploaders: :members,
   max_filesize: 20_000_000,
   max_per_post: 5,
   daily_budget: 100_000_000,

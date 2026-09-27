@@ -900,6 +900,17 @@ defmodule Vutuv.Accounts do
     video_tokens =
       Repo.all(from(v in Vutuv.Posts.PostVideo, where: v.user_id == ^user.id, select: v.token))
 
+    # The user's files, on posts, in messages and still in the composer
+    # (issue #2111): the rows and their preview-page rows cascade, the two
+    # copies on disk and any takedown hold do not.
+    attachment_files =
+      Repo.all(
+        from(a in Vutuv.Attachments.Attachment,
+          where: a.user_id == ^user.id,
+          select: {a.id, a.token}
+        )
+      )
+
     # The user's job-posting images (issue #932): the rows cascade with the
     # postings/account, but their on-disk files would be orphaned otherwise.
     job_image_tokens = Vutuv.Jobs.image_tokens_for_user(user.id)
@@ -1015,6 +1026,12 @@ defmodule Vutuv.Accounts do
 
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
     Enum.each(video_tokens, &Vutuv.PostVideoStore.delete/1)
+
+    Enum.each(attachment_files, fn {id, token} ->
+      Vutuv.AttachmentStore.delete(token)
+      Vutuv.AttachmentStore.purge_hold(id)
+    end)
+
     Enum.each(job_image_tokens, &Vutuv.JobPostingImageStore.delete/1)
     Enum.each(press_kit_tokens, &Vutuv.PressKitStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
