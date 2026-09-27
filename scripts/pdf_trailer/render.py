@@ -317,8 +317,8 @@ FILM = Film(Part(take, URL,
     # the composer opens, the text types itself quickly, the PDF flies in at real
     # speed; the click on Post, the post with its file row; the pages in the lightbox
     [(m["start"] - 0.3, m["typing"], 1.4), (m["typing"], m["typed"], 3.0),
-     (m["typed"], m["drag"], 2.2), (m["drag"], m["attached"] + 1.2, 1.0),
-     (m["to_submit"] - 0.2, m["to_submit"] + 1.1, 1.0), (m["to_submit"] + 1.1, m["posted"], 4.0),
+     (m["typed"], m["drag"], 2.2), (m["drag"], m["attached"] + 1.2, 1.5),
+     (m["to_submit"] - 0.2, m["to_submit"] + 1.1, 1.6), (m["to_submit"] + 1.1, m["posted"], 4.0),
      (m["posted"], m["to_preview"], 4.0),
      # the pages quickly, and out before the lightbox closes (Escape: end - 0.9)
      (m["to_preview"], m["end"] - 1.0, 2.2)],
