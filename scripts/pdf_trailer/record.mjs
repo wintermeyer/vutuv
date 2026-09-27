@@ -161,7 +161,6 @@ await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 await page.waitForSelector("[data-post-files]", { timeout: 90000 });
 await page.waitForTimeout(700);
 mark("posted");
-await spot("card", page.locator("[data-post-files]").first());
 await page.waitForTimeout(1800);
 
 // 4. the preview: the pages in the lightbox
