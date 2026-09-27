@@ -7,6 +7,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Vutuv.PostsHelpers, only: [create_legacy_post!: 2]
 
   alias Vutuv.Activity
   alias Vutuv.Posts
@@ -505,7 +506,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert render(live) =~ "/post_images/#{attached.token}/feed.avif"
     end
 
-    test "an uploaded image gets alt + remove + inline-insert controls", %{
+    test "an uploaded image is an attachment, never a picture in the text", %{
       conn: conn
     } do
       isolate_uploads_root!()
@@ -522,89 +523,22 @@ defmodule VutuvWeb.PostFeedLiveTest do
       ])
       |> render_upload("photo.png")
 
-      # The normal upload feature stays: the add tile and per-image remove
-      # control are still there (with a photo attached, the grid's tile owns
-      # the picker).
+      # A row with its remove control, and the drop area stays.
       assert render(live) =~ "Choose a file"
       assert has_element?(live, ~s([phx-click="remove-image"]))
 
-      # The completed upload is announced to the editor hook (which decides
-      # whether this file was dropped/pasted into the prose and should be
-      # inserted at the cursor).
-      assert_push_event(live, "mde-image-uploaded", %{
-        editor: "composer-body",
-        name: "photo.png",
-        url: "/post_images/" <> _
-      })
-
-      # "Insert into text" lives in the photo's own panel (issue #1104): the
-      # tile is too small for four controls, and inline placement is a rarer
-      # choice than removing or reordering a photo. Clicking it still tells the
-      # editor hook to place the image at the cursor.
+      # Nothing tells the editor to place it in the prose, and the photo's own
+      # sheet offers no "Insert into text" any more.
+      refute_push_event(live, "mde-image-uploaded", %{})
       [image] = Vutuv.Repo.all(PostImage)
-      refute has_element?(live, ~s([phx-click="insert-inline"]))
-
-      # The photo's own panel is in the composer's second step.
       live |> element("#composer-next") |> render_click()
 
-      # The scrim's ⚙ specifically — the tile's img opens the panel too, so a
-      # bare [phx-click=photo-open] selector matches two elements.
       live
       |> element(~s(button[phx-click="photo-open"][phx-value-id="#{image.id}"]))
       |> render_click()
 
-      live
-      |> element(~s(button[phx-click="insert-inline"][phx-value-id="#{image.id}"]))
-      |> render_click()
-
-      expected_url = PostImage.url(image, "feed")
-
-      assert_push_event(live, "mde-insert-image", %{
-        editor: "composer-body",
-        url: ^expected_url
-      })
-    end
-
-    # The same button on a low-bandwidth composer, which has no editor to push
-    # the picture into. It would sit there doing nothing - which a member reads
-    # as a failed upload, not as a setting they turned on - so the server
-    # writes the reference into the Markdown instead.
-    test "low bandwidth: Insert writes the reference into the Markdown itself", %{conn: conn} do
-      isolate_uploads_root!()
-
-      {conn, user} = create_and_login_user(conn)
-
-      user
-      |> Ecto.Changeset.change(%{low_bandwidth?: true})
-      |> Vutuv.Repo.update!()
-
-      {:ok, live, html} = live(conn, ~p"/feed")
-      # The premise: this composer really is the cheap one.
-      refute html =~ "markdown_editor.js"
-
-      {:ok, image} = Image.new(64, 64, color: [10, 100, 200])
-      {:ok, png} = Image.write(image, :memory, suffix: ".png")
-
-      live
-      |> file_input("#composer-form", :images, [
-        %{name: "photo.png", content: png, type: "image/png"}
-      ])
-      |> render_upload("photo.png")
-
-      [stored] = Vutuv.Repo.all(PostImage)
-      live |> element("#composer-next") |> render_click()
-
-      live
-      |> element(~s(button[phx-click="photo-open"][phx-value-id="#{stored.id}"]))
-      |> render_click()
-
-      live
-      |> element(~s(button[phx-click="insert-inline"][phx-value-id="#{stored.id}"]))
-      |> render_click()
-
-      # The reference is in the field the form actually submits, so pressing
-      # Post now publishes a picture in the prose exactly as the editor would.
-      assert render(live) =~ "![](#{PostImage.url(stored, "feed")})"
+      refute has_element?(live, ~s([phx-click="insert-inline"]))
+      refute render(live) =~ "Insert into text"
     end
 
     test "an inline-referenced image renders inside the preview body, not below it", %{
@@ -613,8 +547,8 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {conn, user} = create_and_login_user(conn)
       image = insert(:post_image, user: user, post: nil, token: "feedinline")
 
-      {:ok, _} =
-        Posts.create_post(user, %{
+      _ =
+        create_legacy_post!(user, %{
           body: "Before the picture ![](/post_images/feedinline/feed.avif#left) and after it.",
           image_ids: [image.id]
         })
@@ -636,8 +570,8 @@ defmodule VutuvWeb.PostFeedLiveTest do
       ref = insert(:post_image, user: user, post: nil, token: "tagfeedref")
       gal = insert(:post_image, user: user, post: nil, token: "tagfeedgal")
 
-      {:ok, _} =
-        Posts.create_post(user, %{
+      _ =
+        create_legacy_post!(user, %{
           body: "Text beside ![](/post_images/tagfeedref/feed.avif#right) a floated picture.",
           tags: "elixir",
           image_ids: [ref.id, gal.id]

@@ -160,12 +160,10 @@ defmodule VutuvWeb.MarkdownEditorTest do
     refute editor() =~ "data-mention-budget="
   end
 
-  test "inserting a picture is a slash-menu block, where images are allowed" do
-    # Not a bubble mark: a mark acts on a selection, and putting a picture at
-    # the cursor is an insert. The composer's own bottom bar keeps its separate
-    # "attach photos" — that one adds to the post, this one places one in the
-    # prose. Message, organization and job bodies get neither.
-    assert editor(%{images: true}) =~ ~s(data-mde-block="image")
+  test "no editor offers to put a picture into the text" do
+    # A photo is an attachment now; the slash menu's "Insert image" is gone,
+    # even where an older post's inline picture is still kept on edit.
+    refute editor(%{images: true}) =~ ~s(data-mde-block="image")
     refute editor() =~ ~s(data-mde-block="image")
   end
 

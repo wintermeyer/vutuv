@@ -168,12 +168,11 @@ defmodule Vutuv.Posts.Post do
     # Same idea for the bento arrangement: an unknown name means "automatic"
     # (nil), never a failed post.
     |> update_change(:gallery_layout, &GalleryLayout.cast/1)
-    # A post body may embed only its own uploaded images (`![](…)` with a
-    # `/post_images/<token>/<version>` URL, optional alignment fragment) —
-    # never a remote hotlink, which would leak every reader's IP. The renderer
-    # enforces ownership at display time (`VutuvWeb.Markdown.render_post/2`
-    # only inlines the post's own attachments); this is the storage guard.
-    |> MarkdownContent.validate_own_images_only()
+    # No new picture in the text: a photo is an attachment. A reference the
+    # stored body already carries (a post from before) survives an edit; the
+    # renderer still inlines only the post's own attachments
+    # (`VutuvWeb.Markdown.render_post/2`), and this is the storage guard.
+    |> MarkdownContent.validate_no_new_images()
     # A body may only mention handles that exist, so nobody can seed `@wanted`
     # into a post to reserve it (the anti-hijack partner of handle availability).
     |> Mentions.validate_mentions_exist()

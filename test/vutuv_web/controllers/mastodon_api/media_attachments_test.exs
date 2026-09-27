@@ -83,7 +83,7 @@ defmodule VutuvWeb.MastodonApi.MediaAttachmentsTest do
     {:ok, _} = Image.write(img, src)
     {:ok, image} = Posts.create_pending_image(author, src, "photo.jpg")
 
-    # A body that references the photo inline, the way the composer writes one.
+    # A body that references the photo inline, the way the composer once wrote one.
     # Built here because it needs the image's URL, which only exists now.
     body =
       if attrs[:inline],
@@ -91,7 +91,12 @@ defmodule VutuvWeb.MastodonApi.MediaAttachmentsTest do
         else: "Mit Foto"
 
     attrs = Map.merge(%{body: body, image_ids: [image.id]}, Map.delete(attrs, :inline))
-    {:ok, post} = Posts.create_post(author, attrs)
+
+    # An inline picture is what an older post carries; a new one cannot.
+    post =
+      if attrs.body =~ "![",
+        do: Vutuv.PostsHelpers.create_legacy_post!(author, attrs),
+        else: elem(Posts.create_post(author, attrs), 1)
 
     {post, image}
   end

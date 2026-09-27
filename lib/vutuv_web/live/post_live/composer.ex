@@ -11,13 +11,12 @@ defmodule VutuvWeb.PostLive.Composer do
   the post exists. Submit attaches the pending rows; abandoned ones are
   swept after a day. Each image carries an alt-text input (stored on save).
 
-  **Inline embedding** is client-driven: every completed upload is announced
-  to the editor hook (`mde-image-uploaded` — the hook inserts files that were
-  dropped/pasted into the prose at the cursor), and each thumbnail row's
-  "Insert" button pushes `mde-insert-image` for an explicit at-cursor insert.
-  Attachments the body does not reference render as a gallery below the post
-  (`VutuvWeb.PostComponents`); referenced ones render in place
-  (`VutuvWeb.Markdown.render_post/2`, own-upload whitelist).
+  **No picture goes into the text.** A photo is an attachment and renders as
+  the gallery below the post (`VutuvWeb.PostComponents`); the editor refuses a
+  dropped or pasted file and hands it to the attachments instead. A post
+  written before that may still carry an inline reference, which renders in
+  place (`VutuvWeb.Markdown.render_post/2`, own-upload whitelist) and survives
+  an edit.
 
   **Audience:** new posts publish **public** — there is no audience picker on
   the composer. The deny model still stands behind it: an existing restricted
@@ -78,7 +77,6 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Languages
-  alias Vutuv.MarkdownContent
   alias Vutuv.Mentions
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -89,7 +87,6 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostVideo
-  alias Vutuv.Prefs
   alias Vutuv.Uploads.Spec
   alias Vutuv.Videos
   alias VutuvWeb.AttachmentText
@@ -988,26 +985,6 @@ defmodule VutuvWeb.PostLive.Composer do
   def handle_event("undeny-user", %{"id" => id}, socket) do
     {:noreply,
      assign(socket, :denied_users, Enum.reject(socket.assigns.denied_users, &(&1.id == id)))}
-  end
-
-  def handle_event("insert-inline", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.images, &(&1.id == id)) do
-      nil ->
-        {:noreply, socket}
-
-      image ->
-        # A low-bandwidth composer has no editor to push the picture into, so
-        # the button would sit there doing nothing - which reads as a failed
-        # upload, not as a setting. Write the reference into the Markdown
-        # instead. Not "at the cursor": where the caret sits is the browser's
-        # business and this side cannot ask, so the honest place is the end of
-        # what the member has written, on a paragraph of its own.
-        if Prefs.low_bandwidth?(socket.assigns.current_user) do
-          {:noreply, append_image_reference(socket, image)}
-        else
-          {:noreply, push_event(socket, "mde-insert-image", editor_image_payload(socket, image))}
-        end
-    end
   end
 
   ## Photo grid and panel (issue #1104)
@@ -1924,17 +1901,10 @@ defmodule VutuvWeb.PostLive.Composer do
 
         case result do
           {:ok, image} ->
-            # Announce the finished upload to the editor hook: it inserts the
-            # image at the cursor iff this file was dropped/pasted into the
-            # prose (picker-chosen files just join the thumbnail row).
             {:noreply,
              socket
              |> complete_image_upload(entry.ref, image)
              |> update(:photos, &Map.put(&1, image.id, photo_defaults(image)))
-             |> push_event(
-               "mde-image-uploaded",
-               Map.put(editor_image_payload(socket, image), :name, entry.client_name)
-             )
              |> schedule_draft_save()}
 
           {:error, _reason} ->
@@ -1944,35 +1914,6 @@ defmodule VutuvWeb.PostLive.Composer do
              |> assign(:error, gettext("That file could not be processed."))}
         end
     end
-  end
-
-  # The picture written into the Markdown itself, for the low-bandwidth
-  # composer, which has no editor to place it in. Its own paragraph at the end
-  # of what the member has written: where the caret sits is the browser's
-  # business and this side cannot ask, so the end is the honest answer.
-  # `Vutuv.MarkdownContent` owns the reference's shape, because that module's
-  # regex is what has to read it back when the post is saved.
-  defp append_image_reference(socket, image) do
-    reference = MarkdownContent.image_markdown(PostImage.url(image, "feed"), image.alt)
-
-    body =
-      case String.trim_trailing(socket.assigns.body) do
-        "" -> reference
-        written -> written <> "\n\n" <> reference
-      end
-
-    assign(socket, :body, body)
-  end
-
-  # The payload both editor-hook events share: which editor (the DOM id of
-  # this composer's markdown_editor), the served URL to embed and the alt.
-  defp editor_image_payload(socket, image) do
-    %{
-      editor: "#{socket.assigns.id}-body",
-      id: image.id,
-      url: PostImage.url(image, "feed"),
-      alt: image.alt
-    }
   end
 
   defp run_user_search(socket, term) do
@@ -4022,20 +3963,10 @@ defmodule VutuvWeb.PostLive.Composer do
         </div>
       </div>
 
-      <div class="mt-4 flex flex-wrap items-center gap-3">
+      <%!-- The shortcut that keeps a ten-photo set from being twenty taps.
+      Only shown when there is more than one photo to apply to. --%>
+      <div :if={@many?} class="mt-4 flex flex-wrap items-center gap-3">
         <button
-          type="button"
-          phx-click="insert-inline"
-          phx-value-id={@image.id}
-          phx-target={@myself}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-        >
-          ↳ {gettext("Insert into text")}
-        </button>
-        <%!-- The shortcut that keeps a ten-photo set from being twenty taps.
-        Only shown when there is more than one photo to apply to. --%>
-        <button
-          :if={@many?}
           type="button"
           phx-click="photo-apply-all"
           phx-value-id={@image.id}

@@ -9,8 +9,9 @@
 // goes to the files queue, where `Vutuv.Attachments.Format` reads the bytes and
 // refuses what it does not know, with a sentence the composer shows.
 //
-// Drops into the prose editor never reach this: the editor swallows a picture
-// dropped there to place it inline, and stops the event.
+// The prose editor takes no file (markdown_editor.js, `refuseFiles`): a drop
+// onto it bubbles up here like any other, and a paste into it arrives as a
+// `composer-files` event.
 
 const queueFor = (file, enabled) => {
   const type = file.type || ""
@@ -60,9 +61,9 @@ export const ComposerFiles = {
     this.el.addEventListener("dragleave", this.onDragLeave)
     this.el.addEventListener("drop", this.onDrop)
     this.el.addEventListener("change", this.onPick, true)
-    // A picture let go over the prose editor never reaches `onDrop`: the
-    // editor stops the event to place it inline. Caught on the way down
-    // instead, so the drop area does not stay blue.
+    this.onPaste = (e) => this.route(e.detail?.files)
+    this.el.addEventListener("composer-files", this.onPaste)
+    // Belt and braces: whatever ends a drag anywhere clears the blue.
     this.reset = () => {
       this.depth = 0
       this.el.classList.remove("is-dragging")
@@ -77,6 +78,7 @@ export const ComposerFiles = {
     this.el.removeEventListener("dragleave", this.onDragLeave)
     this.el.removeEventListener("drop", this.onDrop)
     this.el.removeEventListener("change", this.onPick, true)
+    this.el.removeEventListener("composer-files", this.onPaste)
     window.removeEventListener("drop", this.reset, true)
     window.removeEventListener("dragend", this.reset, true)
   },

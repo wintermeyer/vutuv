@@ -621,7 +621,7 @@ defmodule VutuvWeb.PostControllerTest do
       gal = insert(:post_image, user: user, post: nil, token: "galtok", alt: "Extra")
 
       post =
-        create_post!(user, %{
+        create_legacy_post!(user, %{
           body: "See the chart:\n\n![](/post_images/reftok/feed.avif#left)",
           image_ids: [ref.id, gal.id]
         })
@@ -643,7 +643,7 @@ defmodule VutuvWeb.PostControllerTest do
       gal = insert(:post_image, user: user, post: nil, token: "taggaltok")
 
       post =
-        create_post!(user, %{
+        create_legacy_post!(user, %{
           body: "Text with ![](/post_images/tagreftok/feed.avif#right) a floated picture.",
           tags: "elixir",
           image_ids: [ref.id, gal.id]
@@ -706,7 +706,7 @@ defmodule VutuvWeb.PostControllerTest do
         insert(:post_image, user: author, post: nil, token: "pendtok", moderation: "pending")
 
       post =
-        create_post!(author, %{
+        create_legacy_post!(author, %{
           body: "Fresh:\n\n![](/post_images/pendtok/feed.avif)",
           image_ids: [image.id]
         })

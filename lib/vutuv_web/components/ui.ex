@@ -569,7 +569,6 @@ defmodule VutuvWeb.UI do
           <.mde_block cmd="ordered_list" glyph="1." label={gettext("Numbered list")} />
           <.mde_block cmd="blockquote" glyph="❞" label={gettext("Quote")} />
           <.mde_block cmd="code_block" glyph="▤" label={gettext("Code block")} />
-          <.mde_block :if={@images} cmd="image" glyph="▨" label={gettext("Insert image")} />
           <p data-mde-slash-empty class="mde__slash-empty" hidden>
             {gettext("Nothing matches.")}
           </p>

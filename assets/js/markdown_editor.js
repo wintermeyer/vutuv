@@ -19,20 +19,15 @@
 // WYSIWYG. Milkdown's gfm() preset bundles task lists, so we compose the gfm
 // pieces we want by hand rather than using the whole preset.
 //
-// Images are policy-gated: only the post composer enables them
-// (data-mde-images), and even there an image node survives only when its src is
-// an own-upload proxy URL (`/post_images/…`) — mirroring the server, where
-// VutuvWeb.Markdown renders exactly those references and drops everything else
-// (a hotlinked remote picture would leak every reader's IP). Message and other
-// bodies keep stripping every image node. Upload flow: a file dropped or pasted
-// into the prose (or picked via the 🖼 toolbar button) is forwarded to the
-// form's LiveView file input; the server processes it eagerly and answers with
-// an `mde-image-uploaded` push event, at which point the hook inserts the image
-// at the remembered cursor position. The thumbnail row's "Insert" button pushes
-// `mde-insert-image` for an explicit at-cursor insert. An image's alignment
-// lives as a `#left`/`#right`/`#center` src fragment (no fragment = full
-// width), edited via the selection bubble's img-* buttons while an image is
-// selected.
+// Images are policy-gated: only the post composer keeps them (data-mde-images),
+// and only an own-upload proxy URL (`/post_images/…`) an older post already
+// carries — nothing can put a new one into the text any more (refuseFiles
+// below). That keeps such a post intact when it is edited, mirroring the
+// server, where VutuvWeb.Markdown renders exactly those references and drops
+// everything else (a hotlinked remote picture would leak every reader's IP).
+// Message and other bodies strip every image node. An image's alignment lives
+// as a `#left`/`#right`/`#center` src fragment (no fragment = full width),
+// edited via the selection bubble's img-* buttons while an image is selected.
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core"
 import {
   commonmark,
@@ -57,7 +52,6 @@ import {
   Plugin,
   PluginKey,
   NodeSelection,
-  TextSelection,
 } from "@milkdown/kit/prose/state"
 import { ACTIVE_CLASS, followsCaret, markActiveRow, stepIndex, suggestKey } from "./suggest_list"
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
@@ -204,35 +198,35 @@ const chromeWatch = (hook) =>
       })
   )
 
-// Files dropped or pasted into the prose become uploads: remember where they
-// should land, hand them to the form's LiveView file input and swallow the
-// browser/ProseMirror default (which would navigate away or inline a data
-// URI the server could never render).
-const imageFileCapture = (hook) =>
+// A file never lands in the prose, in any editor: a picture in the text is not
+// something a member can make any more. The browser's own answer to a dropped
+// file is to navigate to it, and ProseMirror's is to inline it, so both are
+// refused here. A drop keeps bubbling — in the post composer the form's
+// `ComposerFiles` hook takes it as an attachment like a drop anywhere else on
+// the form — and a paste, which has no bubbling half to hand on, is announced
+// as a `composer-files` event for that same hook. Everywhere else the file is
+// simply not taken.
+const refuseFiles = () =>
   $prose(
     () =>
       new Plugin({
-        key: new PluginKey("MDE_IMAGE_FILES"),
+        key: new PluginKey("MDE_NO_FILES"),
         props: {
           handleDOMEvents: {
-            drop: (view, event) => {
-              const files = imageFiles(event.dataTransfer)
-              if (files.length === 0) return false
-              const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
-              hook.captureFiles(files, coords ? coords.pos : view.state.selection.head)
+            drop: (_view, event) => {
+              if (!hasFiles(event.dataTransfer)) return false
               event.preventDefault()
-              // The composer form around this editor is itself a LiveView
-              // drop target now; without this the same drop would bubble to
-              // LiveView's window listener and the files would upload twice
-              // (once inline here, once as plain attachments).
-              event.stopPropagation()
               return true
             },
             paste: (view, event) => {
-              const files = imageFiles(event.clipboardData)
-              if (files.length === 0) return false
-              hook.captureFiles(files, view.state.selection.head)
+              if (!hasFiles(event.clipboardData)) return false
               event.preventDefault()
+              view.dom.dispatchEvent(
+                new CustomEvent("composer-files", {
+                  bubbles: true,
+                  detail: { files: Array.from(event.clipboardData.files) },
+                })
+              )
               return true
             },
           },
@@ -240,8 +234,7 @@ const imageFileCapture = (hook) =>
       })
   )
 
-const imageFiles = (transfer) =>
-  Array.from(transfer?.files || []).filter((f) => f.type.startsWith("image/"))
+const hasFiles = (transfer) => (transfer?.files?.length || 0) > 0
 
 // A run of backslashes at the END of a block — before a blank line, or at the
 // end of the text. Milkdown serializes a hard break as a trailing backslash,
@@ -570,10 +563,6 @@ export const MarkdownEditor = {
     // or paste strips it and the box springs back (issue #1143). beforeUpdate()
     // reads it while it is still there, applyState() puts it back.
     this.sourceHeight = null
-    // Files this editor sent to the upload input, waiting for the server's
-    // `mde-image-uploaded` echo: [{name, pos}] — pos is where they were
-    // dropped/pasted (null = current cursor at insert time).
-    this.insertQueue = []
 
     // What this editor knows about the handles it is showing: handle -> does an
     // account hold it. Filled by the debounced /system/mentions/check below and
@@ -589,7 +578,7 @@ export const MarkdownEditor = {
 
     const placeholderText = this.root.dataset.mdePlaceholder || ""
 
-    let editor = Editor.make()
+    const editor = Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, this.mountEl)
         ctx.set(defaultValueCtx, this.escapeFootnotes(this.source.value))
@@ -605,15 +594,11 @@ export const MarkdownEditor = {
       .use(history)
       .use(placeholder(placeholderText))
       .use(imagePolicy(this.imagesEnabled))
+      .use(refuseFiles())
       .use(emojiInputRule())
       .use(codeFencePreview(this.fenceLabels()))
       .use(mentionChips(this))
       .use(chromeWatch(this))
-
-    if (this.imagesEnabled) {
-      editor = editor.use(imageFileCapture(this))
-      this.wireImageEvents()
-    }
 
     this.editor = await editor.create()
 
@@ -1030,7 +1015,6 @@ export const MarkdownEditor = {
   run(name) {
     if (name === "fullscreen") return this.toggleFullscreen()
     if (name === "link") return this.runLink()
-    if (name === "image") return this.pickImage()
     if (name.startsWith("img-")) return this.setImageAlignment(name.slice(4))
     const spec = COMMANDS[name]
     if (!spec || !this.editor) return
@@ -1350,105 +1334,11 @@ export const MarkdownEditor = {
       .replace("{max}", String(max))
   },
 
-  // --- inline images (post composer only) ---
-
-  // Server → hook events. `mde-image-uploaded` fires for every finished upload
-  // (whoever initiated it); only files this editor forwarded — dropped, pasted
-  // or toolbar-picked — sit in the insertQueue and get placed into the prose.
-  // `mde-insert-image` is the thumbnail row's explicit "Insert into text".
-  wireImageEvents() {
-    this.handleEvent("mde-image-uploaded", (payload) => {
-      if (payload.editor !== this.el.id) return
-      const index = this.insertQueue.findIndex((entry) => entry.name === payload.name)
-      if (index === -1) return
-      const [entry] = this.insertQueue.splice(index, 1)
-      this.insertImage(payload.url, payload.alt, entry.pos)
-    })
-
-    this.handleEvent("mde-insert-image", (payload) => {
-      if (payload.editor !== this.el.id) return
-      this.insertImage(payload.url, payload.alt, null)
-    })
-
-    // The 🖼 toolbar button clicks the form's (visually hidden) LiveView file
-    // input. Its change event is how we learn which files were picked; the
-    // listener is delegated to the form so it survives LiveView re-renders.
-    this.source.form?.addEventListener("change", (e) => {
-      if (!this.pendingPickInsert) return
-      if (!(e.target instanceof HTMLInputElement) || e.target.type !== "file") return
-      this.pendingPickInsert = false
-      const pos = this.savedInsertPos
-      for (const file of imageFiles(e.target)) {
-        this.insertQueue.push({ name: file.name, pos })
-      }
-    })
-  },
-
-  fileInput() {
-    return this.source.form?.querySelector('input[type="file"]')
-  },
-
-  pickImage() {
-    const input = this.fileInput()
-    if (!input) return
-    this.pendingPickInsert = true
-    this.savedInsertPos = this.editorSelectionHead()
-    input.click()
-  },
-
-  // Dropped/pasted files: queue their names for insertion at `pos`, then hand
-  // them to the LiveView file input (assigning `files` + firing input/change is
-  // the programmatic path into `allow_upload`; the server answers each with an
-  // `mde-image-uploaded` push event once processed).
-  captureFiles(files, pos) {
-    const input = this.fileInput()
-    if (!input) return
-    for (const file of files) this.insertQueue.push({ name: file.name, pos })
-    const transfer = new DataTransfer()
-    files.forEach((file) => transfer.items.add(file))
-    input.files = transfer.files
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-    input.dispatchEvent(new Event("change", { bubbles: true }))
-  },
-
-  editorSelectionHead() {
-    if (!this.editor) return null
-    let head = null
-    this.editor.action((ctx) => {
-      head = ctx.get(editorViewCtx).state.selection.head
-    })
-    return head
-  },
-
-  // Place an image node into the prose at `pos` (null = current cursor; the
-  // position is clamped — the doc may have changed while the upload ran). In
-  // source mode append the Markdown to the textarea instead.
-  insertImage(url, alt, pos) {
-    if (!this.editor || this.mode === "source") return this.insertImageSource(url, alt)
-
-    this.editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx)
-      const { state } = view
-      const type = state.schema.nodes.image
-      if (!type) return
-      const at = Math.min(pos ?? state.selection.head, state.doc.content.size)
-      // TextSelection.near finds the closest valid text position (an inline
-      // image can't sit between two block nodes).
-      const selection = TextSelection.near(state.doc.resolve(at))
-      const tr = state.tr.setSelection(selection)
-      tr.replaceSelectionWith(type.create({ src: url, alt: alt || "" }), false)
-      view.dispatch(tr)
-      view.focus()
-    })
-  },
-
-  insertImageSource(url, alt) {
-    const md = `![${alt || ""}](${url})`
-    const at = this.source.selectionStart ?? this.source.value.length
-    const value = this.source.value
-    this.source.value = `${value.slice(0, at)}${md}${value.slice(at)}`
-    this.source.dispatchEvent(new Event("input", { bubbles: true }))
-  },
+  // --- inline images: only those an older post already carries ---
+  //
+  // A picture can no longer be put into the text (see refuseFiles). What
+  // remains is for a post written before that: the image keeps its place when
+  // the post is edited, and its alignment can still be changed.
 
   // Rewrite the selected image's alignment fragment ("full" clears it). The
   // fragment is the persisted form (part of the Markdown src); CSS previews it
