@@ -19,6 +19,7 @@ defmodule VutuvWeb.DevDocMarkdown do
   alias VutuvWeb.CodeHighlight
   alias VutuvWeb.CodeHighlight.Diff
   alias VutuvWeb.CodeHighlight.Fences
+  alias VutuvWeb.Markdown
   alias VutuvWeb.Markdown.Footnotes
 
   @headings ~w(h1 h2 h3 h4 h5 h6)
@@ -43,6 +44,7 @@ defmodule VutuvWeb.DevDocMarkdown do
     |> CodeHighlight.render()
     |> Diff.render()
     |> Footnotes.inject(footnotes)
+    |> Markdown.linkify_emails()
   end
 
   @doc """
