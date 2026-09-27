@@ -23839,8 +23839,8 @@ msgstr "En attente"
 
 #: lib/vutuv_web/components/pending_post_components.ex:153
 #, elixir-autogen, elixir-format
-msgid "Your post appears as soon as its files are ready"
-msgstr "Votre publication apparaît dès que ses fichiers sont prêts"
+msgid "Preview images are being created and checked."
+msgstr "Les aperçus sont en cours de création et de vérification."
 
 #: lib/vutuv_web/live/uploads_live.ex:41
 #: lib/vutuv_web/live/uploads_live.ex:113

@@ -23837,7 +23837,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/pending_post_components.ex:153
 #, elixir-autogen, elixir-format, fuzzy
-msgid "Your post appears as soon as its files are ready"
+msgid "Preview images are being created and checked."
 msgstr ""
 
 #: lib/vutuv_web/live/uploads_live.ex:41
