@@ -14,8 +14,7 @@ PORT=${TRAILER_PORT:-4078}
 mkdir -p "$OUT"
 
 [ -d scripts/pdf_trailer/node_modules ] || (cd scripts/pdf_trailer && npm install --silent)
-[ -f "$OUT/logo_white_full.png" ] || cp priv/static/images/teaser/logo_white_full.png "$OUT/" 2>/dev/null ||
-  { echo "put a white vutuv logo PNG at $OUT/logo_white_full.png"; exit 1; }
+[ -f "$OUT/logo_white_full.png" ] || node scripts/pdf_trailer/logo.mjs "$OUT/logo_white_full.png"
 
 echo "== pdf"
 node scripts/pdf_trailer/make_pdf.mjs "$OUT/Sommerfest-Programm.pdf"
