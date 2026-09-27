@@ -452,7 +452,7 @@ defmodule Vutuv.Imports.LinkedIn do
         |> tidy(),
       skills: rows_by_type |> Map.get(:skills, []) |> parse_skills(),
       emails: rows_by_type |> Map.get(:emails, []) |> Enum.map(&email_info/1),
-      phones: rows_by_type |> Map.get(:phones, []) |> Enum.map(&phone_candidate/1) |> tidy(),
+      phones: rows_by_type |> Map.get(:phones, []) |> parse_phones(),
       urls: tidy(profile_urls),
       social: tidy(profile_social)
     }
@@ -879,14 +879,31 @@ defmodule Vutuv.Imports.LinkedIn do
 
   # ── PhoneNumbers.csv → PhoneNumber params ──
 
+  # A bare "4915…" is read against the default region DE, i.e. as the landline
+  # 0491 5…, so when one number arrives in several spellings the one carrying
+  # its "+" must win the collapse in tidy/1 (the sort is stable).
+  defp parse_phones(rows) do
+    rows
+    |> Enum.map(&phone_candidate/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.sort_by(&(not String.starts_with?(&1.label, "+")))
+    |> tidy()
+  end
+
   # nil for a number-less row; the id hashes the digits alone, so the same
-  # number in two formats is one candidate.
+  # number in two formats is one candidate. "Whatsapp Phone Numbers.csv"
+  # stores E.164 without the "+" ("4915901704664"), so its numbers get it back.
   defp phone_candidate(row) do
     case blank_nil(row["Number"]) do
       nil ->
         nil
 
       number ->
+        number =
+          if Map.has_key?(row, "Is_WhatsApp_Number") and not String.starts_with?(number, "+"),
+            do: "+" <> number,
+            else: number
+
         %{
           id: cid("phone", digits(number)),
           label: number,
