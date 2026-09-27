@@ -4,7 +4,7 @@
 #   vutuv-teaser-<lang>.{av1.mp4,mp4}           960x540, the desktop plays this
 #   vutuv-teaser-<lang>.hd.{av1.mp4,mp4}        1920x1080, behind the HD toggle
 #   vutuv-teaser-<lang>-portrait.{av1.mp4,mp4}  720x1280, a phone plays this
-#   vutuv-teaser-<lang>.avif                    the poster (the three phones)
+#   vutuv-teaser-<lang>.avif                    the poster (the end: phones under the logo)
 #
 #   scripts/teaser/web.sh     # after run.sh <lang> and run.sh <lang> --portrait
 #

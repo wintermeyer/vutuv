@@ -4,7 +4,7 @@
 #
 # Idempotent: run it before every recording. It creates the fictional members
 # (Miriam Kessler, Anna Berger, Jonas Keller, Lena Hoffmann), Miriam's profile,
-# links, social accounts, her Stammtisch post with likes and Anna's reply, a
+# links, social accounts, her post with likes and Anna's reply, a
 # clean chat, the fictional job postings, and dates two real news posts from
 # the database copy to "20 minutes ago" so they head Miriam's feed. Everything
 # comes from scripts/teaser/content.<lang>.json.
@@ -94,6 +94,20 @@ Repo.delete_all(from(t in Vutuv.Tags.UserTag, where: t.user_id == ^miriam.id))
 for name <- String.split(m["tags"], ",", trim: true),
     do: Tags.add_user_tag(miriam, String.trim(name))
 
+# Jonas and Lena have vouched for a few of her tags already; in the film Anna
+# adds her vote to "Elixir" (2 -> 3). Only fictional members ever endorse.
+votes = %{
+  "elixir" => ["jonas_keller", "lena_hoffmann"],
+  "phoenix framework" => ["lena_hoffmann"],
+  "teamleitung" => ["jonas_keller", "lena_hoffmann"],
+  "team leadership" => ["jonas_keller", "lena_hoffmann"],
+  "postgresql" => ["jonas_keller"]
+}
+
+for ut <- Repo.all(from(t in Vutuv.Tags.UserTag, where: t.user_id == ^miriam.id, preload: :tag)),
+    endorser <- Map.get(votes, String.downcase(ut.tag.name), []),
+    do: {:ok, _} = Tags.create_endorsement(%{user_tag_id: ut.id, user_id: user.(endorser).id})
+
 Repo.delete_all(from(w in WorkExperience, where: w.user_id == ^miriam.id))
 Repo.delete_all(from(e in Education, where: e.user_id == ^miriam.id))
 Repo.delete_all(from(l in Language, where: l.user_id == ^miriam.id))
@@ -156,6 +170,22 @@ end
       upload.(Path.join(assets, "miriam_cover.jpg"), "miriam_kessler_cover.jpg", "image/jpeg")
   })
 
+# faces for the others, so their avatars are photos rather than initials
+for {username, file} <- [
+      {"anna_berger", "anna_avatar.jpg"},
+      {"jonas_keller", "jonas_avatar.jpg"},
+      {"lena_hoffmann", "lena_avatar.jpg"}
+    ] do
+  u = user.(username)
+
+  {:ok, _} =
+    Accounts.update_user(u, %{
+      avatar: upload.(Path.join(assets, file), "#{username}.jpg", "image/jpeg")
+    })
+
+  Repo.query!("update users set avatar_moderation = 'approved' where id = $1", [dump.(u.id)])
+end
+
 Repo.query!(
   ~s|update users set avatar_moderation = 'approved', cover_moderation = 'approved', "show_mastodon_feed?" = true, "show_code_stats?" = true, "fediverse_followers?" = true where id = $1|,
   [dump.(miriam.id)]
@@ -187,7 +217,10 @@ end
 Repo.delete_all(from(s in SocialMediaAccount, where: s.user_id == ^miriam.id))
 
 repos =
-  Enum.zip([["live_planner", 612], ["otp_patterns", 401], ["stammtisch", 88]], m["github_repos"])
+  Enum.zip(
+    [["live_planner", 612], ["otp_patterns", 401], ["handwerk_api", 88]],
+    m["github_repos"]
+  )
   |> Enum.map(fn {[name, stars], desc} ->
     %{
       "name" => name,
@@ -213,6 +246,7 @@ for {{provider, value, stats}, pos} <-
       Enum.with_index([
         {"Mastodon", "miriam@elixir-koblenz.social", nil},
         {"Bluesky", "miriamkessler.dev", nil},
+        {"BookWyrm", "miriam@leseecke-koblenz.social", nil},
         {"GitHub", "miriam-kessler", github},
         {"LinkedIn", "miriam-kessler-koblenz", nil}
       ]) do
@@ -336,8 +370,9 @@ Repo.query!("delete from post_drafts where user_id = $1", [dump.(miriam.id)])
 log.("feed ready")
 
 # ---------- Miriam's post, three likes, Anna's reply ----------
-replies = for {_f, cf} <- contents, do: cf["reply"]
-Repo.delete_all(from(p in Post, where: p.user_id == ^anna.id and p.body in ^replies))
+# Anna is fictional and only ever answers Miriam: a reply outlives its parent,
+# so a changed reply text would otherwise leave the old one behind
+Repo.delete_all(from(p in Post, where: p.user_id == ^anna.id))
 Repo.delete_all(from(p in Post, where: p.user_id == ^miriam.id))
 
 post_body = c["post"]["line1"] <> "\n\n**" <> c["post"]["line2"] <> "**"
@@ -366,6 +401,98 @@ Repo.query!("update posts set inserted_at = $1, updated_at = $1 where id = $2", 
 
 log.("post ready")
 
+# ---------- a post that spread: the reach analysis ----------
+# An older post of Miriam's (three days), whose reactions arrive in three waves
+# from invented servers, each wave wider than the last. The fictional remote
+# accounts only exist in this worktree's database; their follower counts are
+# stamped as just checked, so no refresh ever asks their (non-existent) servers.
+r = c["reach_post"]
+Repo.delete_all(from(a in Vutuv.Fediverse.RemoteAccount, where: a.host in ^r["hosts"]))
+
+{:ok, reach_post} =
+  Posts.create_post(miriam, %{
+    "body" => r["text"],
+    "tags" => Enum.join(r["tags"], ", "),
+    "language" => lang
+  })
+
+published = ago.(70 * 60)
+
+Repo.query!("update posts set inserted_at = $1, updated_at = $1 where id = $2", [
+  published,
+  dump.(reach_post.id)
+])
+
+at_hour = fn h -> NaiveDateTime.add(published, round(h * 3600)) end
+
+for {u, h} <- [{"jonas_keller", 0.2}, {"lena_hoffmann", 0.5}, {"anna_berger", 1.1}] do
+  :ok = Posts.like_post(user.(u), reach_post)
+
+  Repo.query!("update post_likes set inserted_at = $1 where post_id = $2 and user_id = $3", [
+    at_hour.(h),
+    dump.(reach_post.id),
+    dump.(user.(u).id)
+  ])
+end
+
+names = r["names"]
+hosts = r["hosts"]
+
+reactions =
+  r["waves"]
+  |> Enum.with_index()
+  |> Enum.flat_map(fn {[h0, h1, count, reach], w} ->
+    for i <- 0..(count - 1) do
+      host = Enum.at(hosts, rem(i * 7 + w * 3, reach))
+      name = Enum.at(names, rem(i * 5 + w * 11, length(names)))
+      # every fourth one boosts rather than likes
+      kind = if rem(i + w, 4) == 3, do: "announce", else: "like"
+      {name, host, kind, h0 + (h1 - h0) * i / max(count - 1, 1)}
+    end
+  end)
+  |> Enum.uniq_by(fn {name, host, kind, _} -> {name, host, kind} end)
+
+stamp = DateTime.utc_now(:second)
+
+reactions
+|> Enum.filter(fn {_, _, kind, _} -> kind == "announce" end)
+|> Enum.uniq_by(fn {name, host, _, _} -> {name, host} end)
+|> Enum.with_index()
+|> Enum.each(fn {{name, host, _, _}, i} ->
+  followers = Enum.at(r["booster_followers"], rem(i, length(r["booster_followers"])))
+
+  Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+    actor_uri: "https://#{host}/users/#{name}",
+    host: host,
+    handle: name,
+    name: String.capitalize(name),
+    inbox_uri: "https://#{host}/users/#{name}/inbox",
+    follower_count: followers,
+    follower_count_checked_at: stamp,
+    follower_count_attempted_at: stamp,
+    refreshed_at: stamp
+  })
+end)
+
+Repo.insert_all(
+  Vutuv.Fediverse.Reaction,
+  for {name, host, kind, h} <- reactions do
+    %{
+      id: UUIDv7.generate(),
+      post_id: reach_post.id,
+      actor_uri: "https://#{host}/users/#{name}",
+      handle: name,
+      kind: kind,
+      received_at: at_hour.(h) |> DateTime.from_naive!("Etc/UTC"),
+      quiet: true
+    }
+  end
+)
+
+log.(
+  "reach post ready (#{length(reactions)} reactions from #{length(Enum.uniq(for {_, h, _, _} <- reactions, do: h))} servers)"
+)
+
 # ---------- the chat: accepted, with only the two opening messages ----------
 {:ok, conv} = Chat.find_or_create_conversation(anna, miriam)
 Repo.query!("update conversations set status = 'accepted' where id = $1", [dump.(conv.id)])
@@ -376,6 +503,10 @@ Process.sleep(1100)
 log.("chat ready")
 
 # ---------- job postings ----------
+# The unfiltered board opens on the postings that have nothing to do with
+# Elixir ("other" in the content), then the Elixir ones far from Koblenz; the
+# search for Elixir in Koblenz then visibly swaps the list for the ones there.
+near_koblenz = ["Koblenz", "Neuwied", "Montabaur", "Andernach"]
 demo_ids = Enum.map(["anna_berger", "jonas_keller", "lena_hoffmann"], &user.(&1).id)
 Repo.delete_all(from(j in JobPosting, where: j.user_id in ^demo_ids))
 today = Date.utc_today()
@@ -409,7 +540,16 @@ main =
       )
 
     {:ok, p} = Jobs.create_draft(user.(j["poster"]), attrs)
-    published = if j["main"], do: now, else: NaiveDateTime.add(now, -600 - i * 300)
+    near? = j["city"] in near_koblenz or j["city"] == nil
+
+    age =
+      cond do
+        j["other"] -> 120
+        near? -> 3 * 3600
+        true -> 3600
+      end
+
+    published = NaiveDateTime.add(now, -age - i * 300)
 
     p
     |> Ecto.Changeset.change(
@@ -430,6 +570,7 @@ ids = %{
   miriam_id: miriam.id,
   post_id: post.id,
   reply_id: reply.id,
+  reach_post_id: reach_post.id,
   conversation_id: conv.id,
   news_top_id: Ecto.UUID.cast!(top),
   news_second_id: Ecto.UUID.cast!(second),

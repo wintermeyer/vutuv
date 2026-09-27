@@ -7,7 +7,7 @@
 #   * fediverse stays on (the like/repost buttons on remote posts need it), but
 #     every outbound ActivityPub request is answered by the local stub below;
 #   * web push, screenshot capture and code-stats fetching are off;
-#   * Miriam's Mastodon/Bluesky previews are put into the social-feed cache with
+#   * Miriam's Mastodon/Bluesky previews and BookWyrm reviews are put into the social-feed cache with
 #     a year-long TTL, so her fictional accounts are never looked up.
 Application.put_env(:phoenix, :serve_endpoints, true, persistent: true)
 Application.put_env(:vutuv, :fediverse_enabled, true, persistent: true)
@@ -24,11 +24,13 @@ Application.put_env(
       IO.puts("FEDI_STUB #{conn.method} #{conn.host}#{conn.request_path}")
       Plug.Conn.send_resp(conn, 202, "")
     end
-  ], persistent: true)
+  ],
+  persistent: true
+)
 
 {:ok, _} = Application.ensure_all_started(:vutuv)
 
-alias Vutuv.SocialFeed.{Feed, Post}
+alias Vutuv.SocialFeed.{Book, Feed, Post}
 
 lang = List.first(System.argv()) || "de"
 here = Path.dirname(__ENV__.file)
@@ -72,7 +74,40 @@ posts = fn texts, base, hours ->
   end)
 end
 
+cover = fn i ->
+  png = Path.expand("../../_build/teaser/assets/books-#{lang}/#{i}.png", here)
+  "data:image/png;base64," <> Base.encode64(File.read!(png))
+end
+
+reviews =
+  m["book_reviews"]
+  |> Enum.zip([20, 170, 400])
+  |> Enum.with_index()
+  |> Enum.map(fn {{r, h}, i} ->
+    %Post{
+      id: "teaser-book-#{i}",
+      url: "https://leseecke-koblenz.social/user/miriam/review/#{i + 1}",
+      created_at: at.(h),
+      text: r["text"],
+      book: %Book{
+        title: r["title"],
+        author: r["author"],
+        rating: r["rating"],
+        headline: r["headline"],
+        cover: cover.(i)
+      }
+    }
+  end)
+
 feeds = %{
+  {"BookWyrm", "miriam@leseecke-koblenz.social"} => %Feed{
+    name: "Miriam Kessler",
+    handle: "@miriam@leseecke-koblenz.social",
+    url: "https://leseecke-koblenz.social/user/miriam",
+    avatar: avatar,
+    followers: 212,
+    posts: reviews
+  },
   {"Mastodon", "miriam@elixir-koblenz.social"} => %Feed{
     name: "Miriam Kessler",
     handle: "@miriam@elixir-koblenz.social",

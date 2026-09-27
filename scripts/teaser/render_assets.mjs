@@ -2,6 +2,7 @@
 //   logo_white.png          the vutuv logo in white (from priv/static/images/vutuv-logo.svg)
 //   badges/<network>.png    round network badges for the fediverse map
 //   sites-<lang>/*.png      the three fictional websites behind Miriam's links
+//   books-<lang>/<n>.png    covers for Miriam's (fictional) book reviews
 //
 //   node scripts/teaser/render_assets.mjs <lang>
 import { chromium } from "playwright";
@@ -79,6 +80,17 @@ for (const [name, html] of Object.entries(sites)) {
   await sp.setContent(`<!doctype html><html><head><meta charset="utf-8"></head>${html}</html>`);
   await sp.waitForTimeout(300);
   await sp.screenshot({ path: path.join(siteDir, `${name}.png`) });
+}
+// book covers: plain typography on a colour, clearly nobody's real cover
+const bookDir = path.join(A, `books-${lang}`);
+fs.mkdirSync(bookDir, { recursive: true });
+const bp = await (await browser.newContext({ viewport: { width: 112, height: 168 }, deviceScaleFactor: 2 })).newPage();
+for (const [i, b] of c.miriam.book_reviews.entries()) {
+  await bp.setContent(`<body style="margin:0;${font};background:${b.color};color:#fff;width:112px;height:168px;box-sizing:border-box;padding:14px 11px;display:flex;flex-direction:column;justify-content:space-between">
+    <div style="font-size:17px;font-weight:800;line-height:1.1">${b.title}</div>
+    <div style="height:2px;background:rgba(255,255,255,.5);width:32px"></div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;opacity:.9">${b.author}</div></body>`);
+  await bp.screenshot({ path: path.join(bookDir, `${i}.png`) });
 }
 await browser.close();
 console.log("rendered assets for", lang);

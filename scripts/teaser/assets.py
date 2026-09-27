@@ -5,6 +5,9 @@
 Sources and licences (checked 2026-09-23):
   * Miriam's portrait: Jake Nackos on Unsplash (Unsplash License)
     https://unsplash.com/photos/woman-in-white-crew-neck-shirt-smiling-IF9TK5Uy-KI
+  * Anna, Jonas and Lena: Unsplash photos 1494790108377-be9c29b29330,
+    1500648767791-00dcc994a43e and 1438761681033-6461ffad8d80 (Unsplash License),
+    cropped to the face by Unsplash's own image service
   * Koblenz panorama (cover): Maxime Vandenberge on Unsplash (Unsplash License)
     https://unsplash.com/photos/a-city-next-to-a-body-of-water-9wUQEBf03D0
   * World map: Natural Earth 110m land via the world-atlas npm package (public domain)
@@ -21,6 +24,9 @@ os.makedirs(os.path.join(OUT, "icons"), exist_ok=True)
 
 DOWNLOADS = {
     "raw_avatar.jpg": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=1400&q=90&fm=jpg",
+    "anna_avatar.jpg": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&h=800&fit=crop&crop=faces&q=90&fm=jpg",
+    "jonas_avatar.jpg": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&h=800&fit=crop&crop=faces&q=90&fm=jpg",
+    "lena_avatar.jpg": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=800&h=800&fit=crop&crop=faces&q=90&fm=jpg",
     "raw_cover.jpg": "https://images.unsplash.com/photo-1655386278428-7b4064a5d697?w=2600&q=88&fm=jpg",
     "land-110m.json": "https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json",
     "icons/friendica.svg": "https://cdn.jsdelivr.net/gh/friendica/friendica@stable/images/friendica.svg",
