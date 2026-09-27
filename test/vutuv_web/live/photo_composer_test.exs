@@ -259,7 +259,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert zone =~ "Photos, videos or files"
       assert zone =~ "Choose a file"
       assert has_element?(live, "#composer-drop input[type=file][data-composer-pick][multiple]")
-      refute has_element?(live, "#composer-drop [data-drop-more]")
+      assert has_element?(live, "#composer-drop [data-drop-full]")
     end
 
     test "a photo grows into the grid: natural ratio, feed version, caption inline", %{
@@ -289,9 +289,11 @@ defmodule VutuvWeb.PhotoComposerTest do
       # Adding more photos sits in the row under the pictures, not as a tile
       # among them: the mosaic's cells are the arrangement, and a "+" occupying
       # one of them would be a seat the gallery does not have (issue #1892).
-      # The drop area folds into one "Add more" row once something is attached.
+      # The drop area keeps its full shape once something is attached: the
+      # composer does not change under the member's hands.
       refute has_element?(live, "[data-photo-add-tile]")
-      assert has_element?(live, "#composer-drop [data-drop-more]")
+      assert has_element?(live, "#composer-drop [data-drop-full]")
+      refute has_element?(live, "[data-drop-more]")
     end
 
     test "the alt text lives in the panel, and no second caption field appears", %{
@@ -1683,7 +1685,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert html =~ "Galerie"
       assert html =~ "Ein Foto auf ein anderes ziehen, um sie zu tauschen."
       assert html =~ "Foto zuschneiden"
-      assert html =~ "Weitere hinzufügen"
+      assert html =~ "Datei auswählen"
 
       # …and what the sheet says once it is.
       html = open_details(live)

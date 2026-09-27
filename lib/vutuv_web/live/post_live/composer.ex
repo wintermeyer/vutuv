@@ -2418,11 +2418,6 @@ defmodule VutuvWeb.PostLive.Composer do
             uploads={@uploads}
             video?={@video_uploads? and @video == nil}
             files?={@attachment_uploads?}
-            has_media?={
-              @images != [] or @video != nil or @attachments != [] or
-                @uploads.images.entries != [] or @uploads.video.entries != [] or
-                @uploads.attachments.entries != []
-            }
           />
 
           <.gallery_sheet
@@ -2989,10 +2984,10 @@ defmodule VutuvWeb.PostLive.Composer do
   defp percent_left(_window), do: 0
 
   # The drop area under the text (the demo's variant E): one picker and one
-  # drop target for photos, clips and files. Empty, it is a dashed field
-  # that says what it takes; once something is attached it folds into one
-  # "Add more" row, and while files hover the form (`is-dragging`, set by the
-  # `ComposerFiles` hook) the full field comes back in blue.
+  # drop target for photos, clips and files, a dashed field that says what it
+  # takes. It keeps that shape once something is attached — the composer does
+  # not change under the member's hands — and turns blue while files hover the
+  # form (`is-dragging`, set by the `ComposerFiles` hook).
   #
   # The three live file inputs sit here hidden, one per upload: LiveView
   # drives each upload through its own input and the hook hands every file to
@@ -3002,7 +2997,6 @@ defmodule VutuvWeb.PostLive.Composer do
   attr(:uploads, :map, required: true)
   attr(:video?, :boolean, required: true)
   attr(:files?, :boolean, required: true)
-  attr(:has_media?, :boolean, required: true)
 
   defp media_drop(assigns) do
     assigns =
@@ -3035,9 +3029,8 @@ defmodule VutuvWeb.PostLive.Composer do
         for={@pick_id}
         data-drop-full
         class={[
-          "cursor-pointer flex-col items-center gap-1.5 rounded-[14px] border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-slate-700 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-200",
-          "group-[.is-dragging]/drop:border-sky-600 group-[.is-dragging]/drop:bg-sky-50 group-[.is-dragging]/drop:text-sky-700 dark:group-[.is-dragging]/drop:border-sky-400 dark:group-[.is-dragging]/drop:bg-sky-950 dark:group-[.is-dragging]/drop:text-sky-200",
-          if(@has_media?, do: "hidden group-[.is-dragging]/drop:flex", else: "flex")
+          "flex cursor-pointer flex-col items-center gap-1.5 rounded-[14px] border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-slate-700 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-200",
+          "group-[.is-dragging]/drop:border-sky-600 group-[.is-dragging]/drop:bg-sky-50 group-[.is-dragging]/drop:text-sky-700 dark:group-[.is-dragging]/drop:border-sky-400 dark:group-[.is-dragging]/drop:bg-sky-950 dark:group-[.is-dragging]/drop:text-sky-200"
         ]}
       >
         <.upload_icon class="h-6 w-6" />
@@ -3052,15 +3045,6 @@ defmodule VutuvWeb.PostLive.Composer do
           {gettext("Choose a file")}
         </span>
         <span class="text-xs text-slate-500 dark:text-slate-400">{@hint}</span>
-      </label>
-      <label
-        :if={@has_media?}
-        for={@pick_id}
-        data-drop-more
-        class="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[14px] border-2 border-dashed border-slate-300 text-sm font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-800 group-[.is-dragging]/drop:hidden dark:border-slate-600 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
-      >
-        <span aria-hidden="true" class="text-lg leading-none">+</span>
-        {gettext("Add more")}
       </label>
     </div>
     """
