@@ -228,7 +228,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       # The two rights questions are about photos; without one they would be
       # controls about nothing.
       refute has_element?(live, "[data-gallery-open]")
-      refute has_element?(live, "#composer-gallery-license")
+      refute has_element?(live, "#composer-license")
       refute has_element?(live, "#composer-gallery-download")
     end
   end
@@ -841,16 +841,15 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       upload_photo!(live, user)
 
-      # The row is there, its answers are named on the fold, but the selects
-      # stay away until the author opens it.
+      # The licence is in plain sight on the photo step; the download answer
+      # stays in the sheet until the author opens it.
       assert has_element?(live, "#composer-gallery-open")
-      assert render(live) =~ "All rights reserved"
+      assert has_element?(live, ~s(#composer-license option[value="arr"][selected]))
       refute has_element?(live, "#composer-gallery-license")
       refute has_element?(live, "#composer-gallery-download")
 
       open_details(live)
 
-      assert has_element?(live, "#composer-gallery-license")
       assert has_element?(live, "#composer-gallery-download")
     end
 
@@ -903,7 +902,8 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       to_photo_step(live)
       assert has_element?(live, "#composer-gallery-open")
-      refute has_element?(live, "#composer-gallery-license")
+      # The visible licence shows the stored answer, so saving keeps it.
+      assert has_element?(live, ~s(#composer-license option[value="cc-by-sa-4.0"][selected]))
 
       live |> form("#composer-form", %{"post" => %{"body" => "Andere Worte."}}) |> render_submit()
 
@@ -1348,7 +1348,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, ~s(#composer-form [name="post[language]"]))
       assert has_element?(live, "#composer-form button[type=submit]")
 
-      live |> element("#composer-back") |> render_click()
+      live |> element("#composer-back-bottom") |> render_click()
       refute has_element?(live, "[data-details-step]")
       assert has_element?(live, "#composer-row-image-#{image.id}")
     end
@@ -1372,12 +1372,30 @@ defmodule VutuvWeb.PhotoComposerTest do
       live = open_composer(conn)
       upload_photo_in_step_one!(live, user)
 
-      assert render(live) =~ "Weiter"
-      live |> element("#composer-next") |> render_click()
-
+      # The steps are named on step 1 already, so step 2 is no surprise.
       html = render(live)
-      assert html =~ "Schritt 2 von 2"
-      assert html =~ "Zurück"
+      assert html =~ "Text &amp; Anhänge"
+      assert html =~ "Weiter: Fotos"
+      assert html =~ "Alles verwerfen"
+      assert html =~ "Schließen, der Entwurf bleibt erhalten"
+
+      live |> element("#composer-next") |> render_click()
+      assert has_element?(live, ~s(#composer-step-details[aria-current="step"]))
+    end
+
+    test "the step bar walks both ways", %{live: live, user: user} do
+      upload_photo_in_step_one!(live, user)
+      assert has_element?(live, ~s(#composer-step-write[aria-current="step"]))
+
+      live |> element("#composer-step-details") |> render_click()
+      assert has_element?(live, "[data-details-step]")
+
+      live |> element("#composer-step-write") |> render_click()
+      refute has_element?(live, "[data-details-step]")
+    end
+
+    test "a post without photos shows no steps at all", %{live: live} do
+      refute has_element?(live, "[data-step-indicator]")
     end
   end
 

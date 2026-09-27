@@ -2203,7 +2203,7 @@ defmodule VutuvWeb.PostLive.Composer do
               phx-target={@myself}
               class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-red-400"
             >
-              {gettext("Discard draft")}
+              {gettext("Discard everything")}
             </button>
             <%!-- ONE button whose attributes change, not two swapping under an
             `:if`: this row sits above the editor, and a sibling appearing or
@@ -2215,8 +2215,18 @@ defmodule VutuvWeb.PostLive.Composer do
               type="button"
               phx-click={(drafting?(assigns) && "close-request") || "close-composer"}
               phx-target={drafting?(assigns) && @myself}
-              aria-label={gettext("Close")}
-              title={gettext("Close")}
+              aria-label={
+                if(drafting?(assigns),
+                  do: gettext("Close, the draft is kept"),
+                  else: gettext("Close")
+                )
+              }
+              title={
+                if(drafting?(assigns),
+                  do: gettext("Close, the draft is kept"),
+                  else: gettext("Close")
+                )
+              }
               class="-mr-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               ✕
@@ -2226,24 +2236,18 @@ defmodule VutuvWeb.PostLive.Composer do
           <%!-- Step 2's own head: the way back and what this step is. The
           wrapper always renders, so its child appearing does not relocate the
           form below (the jumping-cursor lesson of #1130/#1143). --%>
+          <%!-- The two steps, named, from the moment a photo or a clip joins —
+          already on step 1, so nobody meets the second step by surprise. Both
+          are buttons: the member walks back and forth freely, and the one
+          they are on is marked. --%>
           <div id={"#{@id}-step-head"}>
-            <div :if={@details_step?} class="mb-3 flex items-center gap-2" data-details-step>
-              <button
-                type="button"
-                id={"#{@id}-back"}
-                phx-click="write-step"
-                phx-target={@myself}
-                class="-ml-2 inline-flex h-11 items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                <span aria-hidden="true">‹</span> {gettext("Back")}
-              </button>
-              <span class="flex-1 text-[15px] font-bold text-slate-900 dark:text-slate-100">
-                {details_title(@images, @video)}
-              </span>
-              <span class="text-[13px] text-slate-500 dark:text-slate-400">
-                {gettext("Step 2 of 2")}
-              </span>
-            </div>
+            <.step_indicator
+              :if={@needs_details?}
+              id={@id}
+              details?={@details_step?}
+              details_title={details_title(@images, @video)}
+              myself={@myself}
+            />
           </div>
 
           <%!-- The editor, the tags and the language stay in the form in both
@@ -2374,6 +2378,29 @@ defmodule VutuvWeb.PostLive.Composer do
             <p :if={@bento} class="text-xs text-slate-600 dark:text-slate-400">
               {gettext("Drag one photo onto another to swap them.")}
             </p>
+          </div>
+
+          <%!-- The licence in plain sight on the photo step, not one sheet
+          deeper: it is the answer to who may reuse these pictures, and a
+          member publishing photos should see which one they are giving. --%>
+          <div :if={@images != []} class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <label for={"#{@id}-license"} class="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {gettext("Licence")}
+            </label>
+            <select
+              name="post[license]"
+              id={"#{@id}-license"}
+              title={gettext("Who may reuse these photos")}
+              class={compact_select_class()}
+            >
+              <option
+                :for={license <- PhotoLicense.values()}
+                value={license}
+                selected={@license == license}
+              >
+                {PhotoLicense.label(license)}
+              </option>
+            </select>
           </div>
 
           <.video_block :if={@video} id={@id} video={@video} editing?={@post != nil} myself={@myself} />
@@ -2546,7 +2573,7 @@ defmodule VutuvWeb.PostLive.Composer do
               phx-target={@myself}
               class="inline-flex h-11 items-center rounded-lg border border-slate-300 px-4 text-[15px] font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
             >
-              {gettext("Back")}
+              <span aria-hidden="true">‹</span> {gettext("Text & attachments")}
             </button>
 
             <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
@@ -2581,7 +2608,7 @@ defmodule VutuvWeb.PostLive.Composer do
                 phx-target={@myself}
                 class="whitespace-nowrap px-6"
               >
-                {gettext("Next")} <span aria-hidden="true">›</span>
+                {gettext("Next: %{step}", step: details_title(@images, @video))} <span aria-hidden="true">›</span>
               </.button>
 
               <.button
@@ -3165,6 +3192,81 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp photo_meta(_image), do: ""
 
+  # The two steps as one bar of two buttons: the number, the name, the one the
+  # member is on filled in. Clicking either goes there, which is the whole
+  # promise of "you can go back and forth". `data-details-step` marks step 2
+  # being shown, for the tests and nothing else.
+  attr(:id, :string, required: true)
+  attr(:details?, :boolean, required: true)
+  attr(:details_title, :string, required: true)
+  attr(:myself, :any, required: true)
+
+  defp step_indicator(assigns) do
+    ~H"""
+    <nav
+      aria-label={gettext("Steps")}
+      class="mb-3 flex items-center gap-2"
+      data-step-indicator
+      data-details-step={@details?}
+    >
+      <.step_button
+        id={"#{@id}-step-write"}
+        number={1}
+        label={gettext("Text & attachments")}
+        current?={not @details?}
+        event="write-step"
+        myself={@myself}
+      />
+      <span aria-hidden="true" class="h-px min-w-4 flex-1 bg-slate-300 dark:bg-slate-600"></span>
+      <.step_button
+        id={"#{@id}-step-details"}
+        number={2}
+        label={@details_title}
+        current?={@details?}
+        event="details-step"
+        myself={@myself}
+      />
+    </nav>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:number, :integer, required: true)
+  attr(:label, :string, required: true)
+  attr(:current?, :boolean, required: true)
+  attr(:event, :string, required: true)
+  attr(:myself, :any, required: true)
+
+  defp step_button(assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={@id}
+      phx-click={@event}
+      phx-target={@myself}
+      aria-current={@current? && "step"}
+      class={[
+        "inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-1.5 pr-3 text-[15px]",
+        if(@current?,
+          do: "font-semibold text-slate-900 dark:text-slate-100",
+          else: "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+        )
+      ]}
+    >
+      <span class={[
+        "flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+        if(@current?,
+          do: "bg-brand-700 text-white",
+          else: "border border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"
+        )
+      ]}>
+        {@number}
+      </span>
+      {@label}
+    </button>
+    """
+  end
+
   # What step 2 is about, named by what it holds.
   defp details_title(images, nil) when images != [], do: gettext("Photos")
   defp details_title([], _video), do: gettext("Video")
@@ -3650,22 +3752,6 @@ defmodule VutuvWeb.PostLive.Composer do
         "mt-4 space-y-2",
         @bento && "border-t border-slate-200 pt-3 dark:border-slate-700"
       ]}>
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <label for={"#{@id}-license"} class="text-sm font-medium text-slate-600 dark:text-slate-400">
-            {gettext("Licence")}
-          </label>
-          <select
-            name="post[license]"
-            id={"#{@id}-license"}
-            title={gettext("Who may reuse these photos")}
-            class={compact_select_class()}
-          >
-            <option :for={license <- PhotoLicense.values()} value={license} selected={@license == license}>
-              {PhotoLicense.label(license)}
-            </option>
-          </select>
-        </div>
-
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
           <label for={"#{@id}-download"} class="text-sm font-medium text-slate-600 dark:text-slate-400">
             {gettext("Download")}
