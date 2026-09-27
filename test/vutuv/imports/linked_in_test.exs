@@ -241,6 +241,47 @@ defmodule Vutuv.Imports.LinkedInTest do
       assert [%{params: %{"value" => "+49 1515 0230373"}}] = result.phones
     end
 
+    # A bare "4915…" read against the default region DE is the landline
+    # 0491 5… (Leer); LinkedIn writes it for an international number.
+    test "a bare number without trunk zero is read as international" do
+      csv = "Extension,Number,Type\n,4915150230373,Mobile\n,+49 1515 0230373,Mobile\n"
+      {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
+
+      assert [%{params: %{"value" => value}}] = result.phones
+      assert {:ok, "+49 1515 0230373"} = Vutuv.Phone.normalize(value)
+    end
+
+    test "the national and the international spelling collapse into one" do
+      csv = "Extension,Number,Type\n,01515 0230373,Mobile\n,+49 1515 0230373,Mobile\n"
+      {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
+
+      assert [_one] = result.phones
+    end
+
+    # WhatsApp stores E.164 without the plus; it is never a national number.
+    test "a WhatsApp number is read as international" do
+      whatsapp = "Number,Extension,Is_WhatsApp_Number\n4915901704664,,false\n"
+      {:ok, result} = LinkedIn.parse(zip([{"Whatsapp Phone Numbers.csv", whatsapp}]))
+
+      assert [%{params: %{"value" => "+4915901704664"}}] = result.phones
+
+      assert {:ok, "+49 1590 1704664"} =
+               Vutuv.Phone.normalize(hd(result.phones).params["value"])
+    end
+
+    test "the WhatsApp copy of a listed number collapses into one mobile number" do
+      phones = "Extension,Number,Type\n,,\n, +49 1590 1704664,\n, +4915901704664,Mobile\n"
+      whatsapp = "Number,Extension,Is_WhatsApp_Number\n4915901704664,,false\n"
+
+      {:ok, result} =
+        LinkedIn.parse(
+          zip([{"Whatsapp Phone Numbers.csv", whatsapp}, {"PhoneNumbers.csv", phones}])
+        )
+
+      assert [%{params: %{"value" => value, "number_type" => "Cell"}}] = result.phones
+      assert {:ok, "+49 1590 1704664"} = Vutuv.Phone.normalize(value)
+    end
+
     test "rows without a number yield no candidates" do
       csv = "Extension,Number,Type\n,,Mobile\n,,Mobile\n"
       {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
