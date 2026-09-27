@@ -92,9 +92,7 @@ defmodule VutuvWeb.VideoComponents do
           aria-hidden="true"
           class="pointer-events-none absolute inset-0 flex items-center justify-center"
         >
-          <span class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg">
-            <.play_icon class="ml-1 h-8 w-8" />
-          </span>
+          <.play_disc />
         </span>
         <%!-- Top-left, not bottom-left like the tiles: Chrome and Safari draw
         the native control bar along the bottom of the poster before the
@@ -231,6 +229,21 @@ defmodule VutuvWeb.VideoComponents do
 
   @doc "The length in whole minutes, rounded up — never `0`, a clip is at least a minute of waiting."
   def minutes_up(%PostVideo{} = video), do: max(1, div(PostVideo.seconds(video) + 59, 60))
+
+  @doc """
+  The round play button on a clip's poster, a member's own or a remote one.
+
+  Opaque and 72px because Safari draws its own frosted start button (about
+  68px) in the same spot before the first play, and no CSS hides it: a
+  translucent or smaller disc let its offset triangle show through as a blur.
+  """
+  def play_disc(assigns) do
+    ~H"""
+    <span class="flex h-18 w-18 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg">
+      <.play_icon class="ml-1 h-8 w-8" />
+    </span>
+    """
+  end
 
   @doc "The play triangle every video control draws, the start page's teaser included."
   attr(:class, :string, default: "h-5 w-5")
