@@ -24388,13 +24388,6 @@ msgstr ""
 msgid "Reach analysis"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4811
-#: lib/vutuv_web/components/post_components.ex:4875
-#: lib/vutuv_web/controllers/post_controller.ex:52
-#, elixir-autogen, elixir-format
-msgid "Reach analysis (Beta)"
-msgstr ""
-
 #: lib/vutuv_web/controllers/post_controller.ex:54
 #, elixir-autogen, elixir-format
 msgid "See the known readership, visible responses and network reach of this public post."

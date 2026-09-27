@@ -53,12 +53,12 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
       checked_at: ~U[2026-09-15 12:00:00Z]
     })
 
-    assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~
-             "Reach analysis (Beta)"
+    assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~ "Reach analysis"
 
     analytics = get(conn, "/posts/#{post.id}/analytics")
     body = html_response(analytics, 200)
     assert body =~ "Reach analysis"
+    refute body =~ "Beta"
     assert body =~ "Chart period"
     assert body =~ "Last 7 days"
     assert body =~ "Last 30 days"
@@ -133,8 +133,7 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     post = create_post!(author, %{body: "Public menu"})
     {conn, _reader} = create_and_login_user(conn)
 
-    assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~
-             "Reach analysis (Beta)"
+    assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~ "Reach analysis"
   end
 
   test "another member cannot read a restricted post's analysis", %{conn: conn} do
