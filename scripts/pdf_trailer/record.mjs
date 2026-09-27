@@ -128,11 +128,11 @@ await page.evaluate(([x, y]) => {
   f.innerHTML = '<span class="tz-doc"></span><span>Sommerfest-Programm.pdf</span>';
   f.style.left = x + "px"; f.style.top = y + "px";
   document.body.appendChild(f);
-}, [1320, 620]);
-cx = 1330; cy = 640;
+}, [zx + 360, zy + 150]);
+cx = zx + 380; cy = zy + 170;
 await page.mouse.move(cx, cy);
 let dragging = false;
-await glide(zx, zy, 1500, async (px, py) => {
+await glide(zx, zy, 1000, async (px, py) => {
   await page.evaluate(([x, y]) => { const f = document.querySelector("#tz-file"); f.style.left = x - 20 + "px"; f.style.top = y - 20 + "px"; }, [px, py]);
   if (!dragging && Math.hypot(px - zx, py - zy) < 260) {
     dragging = true;
