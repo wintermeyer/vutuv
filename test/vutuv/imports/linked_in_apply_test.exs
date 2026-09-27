@@ -235,6 +235,20 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
            ) == 1
   end
 
+  # The saved number and the archive's spell it differently; digits alone
+  # ("4915150230373" vs "015150230373") missed that and imported a duplicate.
+  test "a number already on the profile in another spelling is skipped" do
+    user = insert(:user)
+    insert(:phone_number, user: user, value: "+49 1515 0230373")
+
+    phones_csv = "Extension,Number,Type\n,01515 0230373,Mobile\n"
+    {:ok, parsed} = LinkedIn.parse(zip([{"PhoneNumbers.csv", phones_csv}]))
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.phones == 0
+    assert summary.skipped.phones == 1
+  end
+
   # The 22001 regression behind the "500 on import" bug report: LinkedIn
   # allows 2,000-character position descriptions, but the columns were
   # varchar(255) — the insert raised Postgrex.Error (string_data_right_

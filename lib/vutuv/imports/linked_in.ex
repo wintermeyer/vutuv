@@ -30,6 +30,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Accounts.User
   alias Vutuv.Mentions
   alias Vutuv.PageScreenshot
+  alias Vutuv.Phone
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Qualification
@@ -452,7 +453,7 @@ defmodule Vutuv.Imports.LinkedIn do
         |> tidy(),
       skills: rows_by_type |> Map.get(:skills, []) |> parse_skills(),
       emails: rows_by_type |> Map.get(:emails, []) |> Enum.map(&email_info/1),
-      phones: rows_by_type |> Map.get(:phones, []) |> parse_phones(),
+      phones: rows_by_type |> Map.get(:phones, []) |> Enum.map(&phone_candidate/1) |> tidy(),
       urls: tidy(profile_urls),
       social: tidy(profile_social)
     }
@@ -879,37 +880,32 @@ defmodule Vutuv.Imports.LinkedIn do
 
   # ── PhoneNumbers.csv → PhoneNumber params ──
 
-  # A bare "4915…" is read against the default region DE, i.e. as the landline
-  # 0491 5…, so when one number arrives in several spellings the one carrying
-  # its "+" must win the collapse in tidy/1 (the sort is stable).
-  defp parse_phones(rows) do
-    rows
-    |> Enum.map(&phone_candidate/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.sort_by(&(not String.starts_with?(&1.label, "+")))
-    |> tidy()
-  end
-
-  # nil for a number-less row; the id hashes the digits alone, so the same
-  # number in two formats is one candidate. "Whatsapp Phone Numbers.csv"
-  # stores E.164 without the "+" ("4915901704664"), so its numbers get it back.
+  # nil for a number-less row; the id hashes the E.164 form, so the same
+  # number in two spellings ("0151 …" and "+49 151 …") is one candidate.
   defp phone_candidate(row) do
     case blank_nil(row["Number"]) do
       nil ->
         nil
 
       number ->
-        number =
-          if Map.has_key?(row, "Is_WhatsApp_Number") and not String.starts_with?(number, "+"),
-            do: "+" <> number,
-            else: number
+        number = international(number)
 
         %{
-          id: cid("phone", digits(number)),
+          id: cid("phone", Phone.tel(number)),
           label: number,
           params: %{"value" => number, "number_type" => phone_type(row["Type"])}
         }
     end
+  end
+
+  # LinkedIn writes international numbers without their "+" (WhatsApp always,
+  # PhoneNumbers.csv sometimes: "4915901704664"). Read against the default
+  # region DE that is the landline 0491 5901704664 in Leer, so a number with
+  # neither "+" nor trunk zero gets its "+" back when that makes it valid.
+  defp international(number) do
+    if number =~ ~r/\A[1-9]/ and match?({:ok, _}, Phone.normalize("+" <> number)),
+      do: "+" <> number,
+      else: number
   end
 
   defp phone_type(type) do
@@ -989,7 +985,7 @@ defmodule Vutuv.Imports.LinkedIn do
         mark(parsed.certifications, existing.certifications, &certification_key(&1.params)),
       urls: mark(parsed.urls, existing.urls, &downcase(&1.params["value"])),
       social: mark(parsed.social, existing.social, &social_key(&1.params)),
-      phones: mark(parsed.phones, existing.phones, &digits(&1.params["value"])),
+      phones: mark(parsed.phones, existing.phones, &Phone.tel(&1.params["value"])),
       skills:
         parsed.skills
         |> mark(existing.skills, &String.downcase(&1.name))
@@ -1208,7 +1204,7 @@ defmodule Vutuv.Imports.LinkedIn do
 
       {existing, phones} =
         insert_scoped(existing, :phones, Map.get(selection, :phones, []), fn c ->
-          {digits(c.params["value"]), &PhoneNumber.changeset(&1, c.params), :phone_numbers}
+          {Phone.tel(c.params["value"]), &PhoneNumber.changeset(&1, c.params), :phone_numbers}
         end)
 
       {_existing, skills} = insert_skills(user, existing, Map.get(selection, :skills, []))
@@ -1395,7 +1391,7 @@ defmodule Vutuv.Imports.LinkedIn do
         keys(SocialMediaAccount, user.id, fn r ->
           social_key(%{"provider" => r.provider, "value" => r.value})
         end),
-      phones: keys(PhoneNumber, user.id, fn r -> digits(r.value) end),
+      phones: keys(PhoneNumber, user.id, &Phone.tel(&1.value)),
       skills: skill_keys(user.id)
     }
   end
@@ -1481,9 +1477,6 @@ defmodule Vutuv.Imports.LinkedIn do
 
   defp downcase(nil), do: nil
   defp downcase(value), do: value |> to_string() |> String.trim() |> String.downcase()
-
-  defp digits(nil), do: nil
-  defp digits(value), do: value |> to_string() |> String.replace(~r/\D/, "")
 
   # String.capitalize/1 already downcases the tail, so no separate downcase.
   defp titleize(label), do: String.capitalize(label)

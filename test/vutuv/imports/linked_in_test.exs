@@ -242,12 +242,20 @@ defmodule Vutuv.Imports.LinkedInTest do
     end
 
     # A bare "4915…" read against the default region DE is the landline
-    # 0491 5… (Leer), so the international spelling must win the collapse.
-    test "the spelling with a plus survives even when it comes second" do
+    # 0491 5… (Leer); LinkedIn writes it for an international number.
+    test "a bare number without trunk zero is read as international" do
       csv = "Extension,Number,Type\n,4915150230373,Mobile\n,+49 1515 0230373,Mobile\n"
       {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
 
-      assert [%{params: %{"value" => "+49 1515 0230373"}}] = result.phones
+      assert [%{params: %{"value" => value}}] = result.phones
+      assert {:ok, "+49 1515 0230373"} = Vutuv.Phone.normalize(value)
+    end
+
+    test "the national and the international spelling collapse into one" do
+      csv = "Extension,Number,Type\n,01515 0230373,Mobile\n,+49 1515 0230373,Mobile\n"
+      {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
+
+      assert [_one] = result.phones
     end
 
     # WhatsApp stores E.164 without the plus; it is never a national number.
