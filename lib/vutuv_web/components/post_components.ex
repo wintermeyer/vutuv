@@ -4808,7 +4808,7 @@ defmodule VutuvWeb.PostComponents do
                 <:item href={@permalink} copy={@permalink_url}>
                   {gettext("Copy link to post")}
                 </:item>
-                <:item href={~p"/posts/#{@post.id}/analytics"}>{gettext("Reach analysis (Beta)")}</:item>
+                <:item href={~p"/posts/#{@post.id}/analytics"}>{gettext("Reach analysis")}</:item>
                 <:item :if={@editable?} href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
                 <%!-- The profile pin (issue #1110). Only one post can be pinned,
                 so pinning while another post holds the spot asks first and says
@@ -4872,7 +4872,7 @@ defmodule VutuvWeb.PostComponents do
                   {gettext("Copy link to post")}
                 </:item>
                 <:item :if={!@restricted?} href={~p"/posts/#{@post.id}/analytics"}>
-                  {gettext("Reach analysis (Beta)")}
+                  {gettext("Reach analysis")}
                 </:item>
                 <:item
                   :if={@viewer_follow && !@organization_author?}

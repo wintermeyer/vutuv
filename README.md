@@ -22,7 +22,7 @@ We use the [MIT License](LICENSE).
   A private answer under a post stays there and also opens a conversation, each
   view linking to the other.
 
-- A public post's beta reach analysis is public too, uses cached NodeInfo to
+- A public post's reach analysis is public too, uses cached NodeInfo to
   show community size when available, and is available from its
   three-dot menu. It shows the distinct people with visible interactions,
   a shareable server-network card, cached follower totals for potential repost

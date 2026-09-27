@@ -49,7 +49,7 @@ defmodule VutuvWeb.PostController do
         author: Posts.author(post),
         analytics_page: true,
         page_title: gettext("Reach analysis"),
-        open_graph_title: gettext("Reach analysis (Beta)"),
+        open_graph_title: gettext("Reach analysis"),
         meta_description:
           gettext(
             "See the known readership, visible responses and network reach of this public post."
