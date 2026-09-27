@@ -6665,6 +6665,9 @@ defmodule Vutuv.Posts do
       # The book/film review sidecar (nil for ordinary posts) — the card
       # renders it wherever the post renders, so it always travels along.
       :review,
+      # Its files with their preview pages (issue #2108), the ones a reader may
+      # be handed: a frozen file is held by a case and has no chip.
+      attachments: {Attachments.shown_query(), :pages},
       # The author, with the links they have PROVED are their own webpage
       # (issue #1246) — a link in the body pointing at one of them wears the
       # verified mark. One extra batched query per page, never one per card.

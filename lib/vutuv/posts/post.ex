@@ -109,6 +109,10 @@ defmodule Vutuv.Posts.Post do
     # (`Vutuv.Posts.PendingPost`).
     has_one(:video, Vutuv.Posts.PostVideo)
 
+    # Its files (issue #2108), in upload order. Only ever claimed once they are
+    # done: a post carrying one waits for it (`Vutuv.Posts.PendingPost`).
+    has_many(:attachments, Vutuv.Attachments.Attachment, preload_order: [asc: :inserted_at])
+
     # The auto-generated link screenshot: present iff this post carried a single
     # URL and no image at save time (see Vutuv.Posts.Screenshots). Rendered
     # beside the body once `status: "ready"`.

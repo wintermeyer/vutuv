@@ -14,6 +14,7 @@ defmodule VutuvWeb.AgentDocs.Text do
   alias Vutuv.Accounts.User
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.Markdown
+  alias VutuvWeb.UI
 
   @width 80
 
@@ -112,6 +113,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       Markdown.likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
       video_text(doc[:video]),
+      section(gettext("Files"), Enum.map(doc[:files] || [], &file_lines/1)),
       license_text(doc.license),
       section(
         "#{gettext("Conversation")} (#{length(doc.thread)})",
@@ -144,6 +146,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       Markdown.likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
       video_text(doc[:video]),
+      section(gettext("Files"), Enum.map(doc[:files] || [], &file_lines/1)),
       license_text(doc.license),
       section(
         "#{gettext("Conversation")} (#{length(doc.thread)})",
@@ -911,6 +914,9 @@ defmodule VutuvWeb.AgentDocs.Text do
   end
 
   defp license_text(_license), do: nil
+
+  defp file_lines(file),
+    do: "* #{file.name} (#{UI.file_size(file.size_bytes)})\n  #{file.url}"
 
   defp video_text(nil), do: nil
 

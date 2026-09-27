@@ -510,7 +510,7 @@ defmodule Vutuv.Export do
     from(p in Post,
       where: p.user_id == ^user.id,
       order_by: [asc: p.id],
-      preload: [:tags, :images, :denials]
+      preload: [:tags, :images, :denials, :attachments]
     )
     |> Repo.all()
     |> Enum.map(fn post ->
@@ -523,9 +523,21 @@ defmodule Vutuv.Export do
         tags: Enum.map(post.tags, & &1.name),
         images:
           Enum.map(post.images, &%{token: &1.token, alt: &1.alt, content_type: &1.content_type}),
+        # Its files (issue #2111), each at the address it can be downloaded
+        # from while the account exists.
+        files: Enum.map(post.attachments, &file/1),
         audience_denials: Enum.map(post.denials, &denial/1)
       }
     end)
+  end
+
+  defp file(attachment) do
+    %{
+      name: attachment.file_name,
+      content_type: attachment.content_type,
+      size_bytes: attachment.size_bytes,
+      url: Endpoint.url() <> Vutuv.Attachments.file_url(attachment)
+    }
   end
 
   defp drafts(user) do

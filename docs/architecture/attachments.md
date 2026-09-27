@@ -4,8 +4,7 @@ A post can carry files as well as photos and a clip: PDF, plain text and
 Markdown to begin with (milestone #2102), and a message between two connected
 members carries the same plus the photo formats (#2110). This document covers
 how a file gets in, how its preview pages are rendered, what a message does
-with one, and grows as the rest of the milestone lands: what a post shows and
-hands out (#2108).
+with one, and what a post shows and hands out (#2108).
 
 ## One chokepoint
 
@@ -112,9 +111,8 @@ Everything is per installation, read in `config/runtime.exs` with the
 `ATTACHMENT_RENDER_CONCURRENCY`, `PDFINFO_PATH`, `PDFDETACH_PATH`,
 `PDFTOPPM_PATH`.
 
-`ATTACHMENT_UPLOADERS` is `admins` while the milestone is being built, the way
-video was introduced: a post cannot show or hand out its files until #2108
-lands, so nobody else is offered a picker yet — in the composer **or** in a
+`ATTACHMENT_UPLOADERS` is `members` since a post shows and hands out its files
+(#2108); `admins` keeps the picker to admins, in the composer **and** in a
 message, which reads the same switch. `ATTACHMENTS_PER_POST` and both budgets
 cover a message's files too: "the same limits as a post" is what #2110 asked
 for, so there is one set of numbers rather than two that can disagree.
@@ -234,25 +232,46 @@ says how many files rather than nothing at all.
 the disk. The rows cascade with the message on their own; `Vutuv.Chat` calls
 `Attachments.purge_for_message/1` before deleting a message and before wiping a
 declined request's thread, because a served copy nothing points at is a leak
-nobody would notice. (Account deletion is the one gap left, and it is #2111's:
-`Accounts.delete_user/1` takes the rows through the cascade and leaves the
-bytes.)
+nobody would notice. Account deletion takes the rows through the cascade and
+`Accounts.delete_user/1` removes the bytes after it commits.
 
 ### The one address a file has
 
 `VutuvWeb.AttachmentController`, at `/system/attachments/:token/file` and
 `/system/attachments/:token/pages/:position/:version`. Under `/system/` rather
 than a root word, like the two media proxies beside it, so it burns no handle a
-member could otherwise claim. Login-required, and every request re-asks
-`readable_by?/2`; denied and unknown are the same 404, so the URL cannot be
-used to find out that a file exists. The file is always sent as a **download**
+member could otherwise claim. Every request re-asks `readable_by?/2`, which is
+also the login check: it answers false for an anonymous reader of anything but
+a post's file. Denied and unknown are the same 404, so the URL cannot be used
+to find out that a file exists. The file is always sent as a **download**
 (`content-disposition: attachment`) with `cache-control: private, no-store` —
 this URL does not answer the same way for ever, and a copy cached in a shared
 browser would outlive the connection that justified it.
 
-A file under a **post** has no address here. #2108 owns that, and until it
-lands `readable_by?/2` answers false for the post half: a check that has not
-been written is not a check that passed.
+## A post's files (issue #2108)
+
+A file under a **post** follows the post's audience (`Posts.visible_to?/2`),
+the way `/post_images` guards the photos: an anonymous reader downloads a
+public post's file, and narrowing the post shuts every URL already handed out.
+A post claims a file only once it is done and never a refused one, so the
+pipeline is not asked again. A frozen file is out of the proxy and off the
+card (`Attachments.shown_query/0`, which the post preload and the Note use).
+
+The card (`VutuvWeb.PostFileComponents`) draws, per file, the preview pages as
+a strip that opens in the shared lightbox and a chip with the name, the size
+and the page count that hands the file over, in the feed and on the permalink
+alike. A reader who is not the author gets a Report link beside it. A post's
+preview pages take the photo proxy's five-minute cache tier rather than a
+message's `no-store`: they are sizes of a picture a feed renders.
+
+The agent formats (`PostDoc`), the data export and the Fediverse Note list the
+files too; the Note carries each as a `Document`, which Mastodon skips and a
+server that shows files offers for download. Account deletion removes both
+copies and any hold from the disk (`Accounts.delete_user/1`).
+
+Not done: the download does not answer byte ranges, and the post-level "no
+search engines, no AI" switch (#2107) is not built, so a public post's file is
+as public as its text.
 
 ## The preview pages
 
@@ -397,6 +416,4 @@ are the four halves of it, and the whole flow is written up in
 Two consequences for this document. The file's hold is
 `frozen/attachments/<attachment id>/`, one level deeper than a picture's, so
 `Vutuv.Images.reconcile_holds/0` cannot mistake it for a stranded image hold and
-delete it. And nothing serves a file or its pages yet, so a file has no address:
-the public notice form cannot name one and the post's card has no chip to hang a
-Report link on until #2108 gives it one.
+delete it. A post's file is reported from the Report link beside its chip.

@@ -141,6 +141,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
       video_line(doc[:video]),
+      section(gettext("Files"), Enum.map(doc[:files] || [], &file_line/1)),
       license_line(doc.license),
       # The whole conversation (issue #1006), like the HTML permalink: every
       # other thread post oldest first (the page's own post already reads in
@@ -180,6 +181,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
       video_line(doc[:video]),
+      section(gettext("Files"), Enum.map(doc[:files] || [], &file_line/1)),
       license_line(doc.license),
       section(
         "#{gettext("Conversation")} (#{length(doc.thread)})",
@@ -1452,6 +1454,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # so a reader (human or machine) can tell the facts apart.
   # The clip (issue #1906): one line naming the file, its length and its
   # description, under its own heading.
+  # A post's file (issue #2108): its name as the link, its size beside it.
+  defp file_line(file),
+    do: "- " <> md_link(file.name, file.url) <> " (#{UI.file_size(file.size_bytes)})"
+
   defp video_line(nil), do: nil
 
   defp video_line(video) do

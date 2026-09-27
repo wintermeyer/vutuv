@@ -51,7 +51,9 @@ defmodule VutuvWeb.AttachmentComposerTest do
     render_upload(input, name)
   end
 
-  test "a member who is not an admin is offered no files at all" do
+  test "a member who is not an admin is offered no files where uploads are for admins" do
+    Fixtures.put_config(uploaders: :admins)
+
     {conn, _member} =
       build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user()
 

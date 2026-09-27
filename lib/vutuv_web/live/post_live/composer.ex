@@ -291,8 +291,8 @@ defmodule VutuvWeb.PostLive.Composer do
   defp post_video(_post), do: nil
 
   # Whether this composer offers the file picker: this member may upload
-  # (`Vutuv.Attachments.uploads_for?/1` — admins only until the installation
-  # opens it), and this is a new post.
+  # (`Vutuv.Attachments.uploads_for?/1`, which `ATTACHMENT_UPLOADERS` can
+  # narrow to admins), and this is a new post.
   defp attachment_uploads?(nil, user), do: Attachments.uploads_for?(user)
   defp attachment_uploads?(_post, _user), do: false
 

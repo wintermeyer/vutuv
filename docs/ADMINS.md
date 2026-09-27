@@ -133,7 +133,7 @@ Everything else has a default (the vutuv.de production value):
 | `VIDEO_CONCURRENCY` | `2` | How many clips are converted at once. Everything past that queues; the author sees "waiting in line" |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | The two binaries, if not on `$PATH` under those names |
 | `ATTACHMENT_UPLOADS` | `true` | `false` turns files off entirely — on posts and in messages alike: no picker anywhere, and the server refuses one. For an installation that wants text and pictures and nothing that can carry code |
-| `ATTACHMENT_UPLOADERS` | `admins` | Who may attach a file, in the composer and in a message. `admins` while the feature is being built — a post cannot show or hand out its files yet — `members` opens it to everyone once it can |
+| `ATTACHMENT_UPLOADERS` | `members` | Who may attach a file, in the composer and in a message: `members` for everyone, `admins` to keep the picker to admins while an installation tries files out |
 | `ATTACHMENT_MAX_MB` | `20` | The largest file a member may attach, in megabytes. 20 MB is a scanned twenty-page contract or a deck with pictures in it |
 | `ATTACHMENTS_PER_POST` | `5` | How many files one post may carry — and one message, which takes the same limits |
 | `ATTACHMENT_DAILY_MB` | `100` | How much a member may upload in **any 24 hours**, in megabytes. The window rolls rather than resetting at midnight, so there is no hour at which twice the allowance fits. Counted as *accepted uploads*: deleting a file does not give the megabytes back, which is what stops an upload-and-delete loop from filling your disk. Admins have no allowance |
