@@ -110,5 +110,6 @@ assets/node_modules
 
 # teaser recorder (scripts/teaser): its npm install
 /scripts/teaser/node_modules
+/scripts/pdf_trailer/node_modules
 /scripts/teaser/package-lock.json
 /scripts/teaser/__pycache__

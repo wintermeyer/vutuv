@@ -1,0 +1,9 @@
+{
+  "name": "vutuv-pdf-trailer",
+  "private": true,
+  "type": "module",
+  "description": "Records the vutuv PDF attachment trailer from a local dev server. See run.sh.",
+  "dependencies": {
+    "playwright": "1.55.0"
+  }
+}
