@@ -19,6 +19,15 @@ defmodule VutuvWeb.DevDocMarkdownTest do
   end
 
   describe "to_html/1" do
+    test "links a bare email address the way a post does" do
+      html = DevDocMarkdown.to_html("E-Mail: sw@wintermeyer-consulting.de\n\n`a@b.de`")
+
+      assert html =~
+               ~s(<a href="mailto:sw@wintermeyer-consulting.de" class="email">sw@wintermeyer-consulting.de</a>)
+
+      refute html =~ "mailto:a@b.de"
+    end
+
     test "gives every heading an id anchor so #section links resolve" do
       html = DevDocMarkdown.to_html("## OAuth 2 for third-party apps\n\nbody\n\n### Images\n")
 

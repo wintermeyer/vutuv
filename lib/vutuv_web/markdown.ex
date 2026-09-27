@@ -1236,16 +1236,21 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  # A bare email address becomes a `mailto:` link that never wraps
-  # (`.email { white-space: nowrap }`): a hyphenated domain otherwise breaks at
-  # its hyphen and a reader copies half an address. It runs after the
-  # entities, so `@sw@example.org` is already a mention inside an `<a>` and is
-  # skipped with the rest of the linked, coded and preformatted text. The
-  # lookbehind keeps the tail of `@php@tags.<host>` (left plain when no such
-  # tag exists) from reading as an address, and the domain needs a letters-only
-  # top-level label, so `user@localhost` stays text. No `target`: a mail client
-  # is not a tab.
-  defp linkify_emails(html) do
+  @doc """
+  Turns every bare email address in rendered HTML into a `mailto:` link that
+  never wraps (`.email { white-space: nowrap }`): a hyphenated domain otherwise
+  breaks at its hyphen and a reader copies half an address.
+
+  The one place that does it, for member text (posts, messages, remote posts)
+  and for the trusted pages (`VutuvWeb.DevDocMarkdown`: legal pages, help,
+  developer docs) alike. Text inside `a`, `code` and `pre` is left alone, so it
+  runs after the mentions: `@sw@example.org` is by then a mention inside an
+  `<a>`. The lookbehind keeps the tail of `@php@tags.<host>` (left plain when
+  no such tag exists) from reading as an address, and the domain needs a
+  letters-only top-level label, so `user@localhost` stays text. No `target`: a
+  mail client is not a tab.
+  """
+  def linkify_emails(html) do
     if String.contains?(html, "@") do
       html
       |> tokenize_html()

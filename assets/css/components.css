@@ -1487,10 +1487,12 @@ ul.thumbs li .text .url a {
    appear in chat message bubbles. */
 .mention,
 .hashtag { font-weight: 600; }
-/* A bare email address the renderer turned into a `mailto:` link: kept on one
-   line, since a hyphenated domain otherwise wraps at its hyphen and reads as
-   two words. */
-.email { white-space: nowrap; }
+/* An email address kept on one line, since a hyphenated domain otherwise wraps
+   at its hyphen and reads as two words: the `.email` link the renderer makes of
+   a bare address (Markdown.linkify_emails/1, chat bubbles included) and any
+   hand-written `[…](mailto:…)` in rendered Markdown, like a legal page's. */
+.email,
+.markdown a[href^="mailto:"] { white-space: nowrap; }
 /* The verified mark on a link that points at a webpage the post's AUTHOR has
    proved is their own (issue #1246, Vutuv.Profiles.LinkVerification). The
    same emerald ✓ as `<.verified_mark>` on the profile's Links card, written
