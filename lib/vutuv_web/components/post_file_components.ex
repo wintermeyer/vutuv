@@ -1,14 +1,16 @@
 defmodule VutuvWeb.PostFileComponents do
   @moduledoc """
-  What a published post shows of its files (issue #2108): per file a strip of
-  its first pages as pictures, opening in the shared lightbox, and a chip with
-  the name, the size and the page count that hands the file over.
+  What a published post shows of its files (issue #2108): one compact row per
+  file, with its first page as a small picture, the name, the size and the page
+  count, a "Preview" that opens the rendered pages in the shared lightbox and
+  a "Download" that hands the file over.
 
-  Every address comes from `Vutuv.Attachments` (`file_url/1`, `page_url/3`),
-  and the proxy behind them asks the post's audience again on each request, so
-  the card and the bytes cannot disagree about who may have them. The feed
-  card and the permalink draw the same markup: a reader deciding whether to
-  open a file wants to see what it is in both.
+  The row stays the same height whether the file has one page or a hundred:
+  the pages themselves wait in the lightbox, so a long document does not push
+  the conversation down the feed. Every address comes from
+  `Vutuv.Attachments` (`file_url/1`, `page_url/3`), and the proxy behind them
+  asks the post's audience again on each request, so the card and the bytes
+  cannot disagree about who may have them.
   """
 
   use Phoenix.Component
@@ -25,67 +27,83 @@ defmodule VutuvWeb.PostFileComponents do
 
   def post_files(assigns) do
     ~H"""
-    <ul class="mt-3 space-y-3" data-post-files>
-      <li
-        :for={file <- @files}
-        id={"#{@id}-file-#{file.id}"}
-        data-post-file={file.id}
-        class="rounded-2xl p-2 ring-1 ring-slate-200 dark:ring-slate-700"
-      >
-        <.lightbox_gallery
-          :if={file.pages != []}
-          class="mb-2 flex gap-2 overflow-x-auto"
-        >
+    <ul class="mt-3 space-y-2" data-post-files>
+      <li :for={file <- @files} id={"#{@id}-file-#{file.id}"} data-post-file={file.id}>
+        <.lightbox_gallery class="flex items-center gap-3.5 rounded-[14px] border border-slate-200 px-3.5 py-2.5 dark:border-slate-700">
+          <%!-- The first page, which also opens the preview. The other pages
+          ride along as descriptions only, so the lightbox can step through
+          them without the row showing them. --%>
           <a
-            :for={{page, index} <- Enum.with_index(file.pages)}
-            href={Attachments.page_url(file, page, "large")}
+            :if={file.pages != []}
+            href={Attachments.page_url(file, hd(file.pages), "large")}
             class="shrink-0 cursor-zoom-in"
-            data-lightbox-photo={index}
+            data-lightbox-photo="0"
+            data-photo-src={Attachments.page_url(file, hd(file.pages), "large")}
+            data-photo-alt={page_alt(file, 0, length(file.pages))}
+            data-photo-download={Attachments.file_url(file)}
+            data-photo-position={page_alt(file, 0, length(file.pages))}
+          >
+            <img
+              src={Attachments.page_url(file, hd(file.pages), "thumb")}
+              alt={page_alt(file, 0, length(file.pages))}
+              width="44"
+              height="62"
+              loading="lazy"
+              class="block h-[62px] w-11 max-w-none rounded border border-slate-300 bg-white object-cover object-top dark:border-slate-600"
+            />
+          </a>
+          <span
+            :for={{page, index} <- file.pages |> Enum.with_index() |> Enum.drop(1)}
+            hidden
             data-photo-src={Attachments.page_url(file, page, "large")}
             data-photo-alt={page_alt(file, index, length(file.pages))}
             data-photo-download={Attachments.file_url(file)}
             data-photo-position={page_alt(file, index, length(file.pages))}
-          >
-            <img
-              src={Attachments.page_url(file, page, "thumb")}
-              alt={page_alt(file, index, length(file.pages))}
-              width={page.width}
-              height={page.height}
-              loading="lazy"
-              class="h-40 w-auto rounded-lg bg-white ring-1 ring-slate-200 dark:ring-slate-700"
-            />
-          </a>
-        </.lightbox_gallery>
-        <a
-          href={Attachments.file_url(file)}
-          download={file.file_name}
-          class="flex items-center gap-3 rounded-xl px-2 py-2 no-underline! hover:bg-slate-50 dark:hover:bg-slate-800"
-          data-post-file-download
-        >
-          <span class="shrink-0 text-xl" aria-hidden="true">📎</span>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+          />
+          <span :if={file.pages == []} class="flex h-[62px] w-11 shrink-0 items-center justify-center text-2xl" aria-hidden="true">📎</span>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-[15px] font-semibold leading-snug text-slate-900 dark:text-slate-100">
               {file.file_name}
-            </span>
-            <span class="block text-xs text-slate-500 dark:text-slate-400">
+            </div>
+            <div class="text-[13px] leading-snug text-slate-500 dark:text-slate-400">
               {file_facts(file)}
-            </span>
-          </span>
-          <span class="shrink-0 text-xs font-medium text-sky-700 dark:text-sky-300">
-            {gettext("Download file")}
-          </span>
-        </a>
-        <.link
-          :if={@report?}
-          id={"#{@id}-file-#{file.id}-report"}
-          navigate={
-            "/reports/new?" <>
-              URI.encode_query(type: "attachment", id: file.id, return_to: @permalink)
-          }
-          class="ml-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-        >
-          ⚑ {gettext("Report this file")}
-        </.link>
+            </div>
+            <%!-- Each link reaches 40 px of finger through padding it takes
+            back with a negative margin, so the row stays as tight as it
+            looks while the target does not shrink with it. --%>
+            <div class="-mx-[7px] mt-1 flex flex-wrap items-center">
+              <%!-- `data-lightbox-photo` without a `data-photo-src`: a control
+              that opens the gallery, not another picture in it. --%>
+              <a
+                :if={file.pages != []}
+                href={Attachments.page_url(file, hd(file.pages), "large")}
+                data-lightbox-photo="0"
+                class="-my-2.5 px-[7px] py-2.5 text-[13px] font-medium text-sky-700 dark:text-sky-300"
+              >
+                {gettext("Preview")}
+              </a>
+              <a
+                href={Attachments.file_url(file)}
+                download={file.file_name}
+                class="-my-2.5 px-[7px] py-2.5 text-[13px] font-medium text-sky-700 dark:text-sky-300"
+                data-post-file-download
+              >
+                {pgettext("post file", "Download")}
+              </a>
+              <.link
+                :if={@report?}
+                id={"#{@id}-file-#{file.id}-report"}
+                navigate={
+                  "/reports/new?" <>
+                    URI.encode_query(type: "attachment", id: file.id, return_to: @permalink)
+                }
+                class="-my-2.5 px-[7px] py-2.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                {gettext("Report this file")}
+              </.link>
+            </div>
+          </div>
+        </.lightbox_gallery>
       </li>
     </ul>
     """

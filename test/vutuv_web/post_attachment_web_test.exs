@@ -148,6 +148,8 @@ defmodule VutuvWeb.PostAttachmentWebTest do
       |> get(Posts.path(post))
       |> html_response(200)
 
-    assert html =~ "Datei herunterladen"
+    assert html =~ ~r/>\s*Vorschau\s*</
+    assert html =~ ~r/>\s*Herunterladen\s*</
+    assert html =~ "1 Seite"
   end
 end
