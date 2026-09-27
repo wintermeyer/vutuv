@@ -2571,7 +2571,7 @@ defmodule VutuvWeb.PostLive.Composer do
               id={"#{@id}-back-bottom"}
               phx-click="write-step"
               phx-target={@myself}
-              class="inline-flex h-11 items-center rounded-lg border border-slate-300 px-4 text-[15px] font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+              class="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 px-4 text-[15px] font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
             >
               <span aria-hidden="true">‹</span> {gettext("Text & attachments")}
             </button>
