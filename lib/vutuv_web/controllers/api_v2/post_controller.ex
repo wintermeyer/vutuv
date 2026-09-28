@@ -214,7 +214,11 @@ defmodule VutuvWeb.ApiV2.PostController do
   defp feed_entry(%{external_post: %ExternalPost{} = post} = entry) do
     entry
     |> remote_feed_entry(post)
-    |> Map.merge(%{found_via: post.source, servers: ExternalPosts.servers(entry)})
+    |> Map.merge(%{
+      found_via: post.source,
+      servers: ExternalPosts.servers(entry),
+      mirrors: Enum.map(ExternalPosts.mirrors(entry), & &1.address)
+    })
   end
 
   defp feed_entry(%{post: post} = entry) do

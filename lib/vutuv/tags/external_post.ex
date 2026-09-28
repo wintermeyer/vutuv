@@ -56,6 +56,10 @@ defmodule Vutuv.Tags.ExternalPost do
   # same 2048 bytes the fediverse URI sources cap at.
   @max_url 2_048
 
+  # Bridgy Fed's hosts for Bluesky members, websites and its own actors; see
+  # `bridge?/1`.
+  @bridge_hosts ~w(bsky.brid.gy web.brid.gy fed.brid.gy)
+
   schema "external_tag_posts" do
     field(:source, :string)
     field(:remote_id, :string)
@@ -127,9 +131,27 @@ defmodule Vutuv.Tags.ExternalPost do
   somebody local to the server we asked, and `ada@elsewhere` for anybody else.
   Both come back here as the whole address, so a reader never sees a half one.
   """
-  def address(%__MODULE__{} = post) do
-    Handle.display(local_name(post.author_acct), post.author_url, post.author_host)
+  def address(%{author_acct: acct, author_url: url, author_host: host}) do
+    Handle.display(local_name(acct), url, host)
   end
+
+  @doc """
+  Whether the author lives on a **bridge**: an account that stands in for
+  somebody on another network, such as Bridgy Fed's `@name@bsky.brid.gy` for a
+  Bluesky member.
+
+  A person who posts on Mastodon and on Bluesky at once reaches a followed tag
+  twice, once from each account, and nothing in the two rows says they are one
+  person. `Vutuv.Tags.ExternalPosts.fold_copies/1` folds such a mirror into the
+  post it repeats, and this is the half of its rule that decides which side may
+  be folded away: only a bridge's, never an ordinary server's, because two
+  ordinary accounts with the same words are somebody copying somebody.
+
+  A closed list rather than a pattern, so a server merely named like a bridge is
+  an ordinary server.
+  """
+  def bridge?(%{author_host: host}), do: authority_host(host) in @bridge_hosts
+  def bridge?(_unusable), do: false
 
   @doc """
   The name to head the card with: what the author calls themselves, their

@@ -198,6 +198,39 @@ defmodule VutuvWeb.ExternalTagCopiesTest do
       assert entry["found_via"] == @relay_a
       assert entry["servers"] == [@relay_a, @relay_b]
     end
+
+    # The same words posted on Bluesky, served by Bridgy Fed as an account of
+    # its own: one card, and the bridge account named under it.
+    test "a bridge's mirror is one card that names the bridge account", %{
+      conn: conn,
+      user: user
+    } do
+      tag = followed_tag(user, [@relay_a, @relay_b])
+      [own] = copies_of(tag, [@relay_a])
+
+      external_post(tag,
+        source: @relay_b,
+        author_host: "bsky.brid.gy",
+        author_acct: "ada.example@bsky.brid.gy",
+        url: "https://bsky.brid.gy/r/https://bsky.app/profile/ada.example/post/3abc",
+        text: "EIN FUND AUF MEHREREN SERVERN"
+      )
+
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> get(~p"/tags/#{tag.slug}?source=fediverse")
+        |> html_response(200)
+
+      assert cards(html) == [own.id]
+      assert html =~ ~s(data-external-mirrors="1")
+      assert html =~ "Auch über eine Brücke gepostet:"
+      assert html =~ "@ada.example@bsky.brid.gy"
+
+      json = conn |> get("/tags/#{tag.slug}.json") |> json_response(200)
+      assert [entry] = json["posts"]
+      assert entry["mirrors"] == ["@ada.example@bsky.brid.gy"]
+    end
   end
 
   describe "a report from a folded card" do

@@ -414,6 +414,7 @@ defmodule VutuvWeb.TagLive.Timeline do
                 live?
                 post={entry.external_post}
                 servers={ExternalPosts.servers(entry)}
+                mirrors={ExternalPosts.mirrors(entry)}
                 viewer={@current_user}
               />
             <% Posts.remote_feed_entry?(entry) -> %>

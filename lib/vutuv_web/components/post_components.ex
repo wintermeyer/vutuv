@@ -3650,6 +3650,12 @@ defmodule VutuvWeb.PostComponents do
         "`Vutuv.Tags.ExternalPosts.servers/1` (issue #2163). Empty falls back to `post.source`."
   )
 
+  attr(:mirrors, :list,
+    default: [],
+    doc:
+      "bridge accounts whose mirror folded into this card — `Vutuv.Tags.ExternalPosts.mirrors/1`"
+  )
+
   attr(:hide_rules, :any,
     default: nil,
     doc: "the viewer's own content filters — turns the ⋯ menu's hide list on; see <.post_card>"
@@ -3755,6 +3761,19 @@ defmodule VutuvWeb.PostComponents do
           </p>
 
           <.external_servers :if={length(@servers) > 1} id={@post.id} servers={@servers} />
+
+          <p
+            :if={@mirrors != []}
+            data-external-mirrors={length(@mirrors)}
+            class="mb-0 mt-0.5 text-xs text-slate-600 dark:text-slate-400"
+          >
+            {gettext("Also posted through a bridge:")}
+            <%= for mirror <- @mirrors do %>
+              <a {external_link(mirror.url)} class="underline">
+                {mirror.address}
+              </a>
+            <% end %>
+          </p>
 
           <.remote_body
             text={@post.text}
