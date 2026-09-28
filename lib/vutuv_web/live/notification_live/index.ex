@@ -89,6 +89,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   # A live arrival rebuilds the page; several in a burst rebuild it once.
   @reload_delay 1_000
 
+  # How many of a day's looks the desktop rail lists before it folds the rest.
+  @rail_looks 20
+
   # What the static render hands the connected mount (`load_first/1`).
   @payload_keys [:upper, :top_day, :cursor, :entries, :visits, :cards]
 
@@ -120,6 +123,8 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:cal_counts, %{})
      |> assign(:cal_counted, nil)
      |> assign(:cal_capped?, false)
+     |> assign(:visits_open?, false)
+     |> assign(:visits_more?, false)
      |> assign(:replies_only?, user.notifications_replies_only?)
      |> assign(:travel, nil)
      |> assign(:day, nil)}
@@ -139,6 +144,9 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> assign(:travel, travel)
       |> assign(:day, day)
       |> assign(:cal_month, FeedTimeTravel.month_of(day))
+      # The phone's fold opens by itself for a reader standing on a look, so a
+      # reconnect (which re-mounts and forgets the assign) puts it back open.
+      |> assign(:visits_open?, socket.assigns.visits_open? or not is_nil(travel))
 
     # A patch that keeps the window rebuilds from what is loaded; a new one loads.
     socket = if same_window?, do: rebuild(socket), else: load_first(socket)
@@ -185,6 +193,12 @@ defmodule VutuvWeb.NotificationLive.Index do
   def handle_event("cal-toggle", _params, socket) do
     {:noreply, socket |> update(:cal_open?, &(!&1)) |> load_calendar_counts()}
   end
+
+  def handle_event("visits-toggle", _params, socket),
+    do: {:noreply, update(socket, :visits_open?, &(!&1))}
+
+  def handle_event("visits-more", _params, socket),
+    do: {:noreply, update(socket, :visits_more?, &(!&1))}
 
   def handle_event("cal-month", %{"n" => n}, socket) do
     case Integer.parse(to_string(n)) do
@@ -522,6 +536,9 @@ defmodule VutuvWeb.NotificationLive.Index do
               looks={@paths.looks}
               now_path={@paths.now}
               now?={@paths.now?}
+              phone?
+              visits_open?={@visits_open?}
+              travel={@travel}
             />
           </div>
 
@@ -581,6 +598,7 @@ defmodule VutuvWeb.NotificationLive.Index do
             today={@today}
             top_day={@top_day}
             looks={@paths.looks}
+            visits_more?={@visits_more?}
             now_path={@paths.now}
             now?={@paths.now?}
           />
@@ -603,11 +621,22 @@ defmodule VutuvWeb.NotificationLive.Index do
       looks:
         a.day_visits
         |> Enum.reverse()
-        |> Enum.map(&%{visit: &1, path: page_path(a, at: &1.at), current?: a.travel == &1.at})
+        |> Enum.map(
+          &%{
+            visit: &1,
+            time: ViewerClock.format(&1.at, :time),
+            path: page_path(a, at: &1.at),
+            current?: a.travel == &1.at
+          }
+        )
     })
   end
 
-  # The calendar and the looks of the shown day.
+  # The calendar and the looks of the shown day. The desktop rail lists the
+  # looks and folds them past @rail_looks; the phone, where this sits ABOVE the
+  # list, folds them all behind a button beside the folded calendar and opens
+  # them as a grid of times, so a busy day no longer pushes every notification
+  # off the first screen.
   attr(:id, :string, required: true)
   attr(:cal_open?, :boolean, required: true)
   attr(:cal_month, :any, required: true)
@@ -619,30 +648,118 @@ defmodule VutuvWeb.NotificationLive.Index do
   attr(:looks, :list, required: true)
   attr(:now_path, :string, required: true)
   attr(:now?, :boolean, required: true)
+  attr(:phone?, :boolean, default: false)
+  attr(:visits_open?, :boolean, default: false)
+  attr(:visits_more?, :boolean, default: false)
+  attr(:travel, :any, default: nil)
 
   defp time_travel(assigns) do
+    assigns = assign(assigns, rail_fold(assigns))
+
     ~H"""
     <div class="space-y-3">
-      <.feed_calendar
-        id={"notification-calendar-#{@id}"}
-        open?={@cal_open?}
-        month={@cal_month}
-        day={@day}
-        today={@today}
-        metric="notifications"
-        switch?={false}
-        counts={@cal_counts}
-        capped?={@cal_capped?}
-      />
+      <div class={@phone? && "flex flex-wrap gap-2"}>
+        <.feed_calendar
+          id={"notification-calendar-#{@id}"}
+          class={@phone? && if(@cal_open?, do: "basis-full", else: "min-w-0 flex-1")}
+          open?={@cal_open?}
+          month={@cal_month}
+          day={@day}
+          today={@today}
+          metric="notifications"
+          switch?={false}
+          counts={@cal_counts}
+          capped?={@cal_capped?}
+        />
+        <button
+          :if={@phone? and @looks != []}
+          id="visits-toggle"
+          type="button"
+          phx-click="visits-toggle"
+          aria-expanded={to_string(@visits_open?)}
+          aria-controls={"visits-#{@id}"}
+          class={[
+            "flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-white px-3 shadow-sm ring-1 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800",
+            if(@travel,
+              do: "ring-amber-400 dark:ring-amber-500/60",
+              else: "ring-slate-200 dark:ring-slate-800"
+            ),
+            # Beside the folded calendar it takes only what its label needs, so
+            # the date keeps its room when the amber "Now" joins it; under the
+            # open month it fills its own line.
+            @cal_open? && "grow"
+          ]}
+        >
+          <%!-- Travelling, the calendar beside it grows an amber "Now" and needs
+          the room, so the button drops its glyph and names the look it stands
+          on instead of the count: the amber ring already says which state
+          this is. --%>
+          <svg
+            :if={!@travel}
+            class="h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+            />
+          </svg>
+          <span class="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {if @travel, do: ViewerClock.format(@travel, :time), else: visits_label(length(@looks))}
+          </span>
+          <.chevron open?={@visits_open?} class="text-slate-400" />
+        </button>
+      </div>
 
       <section
+        :if={!@phone? or (@visits_open? and @looks != [])}
         id={"visits-#{@id}"}
         class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
       >
         <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Your visits on %{day}", day: ViewerClock.format(@top_day, :day_month))}
         </h2>
-        <ul class="space-y-1">
+
+        <ul :if={@phone?} class="grid grid-cols-4 gap-2">
+          <li :if={@top_day == @today}>
+            <.link patch={@now_path} aria-current={@now? && "true"} class={visit_chip_class(@now?)}>
+              <span class="text-accent">{pgettext("visit list", "now")}</span>
+            </.link>
+          </li>
+          <li :for={look <- @looks}>
+            <.link
+              patch={look.path}
+              aria-current={look.current? && "true"}
+              aria-label={gettext("%{time}, %{source}", time: look.time, source: visit_source(look.visit))}
+              data-visit={NaiveDateTime.to_iso8601(look.visit.at)}
+              class={visit_chip_class(look.current?)}
+            >
+              <svg
+                :if={look.visit.source == "bell"}
+                class="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="2"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+                />
+              </svg>
+              {look.time}
+            </.link>
+          </li>
+        </ul>
+
+        <ul :if={!@phone?} class="space-y-1">
           <li :if={@top_day == @today}>
             <.link patch={@now_path} aria-current={@now? && "true"} class={visit_class(@now?)}>
               <span class="w-12 font-bold tabular-nums text-accent">
@@ -653,18 +770,30 @@ defmodule VutuvWeb.NotificationLive.Index do
               </span>
             </.link>
           </li>
-          <li :for={look <- @looks}>
+          <li :for={look <- @rail_looks}>
             <.link
               patch={look.path}
               aria-current={look.current? && "true"}
               data-visit={NaiveDateTime.to_iso8601(look.visit.at)}
               class={visit_class(look.current?)}
             >
-              <span class="w-12 font-bold tabular-nums">{ViewerClock.format(look.visit.at, :time)}</span>
+              <span class="w-12 font-bold tabular-nums">{look.time}</span>
               <span class="text-sm text-slate-500 dark:text-slate-400">{visit_source(look.visit)}</span>
             </.link>
           </li>
         </ul>
+        <button
+          :if={!@phone? and @rail_fold}
+          id="visits-more"
+          type="button"
+          phx-click="visits-more"
+          aria-expanded={to_string(@rail_fold == :open)}
+          class="mt-1 flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-brand-700 hover:bg-slate-50 dark:text-brand-300 dark:hover:bg-slate-800"
+        >
+          {rail_fold_label(@rail_fold)}
+          <.chevron open?={@rail_fold == :open} />
+        </button>
+
         <p
           :if={@looks == [] and @top_day != @today}
           class="mb-0 text-sm text-slate-500 dark:text-slate-400"
@@ -673,10 +802,67 @@ defmodule VutuvWeb.NotificationLive.Index do
         </p>
         <p class="mb-0 mt-2 text-xs text-slate-500 dark:text-slate-400">
           {gettext("A visit shows the list as it stood at that moment.")}
+          <span :if={@phone?}>{gettext("A bell: opened via the bell.")}</span>
         </p>
       </section>
     </div>
     """
+  end
+
+  # The rail's cut: every look, or the first @rail_looks plus the count folded
+  # away. A look past the cut that the reader stands on opens the fold by itself.
+  defp rail_fold(%{looks: looks, visits_more?: more?}) do
+    {shown, folded} = Enum.split(looks, @rail_looks)
+
+    cond do
+      folded == [] or Enum.any?(folded, & &1.current?) -> %{rail_looks: looks, rail_fold: nil}
+      more? -> %{rail_looks: looks, rail_fold: :open}
+      true -> %{rail_looks: shown, rail_fold: length(folded)}
+    end
+  end
+
+  attr(:open?, :boolean, required: true)
+  attr(:class, :string, default: nil)
+
+  defp chevron(assigns) do
+    ~H"""
+    <svg
+      class={["h-4 w-4 shrink-0", @class, @open? && "rotate-180"]}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="2"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+    </svg>
+    """
+  end
+
+  defp visits_label(count),
+    do:
+      ngettext("%{formatted} visit", "%{formatted} visits", count,
+        formatted: compact_count(count)
+      )
+
+  defp rail_fold_label(:open), do: gettext("Show less")
+
+  defp rail_fold_label(count),
+    do:
+      ngettext("%{formatted} earlier visit", "%{formatted} earlier visits", count,
+        formatted: compact_count(count)
+      )
+
+  defp visit_chip_class(current?) do
+    [
+      "flex h-10 items-center justify-center gap-1 rounded-xl text-[15px] font-bold tabular-nums",
+      if(current?,
+        do:
+          "bg-brand-50 text-brand-800 ring-2 ring-brand-400 dark:bg-brand-800/60 dark:text-brand-200",
+        else:
+          "text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 dark:text-slate-100 dark:ring-slate-700 dark:hover:bg-slate-800"
+      )
+    ]
   end
 
   defp visit_class(true),

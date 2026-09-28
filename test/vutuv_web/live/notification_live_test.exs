@@ -36,10 +36,10 @@ defmodule VutuvWeb.NotificationLiveTest do
     follow
   end
 
-  defp visit!(user, at) do
+  defp visit!(user, at, source \\ "page") do
     Repo.insert!(%NotificationVisit{
       user_id: user.id,
-      source: "page",
+      source: source,
       at: DateTime.from_naive!(at, "Etc/UTC")
     })
   end
@@ -181,6 +181,86 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ "Seen Then"
       refute html =~ "Came Later"
       assert has_element?(live, "#travel-banner a", "Back to now")
+    end
+  end
+
+  describe "the looks of a day" do
+    # Yesterday, so a run just after midnight still has a whole day to fill.
+    defp yesterday_looks!(user, count, source \\ "page") do
+      day = Date.add(Vutuv.ViewerClock.today(), -1)
+      {start, _} = Vutuv.ViewerClock.day_window(day)
+
+      looks =
+        for n <- 1..count do
+          visit!(user, NaiveDateTime.add(start, 8 * 3600 + n * 60), source)
+        end
+
+      {Date.to_iso8601(day), looks}
+    end
+
+    defp looks_in(live, container),
+      do: live |> render() |> elements("#{container} a[data-visit]") |> length()
+
+    test "the phone folds them behind one button beside the calendar", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {day, _looks} = yesterday_looks!(user, 3, "bell")
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?day=#{day}")
+
+      assert has_element?(live, "#visits-toggle[aria-expanded=false]", "3 visits")
+      refute has_element?(live, "#visits-phone a[data-visit]")
+
+      live |> element("#visits-toggle") |> render_click()
+
+      assert has_element?(live, "#visits-toggle[aria-expanded=true]")
+      assert looks_in(live, "#visits-phone") == 3
+      assert has_element?(live, ~s(#visits-phone a[aria-label$="via the bell"]))
+    end
+
+    test "the phone shows them open while travelling", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {_day, [look | _]} = yesterday_looks!(user, 2)
+      at = look.at |> DateTime.to_naive() |> NaiveDateTime.to_iso8601()
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?at=#{at}")
+
+      assert has_element?(live, ~s(#visits-phone a[data-visit="#{at}"][aria-current=true]))
+      # The button names the look instead of the count, to leave the calendar room.
+      assert has_element?(
+               live,
+               "#visits-toggle",
+               Vutuv.ViewerClock.format(DateTime.to_naive(look.at), :time)
+             )
+
+      refute has_element?(live, "#visits-toggle", "2 visits")
+    end
+
+    test "the rail lists twenty and folds the rest", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {day, looks} = yesterday_looks!(user, 22)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?day=#{day}")
+
+      assert looks_in(live, "#visits-desktop") == 20
+      assert has_element?(live, "#visits-more", "2 earlier visits")
+
+      live |> element("#visits-more") |> render_click()
+      assert looks_in(live, "#visits-desktop") == 22
+
+      body =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/notifications?day=#{day}")
+        |> html_response(200)
+
+      assert body =~ "22 Besuche"
+      assert body =~ "2 frühere Besuche"
+
+      # A look past the twentieth that is being shown opens the fold by itself.
+      at = hd(looks).at |> DateTime.to_naive() |> NaiveDateTime.to_iso8601()
+      {:ok, live, _html} = live(conn, ~p"/notifications?at=#{at}")
+      assert has_element?(live, ~s(#visits-desktop a[data-visit="#{at}"]))
     end
   end
 
