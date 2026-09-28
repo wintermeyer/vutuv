@@ -439,9 +439,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.headline}",
       doc.description,
-      doc.videos != [] && "## #{gettext("The film")}",
-      doc.videos != [] && doc.film_note,
-      doc.videos != [] && Enum.map_join(doc.videos, "\n", &"- #{&1.label}: #{&1.url}"),
+      teaser_blocks(doc),
       "## #{gettext("Where we are")}",
       Enum.map_join(InvestorsDoc.figure_rows(doc.figures), "\n", fn {label, value} ->
         "- #{label}: #{value}"
@@ -501,9 +499,21 @@ defmodule VutuvWeb.AgentDocs.Markdown do
           "Profile (further contact details): #{doc.press_contact.profile_url}"
       ]
       |> Enum.filter(&is_binary/1)
-      |> Enum.map_join("\n", &("- " <> &1))
+      |> Enum.map_join("\n", &("- " <> &1)),
+      teaser_blocks(doc)
     ]
     |> join_blocks()
+  end
+
+  # The teaser card of the investor page and the media kit (`VutuvWeb.Teaser`).
+  defp teaser_blocks(%{videos: []}), do: []
+
+  defp teaser_blocks(doc) do
+    [
+      "## #{doc.film_title}",
+      doc.film_note,
+      Enum.map_join(doc.videos, "\n", &"- #{&1.label}: #{&1.url}")
+    ]
   end
 
   # One media-kit link snippet: its name, what it is for, then the code in a

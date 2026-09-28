@@ -110,15 +110,28 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert elements(html, "#investors-teaser ~ *") == []
     end
 
-    test "offers a message on this installation instead", %{conn: conn} do
+    # No "Send a message" button, for anybody: the note names both ways to
+    # write, and a logged-out visitor is offered the account instead.
+    test "offers an account but no message button", %{conn: conn} do
       handle = Application.get_env(:vutuv, :operator_handle)
       insert(:activated_user, username: handle)
 
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      assert html =~ ~s|href="/messages/with/#{handle}"|
-      # And the way in for somebody who has no account yet.
+      refute html =~ ~s|href="/messages/with/#{handle}"|
       assert html =~ "Create an account"
+    end
+
+    test "offers a member neither button", %{conn: conn} do
+      handle = Application.get_env(:vutuv, :operator_handle)
+      insert(:activated_user, username: handle)
+      {conn, _user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert [_] = elements(html, "#investors-contact-note")
+      refute html =~ ~s|href="/messages/with/#{handle}"|
+      refute html =~ "Create an account"
     end
 
     test "offers no contact at all where that handle is nobody here", %{conn: conn} do
@@ -351,7 +364,12 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert LazyHTML.attribute(video, "poster") == ["/images/teaser/vutuv-teaser-de.avif"]
       assert html =~ ~s(src="/images/teaser/vutuv-teaser-de.av1.mp4")
       assert html =~ ~s(src="/images/teaser/vutuv-teaser-de-portrait.mp4")
-      assert html =~ "Der Film"
+      assert text_of(html, "#investors-teaser h2") == "Teaser"
+
+      assert html =~
+               "Kurzer Teaser, der die wichtigsten Funktionen ohne Ton auf die Schnelle zeigt."
+
+      refute html =~ "Zwei stumme Minuten"
 
       base = VutuvWeb.Endpoint.url() <> "/images/teaser/vutuv-teaser-"
 
@@ -369,6 +387,12 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert html =~ "Deutsch · 16:9"
       assert html =~ "English · 9:16"
+
+      # Running time and size beside each address, read from the files
+      # themselves and formatted for the reader: German seconds, decimal comma.
+      labels = html |> elements("#investors-teaser li p") |> Enum.map(&LazyHTML.text/1)
+      assert length(labels) == 4
+      assert Enum.all?(labels, &(&1 =~ ~r/ · \d+ Sekunden · \d+,\d MB$/u)), inspect(labels)
     end
 
     test "names the same addresses in the agent formats", %{conn: conn} do
@@ -376,7 +400,7 @@ defmodule VutuvWeb.CompanyControllerTest do
       json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
 
       url = VutuvWeb.Endpoint.url() <> "/images/teaser/vutuv-teaser-en-portrait.mp4"
-      assert markdown =~ "## The film"
+      assert markdown =~ "## Teaser"
       assert markdown =~ url
       assert url in Enum.map(json["videos"], & &1["url"])
     end
@@ -425,6 +449,24 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert html =~ MediaKitDoc.boilerplate().short
       assert html =~ "/images/brand/vutuv-wordmark.svg"
       assert html =~ MediaKitDoc.press_contact()
+    end
+
+    # The investor page's teaser card, closing this page too, in English like
+    # the rest of it. One component renders both, so a change reaches both.
+    test "closes on the teaser card, in English", %{conn: conn} do
+      html = conn |> german() |> get(~p"/system/media-kit") |> html_response(200)
+
+      assert [_] = elements(html, "#media-kit-teaser")
+      assert elements(html, "#media-kit-teaser ~ *") == []
+      assert text_of(html, "#media-kit-teaser h2") == "Teaser"
+      assert html =~ "A short teaser that quickly shows the main features, without sound."
+      [video] = elements(html, "#media-kit-teaser video")
+      assert LazyHTML.attribute(video, "poster") == ["/images/teaser/vutuv-teaser-en.avif"]
+      assert length(elements(html, "#media-kit-teaser button[data-copy]")) == 4
+
+      markdown = conn |> get(~p"/system/media-kit" <> ".md") |> response(200)
+      assert markdown =~ "## Teaser"
+      assert markdown =~ "vutuv-teaser-de.hd.mp4"
     end
 
     test "stays English under a German Accept-Language header", %{conn: conn} do

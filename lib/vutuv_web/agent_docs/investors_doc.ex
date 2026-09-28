@@ -354,22 +354,6 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   @doc """
-  The sentence above the teaser film on the investor page and in its agent
-  formats.
-  """
-  def film_note do
-    gettext(
-      "Two silent minutes of vutuv in use: one member's morning, from her feed to a job offer and a CV saved as PDF. The addresses below are MP4 files that play anywhere, 16:9 in full HD for a screen and 9:16 for a phone."
-    )
-  end
-
-  @doc """
-  The teaser's addresses to pass on (`VutuvWeb.Teaser.downloads/0`), or none
-  where the installation switched the teaser off.
-  """
-  def videos, do: if(Teaser.enabled?(), do: Teaser.downloads(), else: [])
-
-  @doc """
   The /system/investors page as a doc map: what the page is for, the case it
   makes, the floor under a conversation, the figures, and the way to write.
   """
@@ -404,10 +388,9 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
       # The daily rows themselves are the chart's business; the doc carries the
       # reading of them.
       figures: Map.drop(facts, [:series, :growth]),
-      media_kit_url: AgentDocs.abs_url("/system/media-kit"),
-      film_note: film_note(),
-      videos: videos()
+      media_kit_url: AgentDocs.abs_url("/system/media-kit")
     })
+    |> Map.merge(Map.take(Teaser.texts(nil), [:film_title, :film_note, :videos]))
   end
 
   # The figures the card shows, flat, for the JSON and XML readers.

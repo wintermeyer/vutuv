@@ -243,4 +243,7 @@ sibling hand a journalist the same words. --%>
       >{@press_contact_profile_url}</a>
     </p>
   </.card>
+
+  <%!-- The investor page's teaser card, pinned to English like this page. --%>
+  <Teaser.card :if={Teaser.enabled?()} id="media-kit-teaser" locale="en" />
 </div>
