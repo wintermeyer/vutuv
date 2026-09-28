@@ -19,6 +19,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.Endpoint
+  alias VutuvWeb.Teaser
 
   # The size of the network a vutuv profile is reachable from, quoted with its
   # source and the day it was read (api.fedidb.org/v1/stats, 2026-08-16:
@@ -277,5 +278,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
         url: Application.fetch_env!(:vutuv, :operator_url)
       }
     })
+    # The investor page's teaser card, in English like the rest of the kit.
+    |> Map.merge(Map.take(Teaser.texts("en"), [:film_title, :film_note, :videos]))
   end
 end
