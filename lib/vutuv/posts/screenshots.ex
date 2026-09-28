@@ -46,6 +46,7 @@ defmodule Vutuv.Posts.Screenshots do
   alias Vutuv.MediaJobs
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.PageScreenshot
+  alias Vutuv.Posts.LinkedFile
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
@@ -471,6 +472,11 @@ defmodule Vutuv.Posts.Screenshots do
   defp permanent_failure?(:redirect), do: true
   # A link to a file, not a page (`Vutuv.PageScreenshot.page_response/1`).
   defp permanent_failure?({:not_a_page, _type}), do: true
+  # A file that is not what it claims, too large, or undrawable on this host
+  # (`Vutuv.Posts.LinkedFile`). A server that answered differently on the
+  # download comes back as `:probe_failed` instead and is retried.
+  defp permanent_failure?({:file_preview, _reason}), do: true
+  defp permanent_failure?(:invalid_file), do: true
   defp permanent_failure?({:bad_status, status}), do: status not in [408, 429]
   defp permanent_failure?(_reason), do: false
 
@@ -497,25 +503,25 @@ defmodule Vutuv.Posts.Screenshots do
     end
   end
 
-  # Stored raw — no browser frame: the thumbnail is the video's artwork, not a
-  # captured web page, so browser chrome around it would be a lie.
   defp store_thumbnail(%PostScreenshot{} = job, bytes) do
     tmp = Path.join(System.tmp_dir!(), "yt_thumb_#{job.id}.jpg")
 
     try do
       File.write!(tmp, bytes)
-      upload = %Plug.Upload{content_type: "image/jpeg", filename: "#{job.id}.jpg", path: tmp}
-
-      case Vutuv.Screenshot.store({upload, job}) do
-        {:ok, file_name} ->
-          {:ok, %{screenshot: file_name, width: @display_width, height: @display_height}}
-
-        {:error, _reason} ->
-          :fallback
-      end
+      with {:error, _reason} <- store_frameless(job, tmp), do: :fallback
     after
       File.rm(tmp)
     end
+  end
+
+  # Stored raw — no browser frame: a video's artwork or a linked file's own
+  # picture is not a captured web page, so browser chrome around it would be a
+  # lie. Never trusted, so the AI scan sees every one.
+  defp store_frameless(%PostScreenshot{} = job, path) do
+    upload = %Plug.Upload{filename: job.id <> Path.extname(path), path: path}
+
+    with {:ok, file_name} <- Vutuv.Screenshot.store({upload, job}),
+         do: {:ok, %{screenshot: file_name, width: @display_width, height: @display_height}}
   end
 
   # The classic capture: capture only a link that ends in a plain HTTP 200, then
@@ -525,7 +531,8 @@ defmodule Vutuv.Posts.Screenshots do
   # blocklist is asked about the named URL before any probe (a row queued before
   # its entry existed), and `capture_framed/2` asks again about the target.
   # Returns the stored filename + display size, and whether the browser only
-  # showed trusted sites (`Vutuv.ScreenshotTrust`).
+  # showed trusted sites (`Vutuv.ScreenshotTrust`). A link that ends in a file
+  # rather than a page is read instead of photographed (`file_preview/3`).
   defp page_capture_and_store(%PostScreenshot{} = job) do
     with false <- ScreenshotBlocklist.blocked?(job.url),
          {:ok, target} <- ensure_http_ok(job.url),
@@ -555,7 +562,35 @@ defmodule Vutuv.Posts.Screenshots do
       result
     else
       true -> {:error, :blocklisted}
+      {:file, target, type} -> file_preview(job, target, type)
       refused -> refused
+    end
+  end
+
+  # A picture, a PDF or a text file previews with what it shows
+  # (`Vutuv.Posts.LinkedFile`); every other file keeps the refusal it always
+  # had, and is never downloaded.
+  defp file_preview(%PostScreenshot{} = job, target, type) do
+    if LinkedFile.enabled?() and LinkedFile.previewable?(type) do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "vutuv-linked-file-#{job.id}-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+
+      try do
+        case LinkedFile.render(target, type, dir) do
+          {:ok, png} -> store_frameless(job, png)
+          {:error, :probe_failed} -> {:error, :probe_failed}
+          {:error, reason} -> {:error, {:file_preview, reason}}
+        end
+      after
+        File.rm_rf(dir)
+      end
+    else
+      {:error, {:not_a_page, type}}
     end
   end
 
@@ -564,15 +599,18 @@ defmodule Vutuv.Posts.Screenshots do
   @probe_req_options_key :post_screenshot_req_options
 
   @doc """
-  `{:ok, target}` when `url` ends in a plain **HTTP 200**, where `target` is the
-  address that answered; otherwise `{:error, reason}` and no screenshot is taken.
+  `{:ok, target}` when `url` ends in a plain **HTTP 200** page, where `target`
+  is the address that answered; `{:file, target, type}` when that 200 is a file
+  rather than a page (read by `Vutuv.Posts.LinkedFile` where it can be,
+  refused as `{:not_a_page, type}` otherwise); else `{:error, reason}` and no
+  screenshot is taken.
   A `redirect: false` GET probe (what a browser would get) runs in the worker
   before Chromium. It follows at most #{@max_redirect_hops} redirects, and only
   within the same site (the host itself or its `www.` alias): a newspaper's short
   link to its own article is the same page, while a bounce to another host lands
   on a login or consent wall or a shortener's target. Anything else — a redirect
   off the site or one hop too many, a 404, any other non-200 answer, a 200 that
-  is a file rather than a page (`{:not_a_page, type}`, permanent) — is refused,
+  is a file nothing can preview (`{:not_a_page, type}`, permanent) — is refused,
   leaving the post to show the plain link. Off the request path, so the probe
   never slows a save.
 
@@ -587,6 +625,12 @@ defmodule Vutuv.Posts.Screenshots do
   """
   def ensure_http_ok(url), do: probe_hop(url, @max_redirect_hops)
 
+  @doc """
+  The test seam both requests of this queue read — the probe here and the
+  download in `Vutuv.Posts.LinkedFile` — so one `plug:` stub answers both.
+  """
+  def req_options, do: Application.get_env(:vutuv, @probe_req_options_key, [])
+
   defp probe_hop(url, hops_left) do
     if Vutuv.Ssrf.resolves_to_internal?(URI.parse(url).host) do
       {:error, :internal_target}
@@ -594,6 +638,7 @@ defmodule Vutuv.Posts.Screenshots do
       case classify(probe(url)) do
         :ok -> {:ok, url}
         {:redirect, resp} -> follow(url, resp, hops_left)
+        {:error, {:not_a_page, type}} -> {:file, url, type}
         refused -> refused
       end
     end
@@ -645,7 +690,7 @@ defmodule Vutuv.Posts.Screenshots do
       into: Vutuv.Http.capped_collector(@probe_max_body_bytes),
       headers: [{"user-agent", Http.user_agent()}]
     ]
-    |> Keyword.merge(Application.get_env(:vutuv, @probe_req_options_key, []))
+    |> Keyword.merge(req_options())
     |> Req.get()
   end
 

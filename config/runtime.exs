@@ -675,6 +675,13 @@ if config_env() == :prod do
     config :vutuv, :screenshot_page_check, false
   end
 
+  # A post's one link to a picture, PDF or text file previews with the file
+  # (Vutuv.Posts.LinkedFile). LINK_FILE_PREVIEWS=false keeps the bare link and
+  # downloads nothing.
+  if System.get_env("LINK_FILE_PREVIEWS") == "false" do
+    config :vutuv, :link_file_previews, false
+  end
+
   if votes = System.get_env("SCREENSHOT_CHECK_VOTES") do
     config :vutuv, :screenshot_check_votes, String.to_integer(votes)
   end

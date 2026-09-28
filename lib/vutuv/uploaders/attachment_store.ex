@@ -24,6 +24,7 @@ defmodule Vutuv.AttachmentStore do
       <uploads_dir_prefix>/attachments/<token>/pages/<n>/thumb.avif /lite.avif
                                                         /large.avif
                                                         /pixelated.avif
+                                                        /og.jpg (page 0, on demand)
 
   So they need no upload tree of their own — nothing new in `.gitignore` and
   nothing new in `test/vutuv/uploads_gitignore_test.exs` — and `delete/1`
@@ -38,6 +39,7 @@ defmodule Vutuv.AttachmentStore do
   @served_name "file"
   @root "attachments"
   @pages "pages"
+  @og_name "og.jpg"
 
   # The served sizes of one preview page, read off `Vutuv.Uploads.Spec` at
   # compile time rather than written out again — the mistake `Vutuv.PressKitStore`
@@ -103,6 +105,8 @@ defmodule Vutuv.AttachmentStore do
   def store_page(token, position, source) when is_integer(position) and position >= 0 do
     dir = page_dir(token, position)
     File.mkdir_p!(dir)
+    # A re-render replaces the picture the link-preview JPEG was cut from.
+    File.rm(Path.join(dir, @og_name))
 
     case derive_page(source, dir) do
       {:ok, meta} ->
@@ -151,6 +155,27 @@ defmodule Vutuv.AttachmentStore do
   end
 
   def page_version_path(_token, _position, _version), do: nil
+
+  @doc """
+  One page as the JPEG a link scraper decodes (`og:image`), or `nil` when the
+  page has no `large` size to cut it from. Derived from that size on the first
+  ask and kept beside it, since scrapers read the AVIF sizes no better than
+  they read a PDF: cut to `Vutuv.Uploads.Spec.og_dimensions/2`, and without
+  metadata (`Vutuv.Uploads.Spec.og_jpeg/2`).
+  """
+  def page_og_path(token, position) when is_binary(token) and is_integer(position) do
+    with large when is_binary(large) <- page_version_path(token, position, "large") do
+      og = Path.join(Path.dirname(large), @og_name)
+      if File.exists?(og), do: og, else: derive_og(large, og)
+    end
+  end
+
+  defp derive_og(large, og) do
+    case Spec.og_jpeg(large, &Spec.og_cap/1) do
+      {:ok, jpeg} -> Originals.publish(og, jpeg)
+      :error -> nil
+    end
+  end
 
   @doc "Removes every stored size of one page. A no-op when there is none."
   def delete_page(token, position) when is_binary(token) and is_integer(position) do

@@ -482,6 +482,23 @@ defmodule Vutuv.Uploads.Spec do
     if Image.has_alpha?(image), do: Image.flatten(image), else: {:ok, image}
   end
 
+  @og_width 1200
+
+  @doc """
+  A link-preview picture's size for a source this size: at most
+  #{@og_width} px wide, aspect kept, never upscaled. What every `og:image`
+  JPEG is cut to (`og_cap/1`), so the `og:image:width`/`height` tags can be
+  written from the stored dimensions without opening a file.
+  """
+  def og_dimensions(width, height)
+      when is_integer(width) and is_integer(height) and width > @og_width,
+      do: {@og_width, round(height * @og_width / width)}
+
+  def og_dimensions(width, height), do: {width, height}
+
+  @doc "`image` cut to the width `og_dimensions/2` promises."
+  def og_cap(image), do: Image.thumbnail(image, "#{@og_width}", resize: :down)
+
   @doc """
   A **link-preview JPEG** derived from the file at `path`: decode and
   EXIF-autorotate, hand the image to `shape` (the per-store geometry — a square

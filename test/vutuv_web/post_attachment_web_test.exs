@@ -87,6 +87,52 @@ defmodule VutuvWeb.PostAttachmentWebTest do
       assert [type] = get_resp_header(conn, "content-type")
       assert type =~ "image/"
     end
+
+    # A link to a post that carries a document was a card with no picture on
+    # Mastodon and everywhere else: the first page is what the post is about.
+    test "previews its first page as the link-preview picture", %{post: post, upload: file} do
+      html = build_conn() |> get(Posts.path(post)) |> html_response(200)
+
+      og_url = VutuvWeb.Endpoint.url() <> Attachments.og_url(file)
+      assert html =~ ~s(<meta property="og:image" content="#{og_url}")
+      assert html =~ ~s(<meta property="og:image:type" content="image/jpeg")
+
+      conn = build_conn() |> get(Attachments.og_url(file))
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["image/jpeg"]
+      assert <<0xFF, 0xD8, _rest::binary>> = conn.resp_body
+    end
+
+    test "a photo on the same post still wins over the file", %{
+      author: author,
+      post: post,
+      upload: file
+    } do
+      photo = insert(:post_image, post: post, user: author, width: 800, height: 600)
+
+      html = build_conn() |> get(Posts.path(post)) |> html_response(200)
+
+      assert html =~ "/post_images/#{photo.token}/og.jpg"
+      refute html =~ Attachments.og_url(file)
+    end
+  end
+
+  test "a page the AI check still holds is not the link preview", %{author: author, upload: file} do
+    post = publish!(author, file)
+    [page] = Pages.list(file)
+    page |> Ecto.Changeset.change(moderation: "pending") |> Vutuv.Repo.update!()
+
+    html = build_conn() |> get(Posts.path(post)) |> html_response(200)
+
+    refute html =~ Attachments.og_url(file)
+    assert html =~ Posts.path(post) <> "/og.png"
+    assert build_conn() |> get(Attachments.og_url(file)) |> response(404)
+  end
+
+  test "a file no post has claimed has no link preview", %{author_conn: author_conn, upload: file} do
+    # Not even for its uploader: the JPEG exists for a post's scrapers.
+    assert build_conn() |> get(Attachments.og_url(file)) |> response(404)
+    assert author_conn |> get(Attachments.og_url(file)) |> response(404)
   end
 
   describe "a post for logged-in members only" do
@@ -97,6 +143,14 @@ defmodule VutuvWeb.PostAttachmentWebTest do
     test "keeps the file and its pages from an anonymous reader", %{upload: file} do
       assert build_conn() |> get(Attachments.file_url(file)) |> response(404)
       assert build_conn() |> get(page_url(file)) |> response(404)
+      assert build_conn() |> get(Attachments.og_url(file)) |> response(404)
+    end
+
+    test "keeps its page out of the preview tags", %{conn: conn, post: post, upload: file} do
+      {member_conn, _member} = create_and_login_user(conn)
+      html = member_conn |> get(Posts.path(post)) |> html_response(200)
+
+      refute html =~ Attachments.og_url(file)
     end
 
     test "still hands them to a member", %{conn: conn, upload: file} do

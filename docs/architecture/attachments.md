@@ -264,6 +264,13 @@ alike. A reader who is not the author gets a Report link beside it. A post's
 preview pages take the photo proxy's five-minute cache tier rather than a
 message's `no-store`: they are sizes of a picture a feed renders.
 
+A post whose only picture is a file previews with its first page when the link
+is shared: `og:image` names `Attachments.og_url/1`, a JPEG of that page cut
+from its `large` size on the first request and kept beside it
+(`AttachmentStore.page_og_path/2`). Tag and route both ask
+`Attachments.preview_page/1`, the first page once the AI check released it, so
+a scraper is never handed a URL that answers 404.
+
 The agent formats (`PostDoc`), the data export and the Fediverse Note list the
 files too; the Note carries each as a `Document`, which Mastodon skips and a
 server that shows files offers for download. Account deletion removes both

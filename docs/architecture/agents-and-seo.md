@@ -426,7 +426,10 @@ LinkedIn and X the title is all the text a card carries, and the
 characters, paragraph breaks folded), which Bluesky, Mastodon, Slack and
 Facebook draw under the title. The picture is the post's first image
 (`/post_images/<token>/og.jpg`, served by the authorizing proxy, so audience
-changes keep guarding it), else — for a member's post — its own
+changes keep guarding it), else its clip's cover, else the first page of its
+first file (`/system/attachments/<token>/og.jpg`, a JPEG cut on first request
+from the page the AI check released; the small `summary` card for a portrait
+page, whose middle strip is all the large card would keep), else — for a member's post — its own
 **generated card** at `<permalink>/og.png` (author, headline and the first six
 lines in the largest of three sizes that fits), else the author's card or the
 page's logo, else the brand card. Restricted posts and teasers never leak the

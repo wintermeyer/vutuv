@@ -1286,6 +1286,12 @@ filling the disk or the line:
   deadline bounds the time, not the volume: endless HTML pulled 671 MB into one
   20 s capture.
 
+A post's link to a picture, a PDF or a text file still gets a preview, just not
+from a browser: `Vutuv.Posts.LinkedFile` downloads it with a byte cap and draws
+it the way an uploaded file is drawn (see
+[posts-and-feed.md](posts-and-feed.md)). Profile links and an organization's
+homepage keep the refusal: they name a site, not a document.
+
 ### The profile link's standing retry
 
 Saving a link only nudges `Vutuv.PageScreenshot.Sweeper` (`nudge/0`), so at

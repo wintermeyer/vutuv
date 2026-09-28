@@ -251,20 +251,13 @@ defmodule Vutuv.PostImageStore do
     end
   end
 
-  @og_width 1200
-
   @doc """
   The dimensions `og_file/1` serves, computed from the stored
-  (post-rotation) dimensions: width capped at #{@og_width}px, aspect kept,
-  never upscaled. Lets the `og:image:width`/`height` tags render without
-  disk I/O (`VutuvWeb.OpenGraph`).
+  (post-rotation) dimensions (`Vutuv.Uploads.Spec.og_dimensions/2`). Lets the
+  `og:image:width`/`height` tags render without disk I/O (`VutuvWeb.OpenGraph`).
   """
-  def og_dimensions(%PostImage{width: width, height: height})
-      when is_integer(width) and is_integer(height) and width > @og_width do
-    {@og_width, round(height * @og_width / width)}
-  end
-
-  def og_dimensions(%PostImage{width: width, height: height}), do: {width, height}
+  def og_dimensions(%PostImage{width: width, height: height}),
+    do: Spec.og_dimensions(width, height)
 
   @doc """
   The on-disk path of the photo as JPEG: the link preview (`og:image`) and the file a
@@ -317,7 +310,7 @@ defmodule Vutuv.PostImageStore do
     with {:ok, framed} <- og_frame(kind, image, rotated), do: cap_og(framed)
   end
 
-  defp cap_og(framed), do: Image.thumbnail(framed, "#{@og_width}", resize: :down)
+  defp cap_og(framed), do: Spec.og_cap(framed)
 
   defp og_source(image, token) do
     cond do
