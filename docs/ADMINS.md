@@ -44,9 +44,9 @@ Related documents: [README](../README.md) (overview) ·
   (encrypted, carrying a program, carrying another file). Without them **PDF
   attachments are not offered at all** — the composer's picker does not accept
   `.pdf` and the server refuses one — while text and Markdown files carry on.
-  `pdftoppm` renders the preview pages shown under a post's file as well
-  (`ATTACHMENT_PREVIEW_PAGES`); without it a PDF is still accepted and simply
-  shows no preview.
+  `pdftoppm` renders the preview pages shown under a post's file as well,
+  every page of it, and those pages are what the AI image scan checks;
+  without it a PDF is still accepted and simply shows no preview.
   A check that cannot run is never treated as a check that passed.
 - **ffmpeg** (optional, `apt-get install ffmpeg`) — video on posts: converts
   a member's clip into the files browsers play and pulls the stills the AI
@@ -138,7 +138,8 @@ Everything else has a default (the vutuv.de production value):
 | `ATTACHMENTS_PER_POST` | `5` | How many files one post may carry — and one message, which takes the same limits |
 | `ATTACHMENT_DAILY_MB` | `100` | How much a member may upload in **any 24 hours**, in megabytes. The window rolls rather than resetting at midnight, so there is no hour at which twice the allowance fits. Counted as *accepted uploads*: deleting a file does not give the megabytes back, which is what stops an upload-and-delete loop from filling your disk. Admins have no allowance |
 | `ATTACHMENT_MONTHLY_MB` | `500` | The same over any 30 days |
-| `ATTACHMENT_PREVIEW_PAGES` | `3` | How many of a file's first pages are shown as pictures under the post. A picture sent in a message always has exactly one preview page, which is the picture itself. `0` turns previews off; more than `5` is treated as `5`. A PDF page is rendered by `pdftoppm`, a text or Markdown file by the headless Chromium the link previews use — where neither is installed the file simply shows no preview, and nothing else changes |
+| `ATTACHMENT_MAX_PAGES` | `200` | The longest PDF a member may attach; a longer one is refused with a message naming the limit. Every page is rendered as a preview picture and checked by the AI image scan, so this bounds the work one upload causes (roughly a second of rendering per page). Lowering it does not delete anything: a longer file already stored keeps its first pages up to the new limit |
+| `ATTACHMENT_PREVIEWS` | `true` | `false` renders no preview pages at all, and with them goes the AI scan of a file's contents. A PDF page is rendered by `pdftoppm`, a text or Markdown file by the headless Chromium the link previews use — where neither is installed the file simply shows no preview, and nothing else changes. A picture sent in a message always has exactly one preview page, which is the picture itself. Replaces `ATTACHMENT_PREVIEW_PAGES`, which is ignored now |
 | `ATTACHMENT_RENDER_CONCURRENCY` | `1` | How many files have their preview pages rendered at once. Everything past that queues. Raise it on a machine with cores to spare |
 | `PDFINFO_PATH` / `PDFDETACH_PATH` / `PDFTOPPM_PATH` | `pdfinfo` / `pdfdetach` / `pdftoppm` | The three poppler binaries — the first two run the PDF check, the third renders preview pages — if not on `$PATH` under those names. Missing either of the first two means PDFs are not offered (see the dependency list above); missing the third only means no preview pages |
 | `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |

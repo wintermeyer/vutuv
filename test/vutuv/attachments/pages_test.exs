@@ -67,16 +67,14 @@ defmodule Vutuv.Attachments.PagesTest do
 
   defp reload(%Attachment{id: id}), do: Repo.get!(Attachment, id)
 
-  describe "a PDF's first pages" do
-    test "become image rows parented by the file", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 3)
+  describe "a PDF's pages" do
+    test "every one becomes an image row parented by the file", %{user: user, files: files} do
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 5))
 
       assert %Attachment{stage: "ready"} = Pages.render(attachment)
 
       pages = Pages.list(attachment)
-      assert length(pages) == 3
-      assert Enum.map(pages, & &1.position) == [0, 1, 2]
+      assert Enum.map(pages, & &1.position) == [0, 1, 2, 3, 4]
 
       for page <- pages do
         assert %Image{kind: "attachment_page"} = page
@@ -95,17 +93,19 @@ defmodule Vutuv.Attachments.PagesTest do
       end
     end
 
-    test "stop at five however many the installation asks for", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 9)
-      attachment = stored!(user, Fixtures.multi_page_pdf(files, 8))
+    test "stop at the installation's limit for a file stored before it was lowered", %{
+      user: user,
+      files: files
+    } do
+      attachment = stored!(user, Fixtures.multi_page_pdf(files, 6))
+      Fixtures.put_config(max_pages: 4)
 
       Pages.render(attachment)
 
-      assert length(Pages.list(attachment)) == Pages.max_pages()
+      assert length(Pages.list(attachment)) == 4
     end
 
     test "never exceed what the document has", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 3)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 2))
 
       Pages.render(attachment)
@@ -117,7 +117,7 @@ defmodule Vutuv.Attachments.PagesTest do
       user: user,
       files: files
     } do
-      Fixtures.put_config(preview_pages: 0)
+      Fixtures.put_config(previews: false)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 3))
 
       assert %Attachment{stage: "ready"} = Pages.render(attachment)
@@ -133,14 +133,16 @@ defmodule Vutuv.Attachments.PagesTest do
       put_config(:moderate_images, true)
     end
 
-    test "holds every page and can find its bytes", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 2)
-      attachment = stored!(user, Fixtures.multi_page_pdf(files, 4))
+    test "holds every page, not just the first ones, and can find its bytes", %{
+      user: user,
+      files: files
+    } do
+      attachment = stored!(user, Fixtures.multi_page_pdf(files, 7))
 
       Pages.render(attachment)
 
       pages = Pages.list(attachment)
-      assert length(pages) == 2
+      assert length(pages) == 7
 
       for page <- pages do
         assert page.moderation == ImageScans.initial_state()
@@ -155,7 +157,6 @@ defmodule Vutuv.Attachments.PagesTest do
     end
 
     test "releases a page it cleared", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 1)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 1))
       Pages.render(attachment)
 
@@ -167,7 +168,6 @@ defmodule Vutuv.Attachments.PagesTest do
     end
 
     test "deletes a page it refused, bytes and row", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 1)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 1))
       Pages.render(attachment)
 
@@ -187,7 +187,6 @@ defmodule Vutuv.Attachments.PagesTest do
       user: user,
       files: files
     } do
-      Fixtures.put_config(preview_pages: 5)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 5))
 
       # The renderer waits for `:go` so its sandbox connection is granted before
@@ -251,11 +250,44 @@ defmodule Vutuv.Attachments.PagesTest do
     end
   end
 
+  describe "a long render" do
+    # Every page of a 200-page PDF takes minutes, far past the staleness window,
+    # so a claim stamped once at the start would hand the file to the other
+    # slot of a deploy while this one is still rendering it.
+    test "keeps its claim fresh page by page", %{user: user, files: files} do
+      attachment = stored!(user, Fixtures.multi_page_pdf(files, 20))
+      parent = self()
+
+      {:ok, pid} =
+        Task.start(fn ->
+          receive do
+            :go -> Pages.render(attachment)
+          end
+        end)
+
+      Sandbox.allow(Repo, parent, pid)
+      ref = Process.monitor(pid)
+      send(pid, :go)
+
+      wait_for(fn -> Pages.list(attachment) != [] end)
+      age_claim!(attachment)
+      rendered = length(Pages.list(attachment))
+      wait_for(fn -> length(Pages.list(attachment)) > rendered + 1 end)
+      kill_between_queries(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}, 5_000
+
+      assert reload(attachment).stage == "rendering",
+             "the render finished before it could be interrupted"
+
+      assert Pages.due(4) == [], "a file that is still being rendered is up for grabs"
+    end
+  end
+
   describe "the sweeper's clock" do
     test "drops work this host can never do out of the due query", %{user: user, files: files} do
       # poppler renders the pages, and this host has no such binary. `pdfinfo`
       # is a different one, so the file is still accepted.
-      Fixtures.put_config(preview_pages: 3, pdftoppm: "vutuv-no-such-pdftoppm")
+      Fixtures.put_config(pdftoppm: "vutuv-no-such-pdftoppm")
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 3))
 
       assert [%Attachment{}] = Pages.due(4)
@@ -279,7 +311,7 @@ defmodule Vutuv.Attachments.PagesTest do
       files: files
     } do
       # Present, and answers every run with a non-zero exit.
-      Fixtures.put_config(preview_pages: 2, pdftoppm: System.find_executable("false"))
+      Fixtures.put_config(pdftoppm: System.find_executable("false"))
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 2))
 
       for attempt <- 1..Pages.max_attempts() do
@@ -305,7 +337,6 @@ defmodule Vutuv.Attachments.PagesTest do
     # and the second half is what this now pins: the freeze reaches a page, and
     # a report never does.
     test "is wired, and a page is still nobody's to report", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 1)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 1))
       Pages.render(attachment)
       [page] = Pages.list(attachment)
@@ -325,7 +356,6 @@ defmodule Vutuv.Attachments.PagesTest do
 
   describe "a text file" do
     test "degrades to no pages where there is no browser", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 3)
       attachment = stored!(user, Fixtures.markdown_file(files))
 
       # The premise, and the one place the suite-wide `:chromium_path` in
@@ -371,7 +401,6 @@ defmodule Vutuv.Attachments.PagesTest do
 
   describe "the media job" do
     test "records one rendering per file", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 2)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 3))
 
       Pages.render(attachment)
@@ -379,7 +408,7 @@ defmodule Vutuv.Attachments.PagesTest do
       assert %MediaJob{kind: "attachment_pages", status: "done"} = job = last_page_job()
       assert job.user_id == user.id
       assert job.subject_id == attachment.id
-      assert job.detail =~ "2 pages"
+      assert job.detail =~ "3 pages"
     end
   end
 

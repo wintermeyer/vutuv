@@ -18,10 +18,12 @@ defmodule Vutuv.AttachmentsTest do
   alias Vutuv.AttachmentFixtures, as: Fixtures
   alias Vutuv.Attachments
   alias Vutuv.Attachments.Attachment
+  alias Vutuv.Attachments.Pages
   alias Vutuv.AttachmentStore
   alias Vutuv.MediaJobs.MediaJob
   alias Vutuv.Repo
   alias Vutuv.WorkCounter
+  alias VutuvWeb.AttachmentText
 
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_attachments_#{System.unique_integer([:positive])}")
@@ -54,6 +56,39 @@ defmodule Vutuv.AttachmentsTest do
       Fixtures.put_config(enabled: false)
 
       assert {:error, :disabled} = upload(user, Fixtures.plain_pdf(files))
+    end
+  end
+
+  describe "the page limit" do
+    # Every page of an accepted PDF is rendered and goes through the AI image
+    # scan, so the limit is what bounds that work per file.
+    test "a PDF with more pages than the installation allows is refused, and nothing is kept",
+         %{user: user, files: files, tmp: tmp} do
+      Fixtures.put_config(max_pages: 3)
+
+      assert {:error, :too_many_pages} = upload(user, Fixtures.multi_page_pdf(files, 4))
+      assert Repo.aggregate(Attachment, :count) == 0
+      assert Path.wildcard(Path.join(tmp, "attachments/**/*.pdf")) == []
+    end
+
+    test "a PDF at exactly the limit is accepted", %{user: user, files: files} do
+      Fixtures.put_config(max_pages: 3)
+
+      assert {:ok, %Attachment{page_count: 3}} = upload(user, Fixtures.multi_page_pdf(files, 3))
+    end
+
+    test "the installation's default is 200 pages" do
+      assert Pages.max_pages() == 200
+    end
+
+    test "the member is told the limit" do
+      assert AttachmentText.error_message(:too_many_pages) ==
+               "PDFs may have up to 200 pages."
+
+      Gettext.with_locale(VutuvWeb.Gettext, "de", fn ->
+        assert AttachmentText.error_message(:too_many_pages) ==
+                 "PDFs dürfen höchstens 200 Seiten haben."
+      end)
     end
   end
 

@@ -39,7 +39,7 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
     # HTML, so a failed render would read as the rule under test (#2178; the
     # browser it used to reach is gone from the suite since #2189, and
     # `docs/architecture/attachments.md` has the mechanism).
-    Fixtures.put_config(uploaders: :members, preview_pages: 0)
+    Fixtures.put_config(uploaders: :members, previews: false)
 
     # Both logins in one place: each drives the real PIN flow and reads the
     # newest mail out of this process's mailbox, so interleaving them with a
