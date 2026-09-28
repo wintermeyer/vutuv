@@ -318,7 +318,7 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
 
     assert summary.created.urls == 1
     imported = Repo.get_by!(Url, user_id: user.id)
-    assert imported.id in Enum.map(PageScreenshot.due(user_id: user.id), & &1.id)
+    assert imported.id in Enum.map(PageScreenshot.due(), & &1.id)
   end
 
   test "an overlong website URL is skipped, not crashed" do

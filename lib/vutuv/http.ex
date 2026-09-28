@@ -5,6 +5,21 @@ defmodule Vutuv.Http do
   """
 
   @doc """
+  The media type a response names in its `content-type`, lowercased and
+  without parameters (`"text/html"` for `text/html; charset=utf-8`), or `nil`
+  when it names none.
+  """
+  def media_type(%Req.Response{} = resp) do
+    case Req.Response.get_header(resp, "content-type") do
+      [value | _] ->
+        value |> String.split(";", parts: 2) |> hd() |> String.trim() |> String.downcase()
+
+      [] ->
+        nil
+    end
+  end
+
+  @doc """
   A `Req` `into:` collector that accumulates the response body up to `max_bytes`
   and **halts** the stream once that ceiling is crossed, so a hostile or
   accidental large body is dropped during receipt rather than buffered whole and

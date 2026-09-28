@@ -45,6 +45,7 @@ defmodule Vutuv.Posts.Screenshots do
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.MediaJobs
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.PageScreenshot
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
@@ -468,6 +469,8 @@ defmodule Vutuv.Posts.Screenshots do
   # blocklist: a retry would be refused by the blocklist anyway.
   defp permanent_failure?(:obstructed), do: true
   defp permanent_failure?(:redirect), do: true
+  # A link to a file, not a page (`Vutuv.PageScreenshot.page_response/1`).
+  defp permanent_failure?({:not_a_page, _type}), do: true
   defp permanent_failure?({:bad_status, status}), do: status not in [408, 429]
   defp permanent_failure?(_reason), do: false
 
@@ -526,7 +529,7 @@ defmodule Vutuv.Posts.Screenshots do
   defp page_capture_and_store(%PostScreenshot{} = job) do
     with false <- ScreenshotBlocklist.blocked?(job.url),
          {:ok, target} <- ensure_http_ok(job.url),
-         {:ok, framed_path, trusted?} <- Vutuv.PageScreenshot.capture_framed(target, job.id) do
+         {:ok, framed_path, trusted?} <- PageScreenshot.capture_framed(target, job.id) do
       upload = %Plug.Upload{
         content_type: "image/webp",
         filename: "#{job.id}.webp",
@@ -568,7 +571,8 @@ defmodule Vutuv.Posts.Screenshots do
   within the same site (the host itself or its `www.` alias): a newspaper's short
   link to its own article is the same page, while a bounce to another host lands
   on a login or consent wall or a shortener's target. Anything else — a redirect
-  off the site or one hop too many, a 404, any other non-200 answer — is refused,
+  off the site or one hop too many, a 404, any other non-200 answer, a 200 that
+  is a file rather than a page (`{:not_a_page, type}`, permanent) — is refused,
   leaving the post to show the plain link. Off the request path, so the probe
   never slows a save.
 
@@ -595,7 +599,7 @@ defmodule Vutuv.Posts.Screenshots do
     end
   end
 
-  defp classify({:ok, %Req.Response{status: 200}}), do: :ok
+  defp classify({:ok, %Req.Response{status: 200} = resp}), do: PageScreenshot.page_response(resp)
   defp classify({:ok, %Req.Response{status: s} = resp}) when s in 300..399, do: {:redirect, resp}
 
   defp classify({:ok, %Req.Response{status: s}}) when s in 400..499,
@@ -610,7 +614,7 @@ defmodule Vutuv.Posts.Screenshots do
   # backslash and userinfo tricks that make `URI.parse/1` name a different host
   # than a browser would open.
   defp follow(url, resp, hops_left) do
-    next = Vutuv.PageScreenshot.redirect_target(url, resp)
+    next = PageScreenshot.redirect_target(url, resp)
 
     if hops_left > 0 and is_binary(next) and ChangesetHelpers.web_url?(next) and
          site(next) == site(url),

@@ -26,6 +26,7 @@ defmodule Vutuv.PageScreenshot do
   alias Vutuv.Activity
   alias Vutuv.BrowserFrame
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.PageScreenshot.Browsers
   alias Vutuv.PageScreenshot.Cdp
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
@@ -50,48 +51,6 @@ defmodule Vutuv.PageScreenshot do
   # key is deprecated in Elixir 1.20.
   @probe_req_options_key :page_screenshot_probe_req_options
 
-  @doc """
-  Capture `url`'s screenshot off the request path, fire-and-forget: supervised
-  under `Vutuv.TaskSupervisor` (so it survives a mid-request node restart rather
-  than being a dropped `Task.start`) and gated by `:generate_screenshots` (tests
-  launch no headless Chromium and never touch the SQL Sandbox from an unrelated
-  process). Shared by the HTML link forms and the API's link writes.
-
-  A blocklisted page (`Vutuv.ScreenshotBlocklist`) never gets a task at all —
-  the check is a cached string comparison, cheaper than the process it saves.
-
-  This is the fast path only, never the guarantee: the task dies with the slot a
-  deploy stops, and a link created anywhere else never gets one at all. What
-  makes a screenshot actually happen is `due/1` and the sweeper behind it.
-  """
-  def generate_async(%Url{} = url) do
-    if Application.get_env(:vutuv, :generate_screenshots, true) and
-         not ScreenshotBlocklist.blocked?(url.value) do
-      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn -> generate_screenshot(url) end)
-    end
-
-    :ok
-  end
-
-  @doc """
-  Works through `user_id`'s waiting links in one background task, so a member
-  who just imported an archive sees the pictures arrive instead of waiting for
-  the next sweep. One task for the batch, not one per link: each capture is a
-  headless Chromium of its own, and five at once is not a nudge.
-
-  Fire it **after** the import's transaction commits — a task started inside it
-  reads on another connection and finds no row yet.
-  """
-  def capture_missing_async(user_id) do
-    if Application.get_env(:vutuv, :generate_screenshots, true) do
-      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
-        capture_due(user_id: user_id)
-      end)
-    end
-
-    :ok
-  end
-
   # How long before a link whose capture produced no screenshot is tried again.
   @retry_after_hours 6
   # How many links one pass captures. Each one costs a Chromium run of up to
@@ -102,17 +61,15 @@ defmodule Vutuv.PageScreenshot do
   The profile links still waiting for a screenshot, least-recently-attempted
   first: never captured, not permanently refused (`broken?`), not moderated
   away (`screenshot_moderation`), and either never attempted or last attempted
-  more than #{@retry_after_hours} hours ago. Capped at #{@batch}; `user_id:`
-  narrows it to one member's links (what an import nudges, so a member with
-  more than #{@batch} fresh links gets the rest from the next sweep).
+  more than #{@retry_after_hours} hours ago. Capped at #{@batch}.
 
   There is deliberately no attempt ceiling, unlike the post and organization
   queues: a link is a page somebody chose to show, so a site that is down today
   is worth another look tomorrow, and one run every #{@retry_after_hours} hours
   is cheap enough to keep offering that indefinitely.
 
-  This is what makes a screenshot happen. `generate_async/1` is the fast path
-  from the link form, and it was the only one: a task the deploy killed
+  This is what makes a screenshot happen. A task per saved link used to be the
+  only path, and it had two holes: a task the deploy killed
   mid-capture was never retried, and a link created by any other path (the
   LinkedIn import inserts them straight through `Repo`) was never captured at
   all — 15 of the 1,938 links on vutuv.de sat like that, most of them in
@@ -123,7 +80,7 @@ defmodule Vutuv.PageScreenshot do
   inequality is NULL rather than true for a row that was never flagged, which
   is almost all of them, so it would silently return nothing.
   """
-  def due(opts \\ []) do
+  def due do
     cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -@retry_after_hours, :hour)
 
     from(u in Url,
@@ -134,23 +91,19 @@ defmodule Vutuv.PageScreenshot do
       order_by: [asc_nulls_first: u.screenshot_attempted_at],
       limit: @batch
     )
-    |> scope_to_user(Keyword.get(opts, :user_id))
     |> Repo.all()
   end
-
-  defp scope_to_user(query, nil), do: query
-  defp scope_to_user(query, user_id), do: from(u in query, where: u.user_id == ^user_id)
 
   @doc """
   Captures the due links one after the other and returns how many it worked
   through — attempts, not successes, since a blocklisted page is neither. What
-  `Vutuv.PageScreenshot.Sweeper` runs; `opts` are `due/1`'s, plus `capture:`
-  for the per-link capture function (the seam the post and organization queues
+  `Vutuv.PageScreenshot.Sweeper` runs; `capture:` in `opts` is the per-link
+  capture function (the seam the post and organization queues
   already have — a test stubs it and everything after the browser runs for
   real).
   """
   def capture_due(opts \\ []) do
-    urls = due(opts)
+    urls = due()
     capture = Keyword.get(opts, :capture, &capture_and_frame/1)
     Enum.each(urls, &generate_screenshot(&1, capture))
     length(urls)
@@ -192,7 +145,7 @@ defmodule Vutuv.PageScreenshot do
   end
 
   defp capture_store_and_flag(url, capture) do
-    # Before the capture, not after, and on every outcome: this is `due/1`'s
+    # Before the capture, not after, and on every outcome: this is `due/0`'s
     # clock, not a claim that anything was captured. A run that dies mid-way —
     # a Chromium crash, a deploy stopping the slot — must still move the link
     # off the front of the next batch, or the one link that can never be shot
@@ -222,6 +175,13 @@ defmodule Vutuv.PageScreenshot do
         # a reader, but a property of this attempt rather than of the site, so
         # the row is left alone for the next run to try again.
         Logger.info(failure_message(url, :unusable))
+        :error
+
+      {:error, {:not_a_page, _type} = reason} ->
+        # A link to a file (an archive, a PDF, a video): a permanent property
+        # of the URL and nothing to shoot, so it is not due again.
+        Logger.info(failure_message(url, reason))
+        set_broken(url, true)
         :error
 
       {:error, :internal_target = reason} ->
@@ -401,9 +361,9 @@ defmodule Vutuv.PageScreenshot do
   # guard. This closes the redirect bypass: a public host that 3xx-redirects to
   # 169.254.169.254 / a LAN address would otherwise be followed by Chromium and
   # screenshotted into the member's public profile image. A legit apex->www or
-  # http->https redirect still resolves. Only a redirecting URL is probed; a
-  # direct (or unreachable) URL is handed to Chromium unchanged, exactly as
-  # before, so a 404 / down link keeps its old behaviour.
+  # http->https redirect still resolves. A 2xx answer must be a page
+  # (`page_response/1`); an error status or an unreachable host is handed to
+  # Chromium unchanged, so a 404 / down link keeps its old behaviour.
   defp resolve_public_target(url, hops \\ @max_redirect_hops) do
     cond do
       Ssrf.resolves_to_internal?(URI.parse(url).host) -> {:error, :internal_target}
@@ -414,21 +374,46 @@ defmodule Vutuv.PageScreenshot do
 
   defp follow_or_accept(url, hops) do
     case probe(url) do
+      {:ok, %Req.Response{status: status} = resp} when status in 200..299 ->
+        with :ok <- page_response(resp), do: {:ok, url}
+
       {:ok, %Req.Response{status: status} = resp} when status in 300..399 ->
         case redirect_target(url, resp) do
           nil -> {:error, :bad_redirect}
           next -> resolve_public_target(next, hops - 1)
         end
 
-      # A direct (non-redirect) or unreachable response: hand this URL to Chromium
+      # An error status or an unreachable host: hand this URL to Chromium
       # unchanged, exactly as before.
-      _direct_or_unreachable ->
+      _error_or_unreachable ->
         {:ok, url}
     end
   rescue
     # The module contract is "never raises"; a probe blowing up degrades to the
     # pre-existing behaviour of letting Chromium try the URL.
     _ -> {:ok, url}
+  end
+
+  # What Chromium renders as a page. Anything else it saves as a download (a
+  # 10 GB archive filled the capture user's ~/Downloads in seconds) or shows in
+  # a viewer that is no picture of a web page, so it never gets a browser.
+  @page_types ~w(text/html application/xhtml+xml)
+
+  @doc """
+  `:ok` when a probe's answer is a web page, otherwise
+  `{:error, {:not_a_page, media_type}}` (`nil` when the answer names no
+  type). Permanent: a file does not become a page on the next try. Shared by
+  this module's preflight and the post queue's
+  (`Vutuv.Posts.Screenshots.ensure_http_ok/1`).
+
+  A missing type is refused as well. A real page names its type, and the one
+  that does not is exactly what Chromium sniffs and saves.
+  """
+  def page_response(%Req.Response{} = resp) do
+    case Vutuv.Http.media_type(resp) do
+      type when type in @page_types -> :ok
+      type -> {:error, {:not_a_page, type}}
+    end
   end
 
   @doc """
@@ -558,18 +543,23 @@ defmodule Vutuv.PageScreenshot do
   # long-lived `Vutuv.Posts.ScreenshotWorker` GenServer, whose mailbox and heap
   # should carry neither. And the yield is the BEAM-side backstop behind the OS
   # `timeout`, so a driver wedged in a way its own deadlines miss still ends.
+  #
+  # Every launch waits for a slot in `Vutuv.PageScreenshot.Browsers`, which
+  # caps how many browsers run at once whatever path asked for this one.
   defp run(bin, url, out_path, opts) do
     consent = Keyword.get(opts, :consent, false)
 
-    task =
-      Task.async(fn ->
-        Cdp.capture(bin, capture_args(opts), url, out_path, consent: consent)
-      end)
+    Browsers.run(fn ->
+      task =
+        Task.async(fn ->
+          Cdp.capture(bin, capture_args(opts), url, out_path, consent: consent)
+        end)
 
-    case Task.yield(task, (Cdp.capture_seconds() + 10) * 1000) || Task.shutdown(task) do
-      {:ok, result} -> result
-      _no_result -> {:error, :timeout}
-    end
+      case Task.yield(task, (Cdp.capture_seconds() + 10) * 1000) || Task.shutdown(task) do
+        {:ok, result} -> result
+        _no_result -> {:error, :timeout}
+      end
+    end)
   end
 
   @doc """

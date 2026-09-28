@@ -115,7 +115,8 @@ defmodule Vutuv.PageScreenshot.Cdp do
   # A page target of our own, attached with `flatten: true` so its messages
   # ride the one pipe under a session id rather than a nested envelope.
   defp open_page(state) do
-    with {:ok, %{"targetId" => target}, state} <-
+    with {:ok, _deny, state} <- request(state, "Browser.setDownloadBehavior", %{behavior: "deny"}),
+         {:ok, %{"targetId" => target}, state} <-
            request(state, "Target.createTarget", %{url: "about:blank"}),
          {:ok, %{"sessionId" => session}, state} <-
            request(state, "Target.attachToTarget", %{targetId: target, flatten: true}) do

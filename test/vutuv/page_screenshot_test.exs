@@ -288,6 +288,38 @@ defmodule Vutuv.PageScreenshotTest do
     assert Repo.get!(Url, url.id).broken? == true
   end
 
+  # Chromium saves what it cannot render as a download: a 10 GB archive filled
+  # the capture host's disk in seconds. A link to a file gets no browser, and a
+  # file does not become a page tomorrow, so the link is not due again either.
+  test "a profile link that answers with a file is refused before launching Chromium" do
+    Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family ->
+      {:ok, [{93, 184, 216, 34}]}
+    end)
+
+    args_file =
+      Path.join(System.tmp_dir!(), "chromium-args-#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm(args_file) end)
+    Application.put_env(:vutuv, :chromium_path, fake_chromium(args_file))
+
+    for type <- ["application/zip", "application/pdf", "video/mp4"] do
+      url = insert(:url, user: insert(:user), value: "https://public.example/f", broken?: false)
+
+      stub_probe(fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("content-type", type)
+        |> Plug.Conn.resp(200, "")
+      end)
+
+      capture_log(fn -> assert :error = Vutuv.PageScreenshot.generate_screenshot(url) end)
+
+      assert Repo.get!(Url, url.id).broken? == true, "expected #{type} to be refused"
+      refute Enum.any?(Vutuv.PageScreenshot.due(), &(&1.id == url.id))
+    end
+
+    refute File.exists?(args_file)
+  end
+
   test "an environment failure is logged but does not poison the URL, so it is retried later" do
     user = insert(:user)
     url = insert(:url, user: user, value: "https://example.com/page", broken?: false)
@@ -301,7 +333,12 @@ defmodule Vutuv.PageScreenshotTest do
       {:ok, [{93, 184, 216, 34}]}
     end)
 
-    stub_probe(fn conn -> Plug.Conn.resp(conn, 200, "ok") end)
+    stub_probe(fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("text/html")
+      |> Plug.Conn.resp(200, "ok")
+    end)
+
     Application.put_env(:vutuv, :chromium_path, "/nonexistent/definitely-not-chromium")
 
     log =
@@ -371,14 +408,6 @@ defmodule Vutuv.PageScreenshotTest do
       refute just_tried.id in due
     end
 
-    test "narrows to one member's links (what an import nudges)", %{user: user} do
-      other = insert_activated_user()
-      insert(:url, user: user, value: "https://mine.example")
-      theirs = insert(:url, user: other, value: "https://theirs.example")
-
-      assert Enum.map(Vutuv.PageScreenshot.due(user_id: other.id), & &1.id) == [theirs.id]
-    end
-
     defp hours_ago(hours),
       do: NaiveDateTime.add(NaiveDateTime.utc_now(:second), -hours, :hour)
   end
@@ -435,5 +464,37 @@ defmodule Vutuv.PageScreenshotTest do
 
     assert is_nil(moved.screenshot)
     assert moved.id in Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
+  end
+
+  # The save nudges the sweeper instead of starting a browser of its own, so
+  # the new address has to be due at once, whatever the old one's verdict was.
+  test "editing a refused or just-tried link makes the new address due at once" do
+    user = insert_activated_user()
+    just_now = NaiveDateTime.utc_now(:second)
+
+    refused = insert(:url, user: user, value: "https://file.example/a.zip", broken?: true)
+
+    tried =
+      insert(:url, user: user, value: "https://down.example", screenshot_attempted_at: just_now)
+
+    for url <- [refused, tried] do
+      {:ok, _moved} = url |> Url.changeset(%{"value" => "https://page.example"}) |> Repo.update()
+    end
+
+    due = Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
+    assert refused.id in due
+    assert tried.id in due
+  end
+
+  test "a description edit leaves the link's attempt clock alone" do
+    user = insert_activated_user()
+    just_now = NaiveDateTime.utc_now(:second)
+
+    url =
+      insert(:url, user: user, value: "https://down.example", screenshot_attempted_at: just_now)
+
+    {:ok, _edited} = url |> Url.changeset(%{"description" => "Mine"}) |> Repo.update()
+
+    refute url.id in Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
   end
 end

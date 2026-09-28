@@ -16,7 +16,7 @@ defmodule Vutuv.Profiles.Url do
     # programmatically with the screenshot, never cast from params.
     field(:screenshot_moderation, :string)
     # When the screenshot pipeline last ran for this link, whatever came of it:
-    # the clock Vutuv.PageScreenshot.due/1 orders its retry batch by. Set
+    # the clock Vutuv.PageScreenshot.due/0 orders its retry batch by. Set
     # programmatically, never cast from params.
     field(:screenshot_attempted_at, :naive_datetime)
     field(:broken?, :boolean)
@@ -74,15 +74,19 @@ defmodule Vutuv.Profiles.Url do
   # Pointing the row at another address makes the stored capture a picture of
   # somebody else's page, so it goes with the URL it was taken of. Dropping the
   # column is also what puts the row back in front of
-  # `Vutuv.PageScreenshot.due/1`, which asks for links with no screenshot — a
-  # row that kept the old one would never be captured again if the edit's
-  # fire-and-forget task died, and would show the wrong page indefinitely
-  # rather than none.
+  # `Vutuv.PageScreenshot.due/0`, which asks for links with no screenshot — a
+  # row that kept the old one would never be captured again and would show the
+  # wrong page indefinitely rather than none.
+  #
+  # The attempt clock and the refusal go with it too: they were verdicts on the
+  # old address, and a fresh one is due at once.
   defp drop_screenshot_on_value_change(changeset) do
-    if get_change(changeset, :value) && get_field(changeset, :screenshot) do
+    if get_change(changeset, :value) do
       changeset
       |> put_change(:screenshot, nil)
       |> put_change(:screenshot_moderation, nil)
+      |> put_change(:screenshot_attempted_at, nil)
+      |> put_change(:broken?, false)
     else
       changeset
     end

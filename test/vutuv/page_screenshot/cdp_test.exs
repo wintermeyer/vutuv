@@ -111,4 +111,35 @@ defmodule Vutuv.PageScreenshot.CdpTest do
       end
     end
   end
+
+  describe "capture/5 against a fake browser" do
+    @describetag :tmp_dir
+
+    setup %{tmp_dir: dir} do
+      if System.find_executable("python3") == nil, do: raise("python3 is needed for the fake")
+
+      log = Path.join(dir, "protocol.log")
+      fixture = Path.expand("../../support/fixtures/cdp/fake_browser.py", __DIR__)
+      bin = Path.join(dir, "fake-chromium")
+      File.write!(bin, "#!/bin/sh\nFAKE_BROWSER_LOG='#{log}' exec python3 '#{fixture}' \"$@\"\n")
+      File.chmod!(bin, 0o755)
+
+      %{bin: bin, log: log, out: Path.join(dir, "shot.png")}
+    end
+
+    # Chromium saves whatever it cannot render as a download, and it did: a
+    # link to a 10 GB archive landed in the capture user's ~/Downloads in
+    # seconds, and a page can start a download by script long after any
+    # preflight saw it answer with HTML. So the browser is told to refuse them
+    # before it opens anything at all.
+    test "refuses downloads before the first page exists", %{bin: bin, log: log, out: out} do
+      assert {:ok, _top_frame_urls} = Cdp.capture(bin, [], "https://example.com/", out)
+      assert File.exists?(out)
+
+      [first | _rest] = log |> File.read!() |> String.split("\n", trim: true)
+
+      assert %{"method" => "Browser.setDownloadBehavior", "params" => %{"behavior" => "deny"}} =
+               Jason.decode!(first)
+    end
+  end
 end

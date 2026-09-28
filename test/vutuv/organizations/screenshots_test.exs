@@ -153,6 +153,15 @@ defmodule Vutuv.Organizations.ScreenshotsTest do
       assert job.status == "failed"
       assert job.attempts == 1
       assert job.next_attempt_at == nil
+
+      {file, _owner} = active_organization(%{"website_url" => "https://file.example"})
+
+      Screenshots.deliver_due(
+        force: true,
+        capture: failing_capture({:not_a_page, "application/zip"})
+      )
+
+      assert %{status: "failed", next_attempt_at: nil} = job_for(file)
     end
 
     test "a job past the retry cap is not picked up again" do

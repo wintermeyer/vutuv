@@ -258,6 +258,8 @@ defmodule Vutuv.Organizations.Screenshots do
   defp permanent_failure?(:obstructed), do: true
   defp permanent_failure?(:too_many_redirects), do: true
   defp permanent_failure?(:bad_redirect), do: true
+  # A homepage address that answers with a file (`PageScreenshot.page_response/1`).
+  defp permanent_failure?({:not_a_page, _type}), do: true
   defp permanent_failure?(_reason), do: false
 
   defp capture_and_store(%OrganizationScreenshot{} = job) do

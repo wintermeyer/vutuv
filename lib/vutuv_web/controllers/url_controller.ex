@@ -1,5 +1,6 @@
 defmodule VutuvWeb.UrlController do
   use VutuvWeb, :controller
+  alias Vutuv.PageScreenshot.Sweeper
   alias Vutuv.Profiles.LinkBadges
   alias Vutuv.Profiles.LinkVerification
   alias Vutuv.Profiles.Url
@@ -57,8 +58,8 @@ defmodule VutuvWeb.UrlController do
       |> Url.changeset(url_params)
 
     case Repo.insert(changeset) do
-      {:ok, url} ->
-        Vutuv.PageScreenshot.generate_async(url)
+      {:ok, _url} ->
+        Sweeper.nudge()
 
         conn
         |> put_flash(:info, gettext("Link created successfully."))
@@ -97,8 +98,8 @@ defmodule VutuvWeb.UrlController do
     changeset = Url.changeset(url, url_params)
 
     case Repo.update(changeset) do
-      {:ok, url} ->
-        Vutuv.PageScreenshot.generate_async(url)
+      {:ok, _url} ->
+        Sweeper.nudge()
 
         conn
         |> put_flash(:info, gettext("Link updated successfully."))

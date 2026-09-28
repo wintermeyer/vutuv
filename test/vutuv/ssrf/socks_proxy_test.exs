@@ -46,6 +46,25 @@ defmodule Vutuv.Ssrf.SocksProxyTest do
     assert {:ok, "pong"} = :gen_tcp.recv(sock, 4, 5_000)
   end
 
+  # The capture deadline bounds the time, not the volume: endless HTML pulled
+  # 671 MB into one 20 s capture. Counted on what the upstream sends, since
+  # that is what a hostile site controls.
+  test "cuts a connection once the upstream has sent more than its budget" do
+    proxy_port = start_proxy(vet: fn _target -> {:ok, {127, 0, 0, 1}} end, max_bytes: 1_000)
+    echo_port = start_echo_server()
+
+    sock = open_client(proxy_port)
+    handshake(sock)
+    assert connect_request(sock, {:domain, "stream.example"}, echo_port) == 0
+
+    chunk = :binary.copy("x", 600)
+    :ok = :gen_tcp.send(sock, chunk)
+    assert {:ok, ^chunk} = :gen_tcp.recv(sock, 600, 5_000)
+
+    :ok = :gen_tcp.send(sock, chunk)
+    assert {:error, :closed} = :gen_tcp.recv(sock, 600, 5_000)
+  end
+
   test "a vet refusal answers REP 2 (not allowed by ruleset) and closes without dialling" do
     proxy_port = start_proxy(vet: fn _target -> {:error, :internal} end)
 

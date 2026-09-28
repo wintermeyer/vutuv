@@ -691,7 +691,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
         select: u
       )
       # "rejected", not nil, the way the post branch below records it: the row
-      # is the only memory of the verdict, and `Vutuv.PageScreenshot.due/1`
+      # is the only memory of the verdict, and `Vutuv.PageScreenshot.due/0`
       # reads it to leave the link alone. Clearing it would put the page back
       # in the capture queue and have the sweeper shoot, store and re-scan the
       # same rejected picture every retry window, forever.

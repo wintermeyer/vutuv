@@ -96,6 +96,9 @@ defmodule Vutuv.Application do
         # (tests, air-gapped installs): one idle loopback listener, and the
         # capture path fails closed on `port/1` when it is missing.
         Vutuv.Ssrf.SocksProxy,
+        # The cap on headless Chromiums running at once, which every capture
+        # waits on. Unconditional for the same reason as the proxy above.
+        Vutuv.PageScreenshot.Browsers,
         # Caches + single-flights the inline social feed fetches (Mastodon,
         # Bluesky). Starts after the TaskSupervisor (its fetch tasks run under
         # it); does no work until a profile visit asks, and the per-provider
