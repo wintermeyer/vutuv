@@ -1184,4 +1184,143 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       assert ExternalPosts.tag_finds(tag.id) == []
     end
   end
+
+  # One person posting the same words on Mastodon and on Bluesky, and Bridgy
+  # Fed serving the Bluesky one to the fediverse as an account of its own: two
+  # originals by the only key `origin_key/1` can read, one post to a reader.
+  describe "a bridge's mirror of a post" do
+    @words "Spannend, das automatische System mag die Tatsachen nicht."
+    @bridge "bsky.brid.gy"
+
+    setup do
+      put_config(:tag_source_servers, [@other_source])
+      :ok
+    end
+
+    defp own_post(tag, attrs \\ []) do
+      external_post(
+        tag,
+        Keyword.merge(
+          [url: original("mirror"), source: @source, author_host: @source, text: @words],
+          attrs
+        )
+      )
+    end
+
+    defp mirror(tag, attrs \\ []) do
+      external_post(
+        tag,
+        Keyword.merge(
+          [
+            url: "https://#{@bridge}/r/https://bsky.app/profile/ada.example/post/3abc",
+            source: @other_source,
+            author_host: @bridge,
+            author_acct: "ada.example@#{@bridge}",
+            author_url: "https://#{@bridge}/ap/did:plc:ada",
+            text: @words
+          ],
+          attrs
+        )
+      )
+    end
+
+    test "folds into the author's own post, which stays the one drawn" do
+      tag = followed_tag()
+      # Filed first, so arrival order alone would draw it.
+      bridged = mirror(tag)
+      own = own_post(tag, published_at: DateTime.add(DateTime.utc_now(:second), 40))
+
+      assert [%{post: drawn, copies: copies}] = ExternalPosts.tag_finds(tag.id)
+      assert drawn.id == own.id
+      assert MapSet.new(copies, & &1.id) == MapSet.new([own.id, bridged.id])
+
+      entry = %{external_post: drawn, copies: copies}
+      assert ExternalPosts.servers(entry) == [@source, @other_source]
+
+      assert ExternalPosts.mirrors(entry) == [
+               %{address: "@ada.example@#{@bridge}", url: bridged.url}
+             ]
+
+      assert %{total: 1} = Timeline.page(tag, source: :fediverse)
+    end
+
+    test "is one entry in the feed, and counts once" do
+      user = insert(:activated_user)
+      tag = insert(:tag)
+      {:ok, follow} = Tags.follow_tag(user, tag)
+      {:ok, _} = Tags.add_tag_follow_source(follow, @source)
+      {:ok, _} = Tags.add_tag_follow_source(follow, @other_source)
+      own = own_post(tag)
+      _bridged = mirror(tag)
+
+      assert [%{external_post: %{id: id}}] = ExternalPosts.feed_items(user, 20, nil)
+      assert id == own.id
+      assert length(ExternalPosts.feed_items(user, 20, nil, shape: :marks)) == 1
+    end
+
+    test "the same words from two ordinary servers stay two posts" do
+      tag = followed_tag()
+      own_post(tag)
+      own_post(tag, url: "https://#{@other_source}/@bob/1", author_host: @other_source)
+
+      assert [_, _] = ExternalPosts.tag_finds(tag.id)
+    end
+
+    test "a mirror posted long after is a post of its own" do
+      tag = followed_tag()
+      own_post(tag)
+      mirror(tag, published_at: DateTime.add(DateTime.utc_now(:second), 3600))
+
+      assert [_, _] = ExternalPosts.tag_finds(tag.id)
+    end
+
+    test "different words are a post of their own" do
+      tag = followed_tag()
+      own_post(tag)
+      mirror(tag, text: "Ganz andere Worte über ganz andere Tatsachen.")
+
+      assert [_, _] = ExternalPosts.tag_finds(tag.id)
+    end
+
+    test "whitespace is not a difference" do
+      tag = followed_tag()
+      own_post(tag)
+      mirror(tag, text: "  " <> String.replace(@words, " ", "\n  ") <> "\n")
+
+      assert [_] = ExternalPosts.tag_finds(tag.id)
+    end
+
+    test "a line too short to say whose it is stays apart" do
+      tag = followed_tag()
+      own_post(tag, text: "#LinkedIn")
+      mirror(tag, text: "#LinkedIn")
+
+      assert [_, _] = ExternalPosts.tag_finds(tag.id)
+    end
+
+    # Two accounts posting the same words is somebody copying somebody, and the
+    # bridge cannot tell us which of the two it belongs to.
+    test "a mirror two posts could claim folds into neither" do
+      tag = followed_tag()
+      own_post(tag)
+      own_post(tag, url: "https://#{@other_source}/@bob/1", author_host: @other_source)
+      mirror(tag)
+
+      assert [_, _, _] = ExternalPosts.tag_finds(tag.id)
+    end
+
+    test "a report on the post leaves the mirror standing, and it is drawn next" do
+      tag = followed_tag()
+      own = own_post(tag)
+      bridged = mirror(tag)
+      reporter = insert(:activated_user)
+
+      assert [%{copies: copies}] = ExternalPosts.tag_finds(tag.id)
+      assert {:ok, :every_copy} = ExternalPosts.report(own.id, reporter)
+
+      assert {%ExternalPost{id: redrawn}, [_only]} = ExternalPosts.refold(copies)
+      assert redrawn == bridged.id
+      assert ExternalPosts.mirrors(%{external_post: bridged, copies: [bridged]}) == []
+    end
+  end
 end

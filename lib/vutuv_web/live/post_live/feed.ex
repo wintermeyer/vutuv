@@ -3659,6 +3659,7 @@ defmodule VutuvWeb.PostLive.Feed do
                     live?
                     post={entry.external_post}
                     servers={ExternalPosts.servers(entry)}
+                    mirrors={ExternalPosts.mirrors(entry)}
                     viewer={@current_user}
                     hide_rules={@filter_rules}
                   />

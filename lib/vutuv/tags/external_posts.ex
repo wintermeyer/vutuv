@@ -105,6 +105,12 @@ defmodule Vutuv.Tags.ExternalPosts do
   # answers a narrower question than the one it was asked.
   @fold_scan 3_000
 
+  # How far apart a bridge's mirror and the post it repeats may be published and
+  # still be one post (`fold_mirrors/1`). A crossposting tool sends both within
+  # seconds; five minutes leaves room for a slow bridge, not for somebody
+  # copying the words an hour later.
+  @mirror_window_seconds 300
+
   # An address that is plainly a web address, as a Postgres regex matched
   # case-insensitively: a scheme, a host of letters, digits, dots and hyphens,
   # a port, and a path of the characters RFC 3986 allows unescaped — no query,
@@ -203,6 +209,17 @@ defmodule Vutuv.Tags.ExternalPosts do
   language were identical in every one, and only the author's `acct` spelling
   differed, which `ExternalPost.address/1` normalises away.
 
+  **A bridge's mirror folds in too** (`fold_mirrors/1`): somebody posting on
+  Mastodon and Bluesky at once reaches a tag as two originals, the second from
+  Bridgy Fed's account for them, and that pair has no key in common at all.
+  What relates them is weaker than an address, so the rule is narrow: only a
+  bridge's find folds, only into exactly one other find with the same words
+  published within `@mirror_window_seconds`, and the mirror is never the one
+  drawn. Its rows join `copies`, so the servers that carried it count, and
+  `mirrors/1` names the bridge account on the card. A report still reaches by
+  `origin_key/1` alone, so reporting the post leaves the mirror, which is then
+  drawn on its own.
+
   The caller decides **what to hand over**, and that is the scope of the answer:
   a tag page folds everything it may show under that tag, a member's feed folds
   what the servers *they* named brought them. "Found on three servers" therefore
@@ -217,6 +234,51 @@ defmodule Vutuv.Tags.ExternalPosts do
     |> Enum.map(&elem(&1, 0))
     |> Enum.uniq()
     |> Enum.map(&find(Map.fetch!(grouped, &1)))
+    |> fold_mirrors()
+  end
+
+  # A mirror with two candidates folds into neither: the same words from two
+  # ordinary accounts are somebody copying somebody, and the bridge cannot say
+  # which of them it stands in for.
+  defp fold_mirrors(finds) do
+    {mirrors, own} = Enum.split_with(finds, &ExternalPost.bridge?(&1.post))
+    own_by_words = Enum.group_by(own, &Map.get(&1.post, :text_key))
+
+    # mirror id => the find it folds into
+    target_of =
+      for mirror <- mirrors,
+          key = Map.get(mirror.post, :text_key),
+          key != nil,
+          [target] <- [Enum.filter(Map.get(own_by_words, key, []), &near?(mirror, &1))],
+          into: %{},
+          do: {mirror.post.id, target.post.id}
+
+    extra =
+      mirrors
+      |> Enum.filter(&Map.has_key?(target_of, &1.post.id))
+      |> Enum.group_by(&target_of[&1.post.id], & &1.copies)
+
+    for find <- finds, not Map.has_key?(target_of, find.post.id) do
+      %{find | copies: find.copies ++ List.flatten(Map.get(extra, find.post.id, []))}
+    end
+  end
+
+  defp near?(%{post: a}, %{post: b}),
+    do: abs(DateTime.diff(a.published_at, b.published_at)) <= @mirror_window_seconds
+
+  @doc """
+  The bridge accounts whose mirror of the post an entry carries, as
+  `%{address:, url:}` — what the card names under "also posted through a
+  bridge", so a folded mirror is still one tap away.
+  """
+  def mirrors(%{external_post: post} = entry) do
+    own = ExternalPost.origin_key(post)
+
+    entry
+    |> Map.get(:copies, [])
+    |> Enum.filter(&(ExternalPost.bridge?(&1) and ExternalPost.origin_key(&1) != own))
+    |> Enum.uniq_by(&ExternalPost.origin_key/1)
+    |> Enum.map(&%{address: ExternalPost.address(&1), url: &1.url})
   end
 
   # A row nobody can key is a find of its own, by its id — never `nil`, which
@@ -328,8 +390,31 @@ defmodule Vutuv.Tags.ExternalPosts do
   A whole row carries up to a thousand characters of somebody else's prose, and
   a folded card holds one of these per server for as long as the page is open —
   280 bytes measured, against 2,288 for the row.
+
+  The words travel as `text_key`, a digest with the whitespace folded, for the
+  bridge rule in `fold_mirrors/1`, and only for a text of 20 characters or more:
+  below that ("#LinkedIn") the same words say nothing about whose they are.
+  The author's two columns are there so `mirrors/1` can name a folded bridge
+  account.
   """
   def fold_select(query) do
+    query
+    |> key_select()
+    |> select_merge([external: p], %{
+      author_acct: p.author_acct,
+      author_url: p.author_url,
+      text_key:
+        fragment(
+          "CASE WHEN char_length(btrim(?)) >= 20 THEN md5(btrim(regexp_replace(?, '\\s+', ' ', 'g'))) END",
+          p.text,
+          p.text
+        )
+    })
+  end
+
+  # The columns `origin_key/1` and `home_copy?/1` need, and all a report's reach
+  # does: it never reads the words, so it never pays for their digest.
+  defp key_select(query) do
     select(query, [external: p], %{
       id: p.id,
       source: p.source,
@@ -603,11 +688,11 @@ defmodule Vutuv.Tags.ExternalPosts do
   defp possible_copies_query(rows) when is_list(rows) do
     hosts = rows |> Enum.map(& &1.author_host) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
-    # The same four columns the fold reads, through the same select: they are
+    # The same key columns the fold reads, through the same select: they are
     # the columns `origin_key/1` and `home_copy?/1` need, so a third place
     # listing them is a third place to forget one.
     from(p in ExternalPost, as: :external, where: p.author_host in ^hosts)
-    |> fold_select()
+    |> key_select()
   end
 
   @doc """
