@@ -1,7 +1,7 @@
 defmodule VutuvWeb.AttachmentController do
   @moduledoc """
   The one address a file has, under a message (issue #2110) or a post (issue
-  #2108): the file itself, and the pictures of its first pages.
+  #2108): the file itself, and the pictures of its pages.
 
   Neither tree gets a `Plug.Static` mount or an nginx location
   (`Vutuv.AttachmentStore`), so every byte comes through here and every request

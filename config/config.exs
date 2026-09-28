@@ -881,13 +881,15 @@ config :vutuv, :press_kit, max_filesize: 30_000_000, max_photos: 10, max_logos: 
 # `pdftoppm` (qualification proofs) already asks for — without it PDFs are not
 # offered at all, and text and Markdown carry on.
 #
-# `preview_pages` is how many of a file's first pages are rendered as pictures
-# under the post (issue #2105): three is enough to tell a paper from a price
-# list, five is the ceiling the code clamps to, and 0 turns previews off for an
-# installation that wants none. A PDF page is rendered by `pdftoppm` (the same
-# poppler-utils package as `pdfinfo` above); a text or Markdown file is drawn
-# by the headless Chromium the screenshot pipeline already runs, and where
-# neither is on the box the file simply has no preview.
+# `max_pages` is the longest PDF accepted. Every page of it is rendered as a
+# picture under the post (issue #2105) and each one goes through the AI image
+# scan, so this bounds the work one upload can cause; a longer PDF is refused.
+# `previews: false` renders nothing for an installation that wants no
+# previews, and with them goes the scan of a file's contents. A PDF page is
+# rendered by `pdftoppm` (the same poppler-utils package as `pdfinfo` above);
+# a text or Markdown file is drawn by the headless Chromium the screenshot
+# pipeline already runs, and where neither is on the box the file simply has
+# no preview.
 config :vutuv, :attachments,
   enabled: true,
   uploaders: :members,
@@ -895,7 +897,8 @@ config :vutuv, :attachments,
   max_per_post: 5,
   daily_budget: 100_000_000,
   monthly_budget: 500_000_000,
-  preview_pages: 3,
+  max_pages: 200,
+  previews: true,
   render_concurrency: 1,
   pdfinfo: "pdfinfo",
   pdfdetach: "pdfdetach",

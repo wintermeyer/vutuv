@@ -82,7 +82,7 @@ defmodule Vutuv.ModerationImageTakedownTest do
   # files moving; it needs `pdftoppm`, which this suite already requires for
   # `Vutuv.Attachments.PagesTest`.
   defp attachment_page(owner) do
-    AttachmentFixtures.put_config(uploaders: :members, preview_pages: 1)
+    AttachmentFixtures.put_config(uploaders: :members)
     dir = Path.join(System.tmp_dir!(), "takedown_pdf_#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf(dir) end)

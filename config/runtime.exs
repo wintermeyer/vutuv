@@ -946,6 +946,16 @@ if config_env() == :prod do
     end
   end
 
+  # A switch that keeps the config.exs value while unset: an operator who
+  # turned something off in a source config must not get it back by leaving
+  # the env var alone. Anything but "false" is on.
+  env_bool = fn name, default ->
+    case System.get_env(name) do
+      nil -> default
+      value -> value != "false"
+    end
+  end
+
   # …and the same as a megabyte count, since every size knob here is decimal
   # (1 MB = 1,000,000 bytes), the unit the forms and the messages name.
   env_mb = fn name ->
@@ -980,14 +990,7 @@ if config_env() == :prod do
   config :vutuv,
          :attachments,
          Keyword.merge(attachment_defaults,
-           # Unset means "whatever config.exs says", not "on": an operator who
-           # turned files off in a source config must not get them back by
-           # leaving the env var alone.
-           enabled:
-             case System.get_env("ATTACHMENT_UPLOADS") do
-               nil -> attachment_defaults[:enabled]
-               value -> value != "false"
-             end,
+           enabled: env_bool.("ATTACHMENT_UPLOADS", attachment_defaults[:enabled]),
            uploaders:
              case System.get_env("ATTACHMENT_UPLOADERS") do
                "members" -> :members
@@ -999,8 +1002,8 @@ if config_env() == :prod do
            daily_budget: env_mb.("ATTACHMENT_DAILY_MB") || attachment_defaults[:daily_budget],
            monthly_budget:
              env_mb.("ATTACHMENT_MONTHLY_MB") || attachment_defaults[:monthly_budget],
-           preview_pages:
-             env_int.("ATTACHMENT_PREVIEW_PAGES") || attachment_defaults[:preview_pages],
+           max_pages: env_int.("ATTACHMENT_MAX_PAGES") || attachment_defaults[:max_pages],
+           previews: env_bool.("ATTACHMENT_PREVIEWS", attachment_defaults[:previews]),
            render_concurrency:
              env_int.("ATTACHMENT_RENDER_CONCURRENCY") ||
                attachment_defaults[:render_concurrency],

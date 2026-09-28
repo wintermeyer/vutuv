@@ -47,7 +47,7 @@ defmodule Vutuv.AttachmentHelpers do
 
   @doc """
   The same claim for a module that asks for no pages at all
-  (`preview_pages: 0`), where the pipeline settles the file itself.
+  (`previews: false`), where the pipeline settles the file itself.
   """
   def settled!(%Attachment{} = attachment) do
     Pages.render(attachment)

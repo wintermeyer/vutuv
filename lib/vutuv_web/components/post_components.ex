@@ -5105,7 +5105,7 @@ defmodule VutuvWeb.PostComponents do
             before that tap. --%>
             <.post_video :if={@video} video={@video} />
 
-            <%!-- Its files (issue #2108): the first pages as pictures and a
+            <%!-- Its files (issue #2108): every page as a picture and a
             chip that hands the file over, in both modes. --%>
             <.post_files
               :if={@files != []}

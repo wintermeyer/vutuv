@@ -18,7 +18,9 @@ defmodule Vutuv.Attachments do
        (`Vutuv.Attachments.Format`);
     5. the member has no budget left;
     6. a PDF does not pass the gate (`Vutuv.Uploads.PdfGate`) — last, because
-       it is the only step that shells out and reads the whole file.
+       it is the only step that shells out and reads the whole file — or has
+       more pages than `Vutuv.Attachments.Pages.max_pages/0`, since every page
+       is rendered and scanned.
 
   Only then is anything written to disk. A refusal leaves no file and costs no
   budget.
@@ -158,7 +160,14 @@ defmodule Vutuv.Attachments do
   defp agrees(sniffed, claimed),
     do: if(Format.family(sniffed) == claimed, do: {:ok, sniffed}, else: {:error, :invalid_file})
 
-  defp check_content(:pdf, path), do: PdfGate.check(path)
+  defp check_content(:pdf, path) do
+    with {:ok, pages} <- PdfGate.check(path) do
+      if is_integer(pages) and pages > Pages.max_pages(),
+        do: {:error, :too_many_pages},
+        else: {:ok, pages}
+    end
+  end
+
   defp check_content(:text, _path), do: {:ok, nil}
 
   # A picture is vetted by the same decoder that will derive its preview

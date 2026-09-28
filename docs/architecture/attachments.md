@@ -107,7 +107,7 @@ Everything is per installation, read in `config/runtime.exs` with the
 `config/config.exs` values as defaults, and documented in the env-var table in
 [ADMINS.md](../ADMINS.md): `ATTACHMENT_UPLOADS`, `ATTACHMENT_UPLOADERS`,
 `ATTACHMENT_MAX_MB`, `ATTACHMENTS_PER_POST`, `ATTACHMENT_DAILY_MB`,
-`ATTACHMENT_MONTHLY_MB`, `ATTACHMENT_PREVIEW_PAGES`,
+`ATTACHMENT_MONTHLY_MB`, `ATTACHMENT_MAX_PAGES`, `ATTACHMENT_PREVIEWS`,
 `ATTACHMENT_RENDER_CONCURRENCY`, `PDFINFO_PATH`, `PDFDETACH_PATH`,
 `PDFTOPPM_PATH`.
 
@@ -275,9 +275,14 @@ as public as its text.
 
 ## The preview pages
 
-`Vutuv.Attachments.Pages` renders the first pages of a file as pictures, so a
-reader can tell what it is without downloading it: three by default
-(`ATTACHMENT_PREVIEW_PAGES`), five at most, none at zero.
+`Vutuv.Attachments.Pages` renders every page of a PDF as a picture, so a
+reader can tell what it is without downloading it and the AI image scan judges
+all of its contents, not just the cover. A page that is not rendered is a page
+nobody checks, which is why it is all of them. The upload gate refuses a PDF
+longer than `ATTACHMENT_MAX_PAGES` (200), which bounds the work: about a second
+per page, so the pipeline stamps its claim again after every page and a long
+file is never taken over by the other slot of a deploy mid-render.
+`ATTACHMENT_PREVIEWS=false` renders nothing.
 
 **A PDF page is rendered by `pdftoppm`, not by libvips.** The issue asked for
 libvips' Poppler loader, and that loader is not in this application: `vix`
@@ -295,7 +300,7 @@ A **text or Markdown** file is rendered as one page: the document goes through
 Chromium photographs it, through the raw `Vutuv.PageScreenshot.capture/3` that
 moderation evidence already uses. One page, not three, because a text file has
 no pagination of its own — what is captured is the first screenful, and slicing
-a README into three would produce two pictures of nothing in particular.
+a README into several would produce pictures of nothing in particular.
 
 That page's content is a member's file, so it is rendered **offline**: the
 document carries `Content-Security-Policy: default-src 'none'` and the browser

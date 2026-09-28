@@ -105,7 +105,6 @@ defmodule Vutuv.Posts.PendingTest do
     end
 
     test "names every stage it is in", %{user: user, files: files} do
-      Fixtures.put_config(preview_pages: 3)
       attachment = file!(user, files)
 
       {:ok, pending} =

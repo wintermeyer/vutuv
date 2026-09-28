@@ -17,9 +17,10 @@ defmodule VutuvWeb.AttachmentText do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [megabyte_label: 1]
+  import VutuvWeb.UI, only: [megabyte_label: 1, delimited_count: 1]
 
   alias Vutuv.Attachments
+  alias Vutuv.Attachments.Pages
 
   @doc """
   The sentence for one refusal from `Vutuv.Attachments.create_pending/3`.
@@ -61,6 +62,19 @@ defmodule VutuvWeb.AttachmentText do
     do: gettext("This PDF has another file inside it, which cannot be uploaded here.")
 
   def error_message(:unreadable, _opts), do: gettext("This PDF could not be read.")
+
+  # `%{formatted}` rather than `%{count}`: `ngettext/3` binds `%{count}` to the
+  # raw integer, and an installation may raise the limit past 999.
+  def error_message(:too_many_pages, _opts) do
+    limit = Pages.max_pages()
+
+    ngettext(
+      "PDFs may have up to %{formatted} page.",
+      "PDFs may have up to %{formatted} pages.",
+      limit,
+      formatted: delimited_count(limit)
+    )
+  end
 
   def error_message(:invalid_image, _opts), do: gettext("This picture could not be read.")
 

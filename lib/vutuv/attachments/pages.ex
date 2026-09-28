@@ -1,8 +1,10 @@
 defmodule Vutuv.Attachments.Pages do
   @moduledoc """
-  The preview pages under a post's file (issue #2105): the first pages of a
-  PDF, or a text/Markdown file drawn as one page, so a reader can tell what a
-  file is without downloading it.
+  The preview pages under a post's file (issue #2105): every page of a PDF, up
+  to `max_pages/0`, or a text/Markdown file drawn as one page, so a reader can
+  tell what a file is without downloading it. Every page is also what the AI
+  image scan judges, so a page that is not rendered is a page nobody checks:
+  that is why it is all of them and not the first few.
 
   Each page is a row on the shared `images` table of kind `attachment_page`,
   parented by `attachment_id` and ordered by `position` — the shape #2083 gave
@@ -34,8 +36,8 @@ defmodule Vutuv.Attachments.Pages do
 
   ## Surviving a deploy
 
-  Rendering three PDF pages plus their AVIF derivations takes seconds and a
-  Chromium capture takes longer, so a blue/green deploy stops the slot in the
+  Rendering a PDF page plus its AVIF derivations takes about a second, so a
+  long document takes minutes, and a blue/green deploy stops the slot in the
   middle of it and nothing logs a thing. The recovery is the shape
   `Vutuv.Videos` already uses and `Vutuv.Newsletters.BroadcastResumer`
   established:
@@ -46,8 +48,9 @@ defmodule Vutuv.Attachments.Pages do
     * the due list is a **query** (`due/1`), and a claim is a compare-and-set
       on `worked_at`, so the two slots of a deploy overlap cannot render the
       same file;
-    * the staleness window is longer than one file takes, which is what makes
-      the resume safe while the old slot is still working.
+    * the heartbeat is stamped again after every page, so the staleness
+      window only has to be longer than one *page* takes, which is what makes
+      the resume safe while the old slot is still working on a long file.
 
   ## The clock advances on every outcome
 
@@ -79,13 +82,11 @@ defmodule Vutuv.Attachments.Pages do
 
   @kind "attachment_page"
 
-  # The ceiling issue #2105 sets: "start with three, at most five". Three pages
-  # tell a reader what a document is; five is where a preview strip stops being
-  # a preview and starts being the document.
-  @max_pages 5
-  @default_pages 3
+  # The longest PDF an installation accepts unless it says otherwise. Every page
+  # is rendered and scanned, so this bounds what one upload costs.
+  @default_max_pages 200
 
-  # Longer than one file takes, which is what makes a claim safe across a
+  # Longer than one page takes, which is what makes a claim safe across a
   # blue/green overlap: while the old slot is still rendering, its heartbeat is
   # fresh and the new slot leaves the file alone. Three minutes is the video
   # pipeline's number, and a page render is far quicker than a transcode.
@@ -107,19 +108,13 @@ defmodule Vutuv.Attachments.Pages do
   def preview_version, do: @preview_version
 
   @doc """
-  How many of a file's first pages this installation renders
-  (`ATTACHMENT_PREVIEW_PAGES`). `0` turns previews off; anything above five is
-  five.
+  The longest PDF this installation accepts (`ATTACHMENT_MAX_PAGES`), and so
+  the most pages one file is rendered and scanned as.
   """
-  def preview_pages do
-    config()
-    |> Keyword.get(:preview_pages, @default_pages)
-    |> min(@max_pages)
-    |> max(0)
-  end
+  def max_pages, do: config() |> Keyword.get(:max_pages, @default_max_pages) |> max(1)
 
-  @doc "The hard ceiling `preview_pages/0` clamps to."
-  def max_pages, do: @max_pages
+  @doc "Whether this installation renders previews at all (`ATTACHMENT_PREVIEWS`)."
+  def previews?, do: Keyword.get(config(), :previews, true)
 
   @doc "How long a claim stands before another slot may take the file over."
   def stale_after_seconds, do: @stale_after_seconds
@@ -379,7 +374,7 @@ defmodule Vutuv.Attachments.Pages do
   five costs two renders, not five.
   """
   def render(%Attachment{} = attachment) do
-    attachment = start_render(attachment)
+    attachment = stamp_claim(attachment)
     wanted = wanted_positions(attachment)
 
     job =
@@ -411,12 +406,21 @@ defmodule Vutuv.Attachments.Pages do
   # A PDF has its own pagination, and `pdfinfo` already counted it at upload.
   # A text or Markdown file has none: what is rendered is the document, and
   # what a page-sized viewport shows of it is one page — so slicing a long
-  # README into three would produce two pictures of nothing in particular.
-  defp wanted_positions(%Attachment{content_type: "application/pdf"} = attachment) do
-    positions(min(preview_pages(), attachment.page_count || 1))
-  end
+  # README into several would produce pictures of nothing in particular.
+  #
+  # The limit still applies to a PDF stored before an installation lowered it.
+  defp wanted_positions(%Attachment{} = attachment) do
+    cond do
+      not previews?() ->
+        []
 
-  defp wanted_positions(%Attachment{}), do: positions(min(preview_pages(), 1))
+      attachment.content_type == "application/pdf" ->
+        positions(min(max_pages(), attachment.page_count || 1))
+
+      true ->
+        positions(1)
+    end
+  end
 
   defp positions(count) when count > 0, do: Enum.to_list(0..(count - 1))
   defp positions(_none), do: []
@@ -428,8 +432,12 @@ defmodule Vutuv.Attachments.Pages do
     todo
     |> Enum.reduce_while(:ok, fn position, :ok ->
       case render_page(attachment, position) do
-        :ok -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, reason}}
+        :ok ->
+          stamp_claim(attachment)
+          {:cont, :ok}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
     end)
     |> case do
@@ -505,8 +513,10 @@ defmodule Vutuv.Attachments.Pages do
 
   # The claim, unconditional: `render/1` is reached both from the sweeper
   # (which has already claimed) and directly, and a second stamp costs one
-  # statement and removes a branch.
-  defp start_render(%Attachment{} = attachment) do
+  # statement and removes a branch. Stamped again after every page, so a long
+  # document never looks abandoned to the other slot of a deploy while this
+  # one is still on it.
+  defp stamp_claim(%Attachment{} = attachment) do
     now = DateTime.utc_now(:second)
 
     Repo.update_all(from(a in Attachment, where: a.id == ^attachment.id),
@@ -549,7 +559,7 @@ defmodule Vutuv.Attachments.Pages do
 
       finished(write_strike(attachment, attempts, stage: "failed", worked_at: nil))
     else
-      # The claim stamp is deliberately left where `start_render/1` put it. It
+      # The claim stamp is deliberately left where `stamp_claim/1` put it. It
       # is the *scheduler's* clock, not a claim that the work happened, so the
       # retry is due one staleness window from now instead of on the very next
       # pass — which is what keeps a file that cannot be rendered from spending

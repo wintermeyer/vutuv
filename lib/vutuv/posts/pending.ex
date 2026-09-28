@@ -438,9 +438,9 @@ defmodule Vutuv.Posts.Pending do
 
   # Every preview page of these files, in **one** query: which of them a
   # verdict has not reached (the ids, because the ids are what the scan queue
-  # is asked about) and how many exist at all ("page 2 of 3"). Five pages per
-  # file at most, so carrying both answers back is cheaper than a second round
-  # trip over the same rows.
+  # is asked about) and how many exist at all ("page 2 of 3"). Three narrow
+  # columns even for a 200-page file, so carrying both answers back is cheaper
+  # than a second round trip over the same rows.
   defp page_rows([]), do: []
 
   defp page_rows(ids) do
