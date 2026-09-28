@@ -56,6 +56,7 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Images
   alias Vutuv.Images.Image
   alias Vutuv.MediaJobs
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.Pending
   alias Vutuv.Posts.Post
@@ -480,6 +481,33 @@ defmodule Vutuv.Attachments do
   @doc "One served size of one of its preview pages, at the same address."
   def page_url(%Attachment{token: token}, %Image{} = page, version \\ @preview_version),
     do: "/system/attachments/#{token}/pages/#{page.position}/#{version}#{Spec.served_ext()}"
+
+  @doc """
+  Where a post's file is a link-preview picture: its first page as the JPEG
+  that scrapers decode (`og:image`), which the AVIF sizes are not. Served only
+  while `preview_page/1` answers, and only for a file a post has claimed.
+  """
+  def og_url(%Attachment{token: token}), do: "/system/attachments/#{token}/og.jpg"
+
+  @doc """
+  The page a post's file previews with, or `nil`: its first page, once the AI
+  check released it and while no case holds it. Reads the `:pages` preload when
+  it is there — the post preload carries it — and asks otherwise.
+
+  The one answer the preview tags and the JPEG route share, so a scraper is
+  never handed a URL that then answers 404.
+  """
+  def preview_page(%Attachment{frozen_at: %NaiveDateTime{}}), do: nil
+
+  def preview_page(%Attachment{pages: pages}) when is_list(pages) do
+    Enum.find(pages, &(&1.position == 0 and shown_page?(&1)))
+  end
+
+  def preview_page(%Attachment{} = attachment),
+    do: attachment |> Repo.preload(:pages) |> preview_page()
+
+  defp shown_page?(%Image{} = page),
+    do: is_nil(page.frozen_at) and ImageScans.released?(page.moderation)
 
   @doc """
   The files hanging under one message, in upload order (issue #2110). The

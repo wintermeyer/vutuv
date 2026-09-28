@@ -79,6 +79,12 @@ config :vutuv, Vutuv.Repo,
 # killed mid-capture, or one created without a form behind it (the LinkedIn
 # import). Off, there are no captures at all, so there is nothing to sweep.
 config :vutuv, :generate_screenshots, true
+# A post whose one link is a picture, a PDF or a text file previews with what
+# the file shows instead of the bare link: it is downloaded (at most the
+# attachment size limit) and drawn like an uploaded file
+# (Vutuv.Posts.LinkedFile). Only runs where :generate_screenshots does.
+# LINK_FILE_PREVIEWS=false in the environment switches it off.
+config :vutuv, :link_file_previews, true
 config :vutuv, :fetch_gravatar, true
 
 # Pages that are never worth a link-preview screenshot: they answer a headless

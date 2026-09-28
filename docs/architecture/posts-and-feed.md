@@ -2006,6 +2006,19 @@ falls back to the ordinary capture below. Tests stub the fetch via the
 the pre-existing banner captures is `Vutuv.Release.requeue_youtube_screenshots/0`
 (`Screenshots.requeue_youtube/0`).
 
+**A link to a file previews with what the file shows** (`Vutuv.Posts.LinkedFile`).
+When the probe's 200 is not a page, a picture becomes its own preview, a PDF
+its first page (`pdftoppm`) and a text or Markdown file its first screenful
+(the offline Chromium render uploaded text files get), all through
+`Vutuv.Attachments.PageRender.render_file/4`, so a linked file and an attached
+one look alike. The download fetches exactly the address the probe vetted,
+follows nothing, and stops at `ATTACHMENT_MAX_MB` (256 kB for text); a picture
+or PDF that does not fit, or whose bytes disagree with its type, is `skipped`,
+and a host that cannot draw the type never downloads it. Every other file type
+keeps the plain link and is never downloaded. The result is stored frameless
+and scanned like a YouTube thumbnail. `LINK_FILE_PREVIEWS=false` switches it
+off.
+
 A link that does **not end in a plain HTTP 200** is rejected at capture time by
 `ensure_http_ok/1`, a `redirect: false` GET probe the worker runs before Chromium
 (GET, not HEAD, so a server that 405s HEAD on a real 200 page isn't wrongly

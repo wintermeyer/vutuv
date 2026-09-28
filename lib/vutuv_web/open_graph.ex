@@ -27,8 +27,9 @@ defmodule VutuvWeb.OpenGraph do
       LinkedIn and X the title is all the text a card carries), describes
       itself with the opening of its body, carries its publication date and
       previews — when it has images — its first image
-      (`/post_images/<token>/og.jpg`, the proxy's on-the-fly JPEG), else, for
-      a member's post, its own generated card (`<permalink>/og.png`: the
+      (`/post_images/<token>/og.jpg`, the proxy's on-the-fly JPEG), else its
+      clip's cover, else the first page of its first file
+      (`/system/attachments/<token>/og.jpg`), else, for a member's post, its own generated card (`<permalink>/og.png`: the
       author and the opening lines in the picture itself), else the author's
       picture as above; restricted posts and teasers never put the body or an
       image into a tag. A page's post has no generated card yet and falls
@@ -60,6 +61,8 @@ defmodule VutuvWeb.OpenGraph do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments
+  alias Vutuv.Attachments.Attachment
   alias Vutuv.Fediverse
   alias Vutuv.Moderation
   alias Vutuv.OrganizationImageStore
@@ -71,6 +74,7 @@ defmodule VutuvWeb.OpenGraph do
   alias Vutuv.Posts.PostVideo
   alias Vutuv.SiteName
   alias Vutuv.SocialFeed
+  alias Vutuv.Uploads.Spec
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Markdown
   alias VutuvWeb.OgCard
@@ -491,9 +495,10 @@ defmodule VutuvWeb.OpenGraph do
 
   defp image(%{post: %Post{} = post} = ca) do
     if quotable?(post) do
-      case first_image(post) || post_video(post) do
+      case first_image(post) || post_video(post) || file_page(post) do
         %PostImage{} = post_image -> post_image_entry(post_image, ca)
         %PostVideo{} = video -> video_cover_entry(video, ca)
+        {%Attachment{} = file, page} -> file_page_entry(file, page)
         nil -> post_card(post, ca) || author_image(ca)
       end
     else
@@ -528,7 +533,7 @@ defmodule VutuvWeb.OpenGraph do
   defp post_video(_post), do: nil
 
   defp video_cover_entry(%PostVideo{} = video, ca) do
-    {width, height} = video_cover_dimensions(video)
+    {width, height} = Spec.og_dimensions(video.width, video.height)
 
     %{
       url: abs_url(PostVideo.og_url(video)),
@@ -540,12 +545,36 @@ defmodule VutuvWeb.OpenGraph do
     }
   end
 
-  # The cover JPEG is cut at 1200 px wide, aspect kept, never upscaled.
-  defp video_cover_dimensions(%PostVideo{width: width, height: height})
-       when is_integer(width) and is_integer(height) and width > 1200,
-       do: {1200, round(height * 1200 / width)}
+  # A post whose picture is a document previews with its first page: a card
+  # with no picture was all a link to it got on Mastodon, and the page says what
+  # the post is about better than the generated text card does. The first file
+  # with a page to show; `Attachments.preview_page/1` is the answer the JPEG
+  # route asks too.
+  defp file_page(%Post{attachments: files}) when is_list(files) do
+    Enum.find_value(files, fn file ->
+      case Attachments.preview_page(file) do
+        nil -> nil
+        page -> {file, page}
+      end
+    end)
+  end
 
-  defp video_cover_dimensions(%PostVideo{width: width, height: height}), do: {width, height}
+  defp file_page(_post), do: nil
+
+  # A page is portrait more often than not, and a portrait picture in the large
+  # card is cut to a strip of its middle, so it asks for the small one.
+  defp file_page_entry(%Attachment{} = file, page) do
+    {width, height} = Spec.og_dimensions(page.width, page.height)
+
+    %{
+      url: abs_url(Attachments.og_url(file)),
+      width: width,
+      height: height,
+      type: "image/jpeg",
+      alt: file.file_name,
+      card: if(width > height, do: "summary_large_image", else: "summary")
+    }
+  end
 
   # Whoever the page is about, as a picture: the member's card, else the
   # organization's logo, else the brand card.

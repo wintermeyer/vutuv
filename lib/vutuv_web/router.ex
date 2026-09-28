@@ -1001,6 +1001,8 @@ defmodule VutuvWeb.Router do
     # and no nginx location for either tree — every byte comes through here.
     get("/system/attachments/:token/file", AttachmentController, :file)
     get("/system/attachments/:token/pages/:position/:version", AttachmentController, :page)
+    # A post file's first page as the JPEG link scrapers read (`og:image`).
+    get("/system/attachments/:token/og.jpg", AttachmentController, :og)
 
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).

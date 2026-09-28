@@ -250,8 +250,9 @@ defmodule Vutuv.Posts.ScreenshotsTest do
     end
 
     # Chromium saves what it cannot render as a download: a 10 GB archive
-    # filled the capture host's disk in seconds. Only a page gets a browser.
-    test "a 200 that answers with a file instead of a page is refused" do
+    # filled the capture host's disk in seconds. Only a page gets a browser; a
+    # file is handed back as one, for `Vutuv.Posts.LinkedFile` to read or refuse.
+    test "a 200 that answers with a file instead of a page is not a page" do
       for type <- ["application/zip", "application/pdf", "video/mp4", "image/png", nil] do
         stub_probe(fn conn ->
           conn
@@ -260,8 +261,8 @@ defmodule Vutuv.Posts.ScreenshotsTest do
         end)
 
         assert Screenshots.ensure_http_ok("https://example.com/file") ==
-                 {:error, {:not_a_page, type}},
-               "expected #{inspect(type)} to be refused"
+                 {:file, "https://example.com/file", type},
+               "expected #{inspect(type)} to be a file"
       end
     end
 

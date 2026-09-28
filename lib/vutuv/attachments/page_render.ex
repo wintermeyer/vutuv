@@ -85,12 +85,12 @@ defmodule Vutuv.Attachments.PageRender do
   once per request, `System.find_executable/1` is a `$PATH` walk, and a cached
   probe is a fifth thing a test has to remember to forget.
   """
-  def renderable?(%Attachment{content_type: "application/pdf"}),
-    do: not is_nil(executable(pdftoppm()))
+  def renderable?(%Attachment{content_type: type}), do: renderable_type?(type)
 
-  def renderable?(%Attachment{content_type: "image/" <> _rest}), do: true
-
-  def renderable?(%Attachment{}), do: not is_nil(executable(PageScreenshot.binary()))
+  @doc "`renderable?/1` for a content type rather than a stored file."
+  def renderable_type?("application/pdf"), do: not is_nil(executable(pdftoppm()))
+  def renderable_type?("image/" <> _rest), do: true
+  def renderable_type?(_text), do: not is_nil(executable(PageScreenshot.binary()))
 
   # `PageScreenshot.binary/0` hands back a configured path unchecked, so ask
   # the filesystem: a `CHROMIUM_PATH` pointing at nothing must read as "no
@@ -119,6 +119,15 @@ defmodule Vutuv.Attachments.PageRender do
       source -> render_source(attachment, source, position, dest)
     end
   end
+
+  @doc """
+  The first page of a file that is not stored as an attachment, a file a post
+  links to on another server (`Vutuv.Posts.LinkedFile`), drawn by the same
+  renderers so a linked text file and an uploaded one look alike. `type` picks
+  the renderer and `name` titles a text page; nothing else of a row is read.
+  """
+  def render_file(type, name, source, dest),
+    do: render_source(%Attachment{content_type: type, file_name: name}, source, 0, dest)
 
   defp render_source(%Attachment{content_type: "application/pdf"}, source, position, dest),
     do: render_pdf(source, position, dest)

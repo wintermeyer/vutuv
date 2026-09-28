@@ -71,6 +71,24 @@ defmodule VutuvWeb.AttachmentController do
     end
   end
 
+  @doc """
+  A post file's first page as the JPEG link scrapers decode, which is what
+  `og:image` names on the permalink of a post whose only picture is a document.
+  Only a post's file, and only while `Attachments.preview_page/1` answers, so
+  the tag and this route cannot disagree. Everything else is the same 404 as
+  the rest of this proxy.
+  """
+  def og(conn, %{"token" => token}) do
+    with %Attachment{post_id: post_id} = attachment when is_binary(post_id) <-
+           readable(conn, token),
+         %{position: position} <- Attachments.preview_page(attachment),
+         path when is_binary(path) <- AttachmentStore.page_og_path(attachment.token, position) do
+      ImageProxy.send_version(conn, path, content_type: "image/jpeg")
+    else
+      _denied_or_missing -> ImageProxy.not_found(conn)
+    end
+  end
+
   # A post's page is a size of a picture a feed renders, so it takes the photo
   # proxy's five-minute tier: a scroll past the same card costs no request, and
   # narrowing the post still reaches a browser that holds it within five
