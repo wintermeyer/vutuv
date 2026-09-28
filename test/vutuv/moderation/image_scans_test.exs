@@ -579,7 +579,7 @@ defmodule Vutuv.Moderation.ImageScansTest do
 
     test "a rejected link screenshot is remembered, not just removed", %{user: user} do
       # The row is the only memory of the verdict. Clearing the column would
-      # put the page straight back in front of Vutuv.PageScreenshot.due/1, and
+      # put the page straight back in front of Vutuv.PageScreenshot.due/0, and
       # the sweeper would shoot, store and re-scan the same rejected picture
       # every six hours for good.
       {:ok, url} =

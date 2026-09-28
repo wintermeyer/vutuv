@@ -32,6 +32,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
 
   alias Vutuv.CodeStats
   alias Vutuv.Ordering
+  alias Vutuv.PageScreenshot.Sweeper
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.QualificationDocument
   alias Vutuv.Tags.UserTag
@@ -170,8 +171,8 @@ defmodule VutuvWeb.ApiV2.SectionController do
   end
 
   # Same side effect as the HTML link forms (create AND update, so an API edit
-  # never leaves a stale screenshot); shares the supervised, gated capture.
-  defp after_write(:links, url), do: Vutuv.PageScreenshot.generate_async(url)
+  # never leaves a stale screenshot): one sweeper, so one browser at a time.
+  defp after_write(:links, _url), do: Sweeper.nudge()
 
   # A code-forge account gets its first stats snapshot fetched in the
   # background, exactly as the HTML form's create/update does — an entry added

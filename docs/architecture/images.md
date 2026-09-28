@@ -1268,17 +1268,38 @@ redirecting to `www.` is the normal shape of a homepage; the post path insists o
 a plain HTTP 200 (`Vutuv.Posts.Screenshots.ensure_http_ok/1`), because there a
 redirect usually means a shortener or a login wall.
 
+### A link to a file gets no browser
+
+Chromium saves what it cannot render as a download. Pointed at a 10 GB archive
+it wrote all of it into the capture user's `~/Downloads` in about six seconds,
+and production's held PDFs from member links. Three limits keep a link from
+filling the disk or the line:
+
+- Both preflights ask `PageScreenshot.page_response/1`: a 2xx answer must say
+  `text/html` or `application/xhtml+xml`, or the link is refused for good
+  (`{:not_a_page, type}`: `broken?` on a profile link, `skipped` or `failed` in
+  the two queues). A missing type is refused too.
+- The driver sends `Browser.setDownloadBehavior: deny` before it opens a page,
+  because a page can start a download by script long after the preflight saw
+  HTML. Chromium then cancels the transfer after a few megabytes.
+- `Vutuv.Ssrf.SocksProxy` cuts any upstream connection past 50 MB. The capture
+  deadline bounds the time, not the volume: endless HTML pulled 671 MB into one
+  20 s capture.
+
 ### The profile link's standing retry
 
-The link form's capture is fire-and-forget (`PageScreenshot.generate_async/1`),
-which is the fast path and never the guarantee: a blue/green deploy stops the
-slot mid-capture without a word, and a link created by any other path — the
-LinkedIn import inserts them straight through `Repo` — had nothing capturing it
+Saving a link only nudges `Vutuv.PageScreenshot.Sweeper` (`nudge/0`), so at
+most one Chromium runs for profile links however fast somebody saves them. A
+task per save used to capture it, and had two holes: a blue/green deploy stops
+the slot mid-capture without a word, and a link created by any other path (the
+LinkedIn import inserts them straight through `Repo`) had nothing capturing it
 at all. Both left the member a grey camera tile for good; 15 of the 1,938 links
 on vutuv.de sat like that, most in same-second batches an import left behind.
+It also let a script writing links through the API start browsers until the
+host ran out of memory.
 
 So the row is the record of unfinished work and `Vutuv.PageScreenshot.Sweeper`
-acts on it: every five minutes it captures `PageScreenshot.due/1`, up to five
+acts on it: every five minutes it captures `PageScreenshot.due/0`, up to five
 links, least recently attempted first. `urls.screenshot_attempted_at` is
 stamped before each capture and on every outcome — that is the sweeper's clock,
 not a claim that anything was captured, and without it the one link that can
@@ -1287,7 +1308,7 @@ stalled `Vutuv.Fediverse.refresh_counts/1`, #1316). It rides `:generate_screensh
 like the captures themselves, so an air-gapped installation runs no sweeper.
 
 Three things keep a link out of that query for good: `broken?` (an SSRF-refused
-target), a `screenshot_moderation` of `"rejected"` (the AI scan threw the
+target, or a file rather than a page), a `screenshot_moderation` of `"rejected"` (the AI scan threw the
 picture out, and re-shooting it every six hours would be a treadmill), and
 simply having a screenshot.
 
@@ -1299,11 +1320,12 @@ an internal address today. They are ordinary member homepages that a rule which
 no longer exists poisoned, and the sweeper would have stepped over them forever;
 `clear_stale_broken_flag_on_urls` sets them back to NULL. A link that really is
 an internal target costs one DNS lookup on the next sweep and is flagged again. Which is why **editing a link's URL clears it**
-(`Url.changeset/2`): otherwise the row keeps a photograph of a different page
-and, having one, is never captured again. The LinkedIn import nudges the
-member's own waiting links after its transaction commits
-(`capture_missing_async/1`, one task for the batch), so the pictures arrive
-while they are still looking at their fresh profile.
+(`Url.changeset/2`), together with the screenshot and the attempt clock:
+otherwise the row keeps a photograph of a different page and, having one, is
+never captured again, and the new address would wait out the old one's six
+hours. The LinkedIn import nudges the sweeper after its transaction commits,
+so the pictures arrive while the member is still looking at their fresh
+profile.
 
 ### How the browser is driven
 

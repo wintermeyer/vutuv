@@ -29,7 +29,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Mentions
-  alias Vutuv.PageScreenshot
+  alias Vutuv.PageScreenshot.Sweeper
   alias Vutuv.Phone
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
@@ -1165,9 +1165,9 @@ defmodule Vutuv.Imports.LinkedIn do
     # so nothing queues their screenshot. The sweeper would find them within
     # five minutes either way; this is only so the member watching their fresh
     # profile sees the pictures arrive. After the transaction, never inside it:
-    # a task started in there reads on another connection and finds no row yet.
+    # the sweeper reads on another connection and would find no row yet.
     with {:ok, %{created: %{urls: created}}} when created > 0 <- result,
-         do: PageScreenshot.capture_missing_async(user.id)
+         do: Sweeper.nudge()
 
     result
   end

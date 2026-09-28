@@ -263,7 +263,7 @@ defmodule Vutuv.SocialFeed.Http do
     with %URI{scheme: "https", host: host} when is_binary(host) <- URI.parse(url),
          false <- Vutuv.Ssrf.resolves_to_internal?(host),
          {:ok, %Req.Response{status: 200, body: body} = resp} <- get(url, options_key),
-         type when type in @avatar_types <- content_type(resp),
+         type when type in @avatar_types <- Vutuv.Http.media_type(resp),
          true <- is_binary(body) and byte_size(body) <= @max_avatar_bytes,
          true <- safe_remote_image?(body) do
       "data:" <> type <> ";base64," <> Base.encode64(body)
@@ -284,13 +284,6 @@ defmodule Vutuv.SocialFeed.Http do
   defp safe_remote_image?(body) do
     not ImageScans.enabled?() or
       match?({:ok, %{safe?: true}}, Ollama.moderate_binary(body))
-  end
-
-  defp content_type(resp) do
-    case Req.Response.get_header(resp, "content-type") do
-      [value | _] -> value |> String.split(";") |> hd() |> String.trim() |> String.downcase()
-      _ -> nil
-    end
   end
 
   @doc """

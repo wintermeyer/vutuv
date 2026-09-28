@@ -73,7 +73,9 @@ defmodule Vutuv.Ssrf.SocksProxy do
 
   One instance runs in the application supervision tree. The `:vet` option
   (a `fun({:domain, host} | {:ip, ip_tuple}) -> {:ok, ip} | {:error, term}`)
-  exists for tests only; the default is `default_vet/1` on `Vutuv.Ssrf`.
+  exists for tests only; the default is `default_vet/1` on `Vutuv.Ssrf`. So
+  does `:max_bytes`, the most one upstream connection may send before it is
+  cut (50 MB by default).
   """
 
   use GenServer
@@ -89,6 +91,12 @@ defmodule Vutuv.Ssrf.SocksProxy do
   # a relay idle this long has lost its client, so close it rather than leak
   # the handler process.
   @idle_timeout 120_000
+  # What one upstream connection may send before it is cut. The capture's own
+  # deadline bounds the time, not the volume: a page streaming endless HTML
+  # pulled 671 MB in 20 s, and even a denied download reads megabytes before
+  # Chromium cancels it. A real page's largest single asset (a hero image, a
+  # framework bundle) stays far below this.
+  @max_bytes 50_000_000
 
   # SOCKS5 reply codes (RFC 1928 §6).
   @rep_success 0x00
@@ -130,7 +138,10 @@ defmodule Vutuv.Ssrf.SocksProxy do
 
   @impl true
   def init(opts) do
-    vet = Keyword.get(opts, :vet, &default_vet/1)
+    policy = %{
+      vet: Keyword.get(opts, :vet, &default_vet/1),
+      max_bytes: Keyword.get(opts, :max_bytes, @max_bytes)
+    }
 
     {:ok, listen} =
       :gen_tcp.listen(0, [
@@ -142,7 +153,7 @@ defmodule Vutuv.Ssrf.SocksProxy do
       ])
 
     {:ok, port} = :inet.port(listen)
-    {:ok, _acceptor} = Task.start_link(fn -> accept_loop(listen, vet) end)
+    {:ok, _acceptor} = Task.start_link(fn -> accept_loop(listen, policy) end)
     {:ok, %{listen: listen, port: port}}
   end
 
@@ -153,13 +164,13 @@ defmodule Vutuv.Ssrf.SocksProxy do
   # malformed or hostile client can only ever break its own handler. The
   # `:go` message gates the handler until socket ownership has transferred
   # (passive-mode recv is owner-only).
-  defp accept_loop(listen, vet) do
+  defp accept_loop(listen, policy) do
     case :gen_tcp.accept(listen) do
       {:ok, client} ->
         {:ok, pid} =
           Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
             receive do
-              {:go, socket} -> serve(socket, vet)
+              {:go, socket} -> serve(socket, policy)
             after
               5_000 -> :ok
             end
@@ -167,7 +178,7 @@ defmodule Vutuv.Ssrf.SocksProxy do
 
         :ok = :gen_tcp.controlling_process(client, pid)
         send(pid, {:go, client})
-        accept_loop(listen, vet)
+        accept_loop(listen, policy)
 
       # The listen socket died with the GenServer (shutdown/restart): stop.
       {:error, :closed} ->
@@ -175,15 +186,15 @@ defmodule Vutuv.Ssrf.SocksProxy do
 
       {:error, reason} ->
         Logger.error("socks proxy accept failed: #{inspect(reason)}")
-        accept_loop(listen, vet)
+        accept_loop(listen, policy)
     end
   end
 
-  defp serve(client, vet) do
+  defp serve(client, policy) do
     with {:ok, methods} <- recv_greeting(client),
          :ok <- select_no_auth(client, methods),
          {:ok, target, port} <- read_request(client) do
-      connect_vetted(client, vet, target, port)
+      connect_vetted(client, policy, target, port)
     else
       {:refuse, rep} -> reply(client, rep)
       _error -> :ok
@@ -257,20 +268,20 @@ defmodule Vutuv.Ssrf.SocksProxy do
   # The heart of the guard: resolve-and-vet at dial time, connect to exactly
   # the vetted address (never to what the client asked for by name, and never
   # via a second lookup).
-  defp connect_vetted(client, vet, target, port) do
-    case vet.(target) do
-      {:ok, ip} -> connect_upstream(client, ip, port)
+  defp connect_vetted(client, policy, target, port) do
+    case policy.vet.(target) do
+      {:ok, ip} -> connect_upstream(client, ip, port, policy.max_bytes)
       {:error, _refused} -> reply(client, @rep_not_allowed)
     end
   end
 
-  defp connect_upstream(client, ip, port) do
+  defp connect_upstream(client, ip, port, max_bytes) do
     case :gen_tcp.connect(ip, port, [:binary, active: false], @connect_timeout) do
       {:ok, upstream} ->
         reply(client, @rep_success)
         :ok = :inet.setopts(client, active: :once)
         :ok = :inet.setopts(upstream, active: :once)
-        relay(client, upstream)
+        relay(client, upstream, max_bytes)
         :gen_tcp.close(upstream)
 
       {:error, reason} ->
@@ -293,15 +304,20 @@ defmodule Vutuv.Ssrf.SocksProxy do
 
   # Byte pump between client and upstream. `active: :once` per direction gives
   # backpressure: the next chunk is only asked for after the previous one was
-  # written through.
-  defp relay(a, b) do
+  # written through. `budget` is what the upstream may still send; a
+  # connection that spends it is cut.
+  defp relay(client, upstream, budget) do
     receive do
       {:tcp, socket, data} ->
-        other = if socket == a, do: b, else: a
+        {other, budget} =
+          if socket == client,
+            do: {upstream, budget},
+            else: {client, budget - byte_size(data)}
 
-        with :ok <- :gen_tcp.send(other, data),
+        with true <- budget >= 0,
+             :ok <- :gen_tcp.send(other, data),
              :ok <- :inet.setopts(socket, active: :once) do
-          relay(a, b)
+          relay(client, upstream, budget)
         end
 
       {:tcp_closed, _socket} ->

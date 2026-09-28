@@ -31,8 +31,8 @@ defmodule Vutuv.Posts.ScreenshotsTest do
 
   # Route the HTTP-200 probe's Req request at a stub: a bare status, or a full
   # `plug: fn conn -> conn end` responder. Paired with the describe's on_exit.
-  defp stub_probe(status) when is_integer(status),
-    do: stub_probe(fn conn -> Plug.Conn.send_resp(conn, status, "") end)
+  # A bare status answers as an HTML page, the content type a real one sends.
+  defp stub_probe(status) when is_integer(status), do: stub_probe(&page(&1, status))
 
   defp stub_probe(fun) when is_function(fun),
     do: Application.put_env(:vutuv, :post_screenshot_req_options, plug: fun)
@@ -48,9 +48,15 @@ defmodule Vutuv.Posts.ScreenshotsTest do
           |> Plug.Conn.send_resp(301, "")
 
         :error ->
-          Plug.Conn.send_resp(conn, 200, "")
+          page(conn, 200)
       end
     end
+  end
+
+  defp page(conn, status) do
+    conn
+    |> Plug.Conn.put_resp_content_type("text/html")
+    |> Plug.Conn.send_resp(status, "")
   end
 
   # A post whose auto-screenshot has already been captured, stored and released
@@ -242,6 +248,38 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       assert Screenshots.ensure_http_ok("https://example.com/down") ==
                {:error, {:server_error, 503}}
     end
+
+    # Chromium saves what it cannot render as a download: a 10 GB archive
+    # filled the capture host's disk in seconds. Only a page gets a browser.
+    test "a 200 that answers with a file instead of a page is refused" do
+      for type <- ["application/zip", "application/pdf", "video/mp4", "image/png", nil] do
+        stub_probe(fn conn ->
+          conn
+          |> put_content_type(type)
+          |> Plug.Conn.send_resp(200, "")
+        end)
+
+        assert Screenshots.ensure_http_ok("https://example.com/file") ==
+                 {:error, {:not_a_page, type}},
+               "expected #{inspect(type)} to be refused"
+      end
+    end
+
+    test "an HTML or XHTML page passes whatever its parameters and casing" do
+      for type <- ["text/html; charset=utf-8", "Text/HTML", "application/xhtml+xml"] do
+        stub_probe(fn conn ->
+          conn
+          |> put_content_type(type)
+          |> Plug.Conn.send_resp(200, "")
+        end)
+
+        assert {:ok, _page} = Screenshots.ensure_http_ok("https://example.com/page"),
+               "expected #{type} to pass"
+      end
+    end
+
+    defp put_content_type(conn, nil), do: conn
+    defp put_content_type(conn, type), do: Plug.Conn.put_resp_header(conn, "content-type", type)
   end
 
   describe "reconcile/1" do
@@ -477,8 +515,8 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       refute_received :probed
     end
 
-    test "a non-200 link (redirect, 404) is skipped at once (no retry)" do
-      for reason <- [:redirect, {:bad_status, 404}] do
+    test "a non-200 link (redirect, 404) or a file is skipped at once (no retry)" do
+      for reason <- [:redirect, {:bad_status, 404}, {:not_a_page, "application/zip"}] do
         post = url_post(user())
         {:ok, _job} = Screenshots.reconcile(post)
 
