@@ -91,6 +91,7 @@ defmodule VutuvWeb.ImportController do
          {:ok, summary} <- LinkedIn.apply_selection(user, selection) do
       # Which import ran, never what came in: the entries are on the profile
       # already, and the archive's contents are none of the log's business.
+      # The profile checklist reads this kind to tick its import step.
       Vutuv.AccountEvents.record(user, "import_applied",
         conn: conn,
         details: %{source: "linkedin"}

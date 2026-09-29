@@ -385,6 +385,9 @@ defmodule Vutuv.AccountEvents do
     )
   end
 
+  @doc "Whether `user`'s log holds at least one `kind` event."
+  def recorded?(%User{id: user_id}, kind), do: Repo.exists?(base(user_id, %{kind: kind}))
+
   @doc "The kinds present across the whole installation (the admin kind filter)."
   def kinds_present do
     Repo.all(from(e in AccountEvent, distinct: true, select: e.kind))

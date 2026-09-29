@@ -205,6 +205,29 @@ defmodule VutuvWeb.ImportControllerTest do
            )
   end
 
+  # An archive need not carry a single position or school: a member who picks
+  # only skills still ran the import, so the profile checklist ticks the step.
+  test "an import without career entries still ticks the checklist step", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    {:ok, parsed} = LinkedIn.parse(zip_binary([{"Skills.csv", "Name\nElixir\n"}]))
+    skill_id = hd(parsed.skills).id
+
+    applied =
+      post(conn, ~p"/settings/import/linkedin/apply", %{
+        "payload" => Jason.encode!(LinkedIn.payload_map(parsed)),
+        "selected" => [skill_id]
+      })
+
+    assert redirected_to(applied) == ~p"/#{user}"
+    refute Repo.exists?(from(w in WorkExperience, where: w.user_id == ^user.id))
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    assert html =~ "Complete your profile"
+    assert html =~ "1/3"
+    refute html =~ ~s(href="#{~p"/settings/import/linkedin"}")
+  end
+
   # Issue #1477: "already on your profile" and "another member has claimed it"
   # used to share one sentence, so an entry that never landed was reported as
   # one the member already had.
