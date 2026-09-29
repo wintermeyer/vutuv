@@ -53,7 +53,7 @@ defmodule VutuvWeb.TagNewLive do
           <label for={@form[:value].id}>{gettext("Tags")}</label>
           <p class="editform__hint">
             💡 <strong>{gettext("Tip:")}</strong> {gettext(
-              "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
+              "Press Enter after each tag. A tag may be several words long, like Ruby on Rails."
             )}
           </p>
           <.tag_input

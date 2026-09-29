@@ -137,11 +137,14 @@ defmodule Vutuv.Tags do
   # become a tag — which is both what makes two spellings of one topic collapse
   # and what a caller that has to look the topic up again reads
   # (`member_counts_by_name/1`).
-  defp resolved_entries(names) do
+  defp resolved_entries(names), do: names |> typed_entries() |> Enum.uniq_by(&elem(&1, 0))
+
+  # `resolved_entries/1` before the dedupe: one entry per typed name, so a
+  # caller that has to say which typed name became which topic can zip them.
+  defp typed_entries(names) do
     resolved = resolution_by_key(names)
 
-    names
-    |> Enum.map(fn name ->
+    Enum.map(names, fn name ->
       # The same folded key the single lookup uses (`Vutuv.Tags.MatchKey`), or a
       # batch goes on counting spellings where one lookup counts topics — which
       # is what sign-up's three-tag minimum and the composer's cap of five are
@@ -149,7 +152,6 @@ defmodule Vutuv.Tags do
       key = match_key(name)
       Map.get(resolved, key, {{:new, key}, name})
     end)
-    |> Enum.uniq_by(&elem(&1, 0))
   end
 
   # `{typed key => {identity, display name}}` for every name that matches a
@@ -529,16 +531,98 @@ defmodule Vutuv.Tags do
   """
   def member_counts_by_name([]), do: []
 
-  def member_counts_by_name(names) when is_list(names) do
-    entries = resolved_entries(names)
+  def member_counts_by_name(names) when is_list(names),
+    do: names |> resolved_entries() |> with_counts()
+
+  # `[{display name, listed members}]` for resolved entries, one count query for
+  # all of them — what `member_counts_by_name/1` and `resolve_typed_names/1`
+  # share.
+  defp with_counts(entries) do
     counts = listed_member_counts(for {{:tag, id}, _name} <- entries, do: %Tag{id: id})
 
-    Enum.map(entries, fn {identity, name} ->
-      case identity do
-        {:tag, id} -> {name, Map.get(counts, id, 0)}
-        {:new, _key} -> {name, 0}
-      end
+    Enum.map(entries, fn
+      {{:tag, id}, name} -> {name, Map.get(counts, id, 0)}
+      {{:new, _key}, name} -> {name, 0}
     end)
+  end
+
+  @doc """
+  What each typed name becomes — `[{typed, display name, listed members}]`,
+  one entry per name and in typed order, duplicates kept.
+
+  `member_counts_by_name/1` without its dedupe, for the tag box that already
+  shows pills and wants to say of each one which topic it will be saved as
+  ("js" becomes javascript) and how many members carry it. Keeping every entry
+  is what lets the box find its own pill again by the name it typed.
+  """
+  def resolve_typed_names([]), do: []
+
+  def resolve_typed_names(names) when is_list(names) do
+    names
+    |> typed_entries()
+    |> with_counts()
+    |> Enum.zip_with(names, fn {name, count}, typed -> {typed, name, count} end)
+  end
+
+  @suggest_limit 6
+
+  @doc """
+  The existing topics offered under a tag field while `query` is being typed —
+  `[%{name, count, alias}]`, at most `limit` of them.
+
+  Matching is on the folded `Vutuv.Tags.MatchKey`, so case, spaces, hyphens
+  and underscores do not matter. A topic whose whole name starts with the query
+  ranks above one where only a later word does ("ruby" offers Ruby before Ruby
+  on Rails' "rails"), and within each rank the topic more listed members carry
+  comes first, since that is where a member finds people.
+
+  An **alternative name** (#1338) offers its topic, never itself: the member is
+  about to be given the topic anyway, so the list says so up front. `alias` is
+  the alternative name that matched, or nil when the topic's own name did —
+  which it prefers, so "j" offers javascript without mentioning "js".
+
+  Honor tags are left out: only an admin can give one.
+  """
+  def suggest(query, limit \\ @suggest_limit)
+
+  def suggest(query, limit) when is_binary(query) do
+    case MatchKey.normalize(query) do
+      nil -> []
+      key -> suggest_key(key, limit)
+    end
+  end
+
+  def suggest(_query, _limit), do: []
+
+  defp suggest_key(key, limit) do
+    prefix = SearchText.starts_with(key)
+    word = "%-" <> prefix
+
+    candidates =
+      from(t in Tag,
+        left_join: c in assoc(t, :merged_into),
+        where: like(MatchKey.sql(t.name), ^prefix) or like(MatchKey.sql(t.name), ^word),
+        where: not coalesce(c.honor?, t.honor?),
+        select: %{
+          id: coalesce(c.id, t.id),
+          name: coalesce(c.name, t.name),
+          alias: fragment("CASE WHEN ? IS NULL THEN NULL ELSE ? END", t.merged_into_id, t.name),
+          whole?: like(MatchKey.sql(t.name), ^prefix)
+        }
+      )
+      |> Repo.all()
+      # Per topic, the best way it matched: a whole-name match beats a word
+      # match, and its own name beats an alternative one.
+      |> Enum.group_by(& &1.id)
+      |> Enum.map(fn {_id, rows} -> Enum.min_by(rows, &{not &1.whole?, &1.alias != nil}) end)
+
+    counts = listed_member_counts(Enum.map(candidates, &%Tag{id: &1.id}))
+
+    candidates
+    |> Enum.map(&Map.put(&1, :count, Map.get(counts, &1.id, 0)))
+    |> Enum.sort_by(&{not &1.whole?, -&1.count, String.downcase(&1.name)})
+    |> Enum.take(limit)
+    |> Enum.map(&Map.take(&1, [:name, :count, :alias]))
   end
 
   @doc """

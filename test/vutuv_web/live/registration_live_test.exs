@@ -375,7 +375,14 @@ defmodule VutuvWeb.RegistrationLiveTest do
 
       html = render_change(view, "validate", %{"step" => %{"typed" => "Hund, Kat"}})
 
-      assert html =~ ~s(name="user[tag_list]" value="Hund")
+      # One chip, and the unfinished word is still submitted with it.
+      assert [_] =
+               html
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query(".tag-input__box .tag-input__pill")
+               |> Enum.to_list()
+
+      assert html =~ ~s(name="user[tag_list]" value="Hund, Kat")
 
       assert ["Kat"] =
                html
@@ -401,6 +408,27 @@ defmodule VutuvWeb.RegistrationLiveTest do
       html = render_click(view, "remove_tag", %{"name" => "Origami"})
 
       assert html =~ ~s(name="user[tag_list]" value="Cooking")
+    end
+
+    # Nobody types a comma after the last topic. What is still in the field is
+    # a topic like the others: it counts toward the three and it is submitted,
+    # so the button does not stay grey over a tag the member can see.
+    test "what is still in the field counts, and is submitted with the rest" do
+      {:ok, view, _html} = open()
+      view = walk_to_topics(view)
+
+      render_click(view, "add_typed", %{"value" => "Origami, Cooking"})
+      html = render_change(view, "validate", %{"step" => %{"typed" => "Cats"}})
+
+      refute html =~ ~s(type="submit" disabled)
+      assert html =~ ~s(name="user[tag_list]" value="Origami, Cooking, Cats")
+    end
+
+    test "the field offers the shared suggestion list" do
+      {:ok, view, _html} = open()
+      view = walk_to_topics(view)
+
+      assert has_element?(view, ~s(#signup-topic[data-tag-suggest-url="/system/tags/suggest"]))
     end
 
     test "the submit waits for the third topic" do
