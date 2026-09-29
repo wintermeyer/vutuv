@@ -4014,27 +4014,44 @@ defmodule VutuvWeb.UI do
   fuzzy-filled. Deliberately **not** shared with `job_age/1`, which counts
   calendar days from the Berlin clock and speaks in weeks and months — same
   shape, different question.
+
+  `:compact` says the same in the fewest characters, for a corner beside a
+  name (the bell's preview): `3 min`, `2 h`, `4 days`, with the unit labels
+  `duration/1` already translates ("3 Min."). One ladder for both styles, so
+  the thresholds cannot drift apart.
   """
-  def relative_time(nil), do: gettext("unknown")
+  def relative_time(at, style \\ :long)
+
+  def relative_time(nil, :long), do: gettext("unknown")
+  def relative_time(nil, :compact), do: ""
 
   # A derived feed item's stamp comes off a `naive_datetime` column and is UTC
   # by construction, the same reading `local_time/1` and `post_time/1` document.
   # Here rather than at each call site, so a caller holding one does not write
   # the conversion out again (the bell's preview did).
-  def relative_time(%NaiveDateTime{} = at),
-    do: at |> DateTime.from_naive!("Etc/UTC") |> relative_time()
+  def relative_time(%NaiveDateTime{} = at, style),
+    do: at |> DateTime.from_naive!("Etc/UTC") |> relative_time(style)
 
-  def relative_time(%DateTime{} = at) do
+  def relative_time(%DateTime{} = at, style) do
     seconds = DateTime.diff(DateTime.utc_now(), at, :second)
 
     cond do
       seconds < 60 -> gettext("just now")
-      seconds < 3600 -> ngettext("%{count} minute ago", "%{count} minutes ago", div(seconds, 60))
-      seconds < 86_400 -> ngettext("%{count} hour ago", "%{count} hours ago", div(seconds, 3600))
-      seconds < 604_800 -> ngettext("%{count} day ago", "%{count} days ago", div(seconds, 86_400))
+      seconds < 3600 -> age_label(:minutes, div(seconds, 60), style)
+      seconds < 86_400 -> age_label(:hours, div(seconds, 3600), style)
+      seconds < 604_800 -> age_label(:days, div(seconds, 86_400), style)
       true -> Vutuv.ViewerClock.format(at, :date)
     end
   end
+
+  defp age_label(:minutes, n, :long),
+    do: ngettext("%{count} minute ago", "%{count} minutes ago", n)
+
+  defp age_label(:minutes, n, :compact), do: gettext("%{minutes} min", minutes: n)
+  defp age_label(:hours, n, :long), do: ngettext("%{count} hour ago", "%{count} hours ago", n)
+  defp age_label(:hours, n, :compact), do: gettext("%{hours} h", hours: n)
+  defp age_label(:days, n, :long), do: ngettext("%{count} day ago", "%{count} days ago", n)
+  defp age_label(:days, n, :compact), do: ngettext("%{count} day", "%{count} days", n)
 
   @doc """
   How long something took, from milliseconds, as a person would say it:

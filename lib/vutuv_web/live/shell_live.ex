@@ -40,7 +40,8 @@ defmodule VutuvWeb.ShellLive do
       icon_pencil: 1,
       name_initials: 1,
       presence_dot: 1,
-      relative_time: 1
+      relative_time: 1,
+      relative_time: 2
     ]
 
   import VutuvWeb.UserHelpers, only: [full_name: 1]
@@ -50,6 +51,7 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.ContentFilters
   alias Vutuv.Dashboard
   alias Vutuv.DayClock
+  alias Vutuv.Fediverse.Handle
   alias Vutuv.Organizations
   alias Vutuv.PeopleCounter
   alias Vutuv.PostRewrites
@@ -1802,11 +1804,13 @@ defmodule VutuvWeb.ShellLive do
   attr(:user_param, :string, required: true)
 
   # What the bell's number stands for, in the smallest form that still answers
-  # it: one round kind badge, who did what, one line of the post it is about,
-  # and how long ago. The line is cut to one row and never unfolds — a second
-  # notifications page hanging off the bar would move the trip rather than save
-  # it. Every row is still a link, so the one item that IS worth opening stays
-  # one click away.
+  # it: one round kind badge, who did it, the verb alone, and two lines of the
+  # post it is about. The post is the part worth reading, so "liked your post
+  # on another network" shrinks to "liked" (`NotificationLine.short_text/1`),
+  # the network moves into a globe on the badge's corner, and the time goes to
+  # the top right in its short form. A kind that quotes nothing keeps its whole
+  # sentence. Every row is still a link, so the one item that IS worth opening
+  # stays one click away.
   #
   # The gap under the bell is `pt-2` on the positioned wrapper rather than a
   # margin on the card: padding belongs to the hover area, a margin does not,
@@ -1819,7 +1823,7 @@ defmodule VutuvWeb.ShellLive do
       |> Map.put(:rows, Enum.map(assigns.preview.items, &preview_row(&1, assigns.user_param)))
 
     ~H"""
-    <div id="bell-preview" class="absolute right-0 top-full z-20 w-80 pt-2">
+    <div id="bell-preview" class="absolute right-0 top-full z-20 w-[22rem] pt-2">
       <div class={menu_surface_class()}>
         <ul
           class="divide-y divide-slate-100 dark:divide-slate-800"
@@ -1833,36 +1837,60 @@ defmodule VutuvWeb.ShellLive do
               href={row.href}
               data-seen-kind={row.dismiss[:kind]}
               data-seen-source-id={row.dismiss[:source_id]}
-              class="flex items-start gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+              class="flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               <span
                 class={[
-                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                  NotificationLine.kind_classes(row.kind)
+                  "relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                  NotificationLine.kind_classes(row.badge)
                 ]}
                 aria-hidden="true"
               >
-                {NotificationLine.kind_glyph(row.kind)}
+                {NotificationLine.kind_glyph(row.badge)}
+                <span
+                  :if={row.remote?}
+                  data-bell-preview-remote
+                  class="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
+                >
+                  🌐
+                </span>
               </span>
               <span class="min-w-0 flex-1">
-                <%!-- Name and verb phrase read as one sentence, so they share
-                one clamp; `line-clamp-2` brings its own `display`, which is
-                why no block utility sits beside it. A kind with no actor is a
-                whole sentence and gets no bold half. --%>
-                <span class="line-clamp-2 text-sm leading-snug text-slate-800 dark:text-slate-100">
+                <span class="flex items-baseline gap-2 text-sm leading-snug text-slate-800 dark:text-slate-100">
                   <span class="sr-only">{NotificationLine.kind_label(row.kind)}:</span>
-                  <span class={row.body && "font-semibold"}>{row.title}</span>
-                  {row.body}
+                  <%!-- Name and verb on one line: the name gives way (the
+                  server first, it sits at the end), the verb never does. --%>
+                  <span :if={row.verb} class="flex min-w-0 flex-1 items-baseline gap-1">
+                    <span class="min-w-0 truncate">
+                      <span class="font-semibold">{row.name}</span><span
+                        :if={row.server}
+                        data-bell-preview-server
+                        class="text-slate-500 dark:text-slate-400"
+                      >{row.server}</span>
+                    </span>
+                    <span data-bell-preview-verb class="shrink-0">{row.verb}</span>
+                  </span>
+                  <%!-- A kind with no short form reads as a sentence and shares
+                  one clamp; one with no actor is a whole sentence and gets no
+                  bold half. --%>
+                  <span :if={!row.verb} class="line-clamp-2 min-w-0 flex-1">
+                    <span class={row.body && "font-semibold"}>{row.title}</span>
+                    {row.body}
+                  </span>
+                  <span
+                    data-bell-preview-time
+                    title={relative_time(row.at)}
+                    class="shrink-0 text-xs text-slate-500 dark:text-slate-400"
+                  >
+                    {relative_time(row.at, :compact)}
+                  </span>
                 </span>
                 <span
                   :if={row.teaser != ""}
                   data-bell-preview-teaser
-                  class="mt-0.5 block truncate text-sm text-slate-600 dark:text-slate-400"
+                  class="mt-0.5 line-clamp-2 text-sm leading-snug text-slate-600 dark:text-slate-400"
                 >
                   {row.teaser}
-                </span>
-                <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                  {relative_time(row.at)}
                 </span>
               </span>
             </.link>
@@ -1893,14 +1921,26 @@ defmodule VutuvWeb.ShellLive do
 
   # One row's presentation, so the markup above carries no lookups: the same
   # name-over-verb-phrase split the browser notification uses, and the same
-  # `notification_url/2` destination that a popup lands on.
+  # `notification_url/2` destination that a popup lands on. The short verb only
+  # stands in for the phrase when there is a quote under it: "Anna liked" over
+  # nothing would drop the object without showing it.
   defp preview_row(item, viewer) do
     {title, body} = NotificationLine.title_and_body(item)
+    verb = if body && item.teaser != "", do: NotificationLine.short_text(item)
+
+    # `@name@server` is set in two weights, so the name reads first and the
+    # server, the part a narrow row cuts, is visibly the lesser half.
+    name = Handle.short(title)
 
     %{
       kind: item.kind,
+      badge: NotificationLine.badge_kind(item),
+      remote?: NotificationLine.remote?(item),
       title: title,
       body: body,
+      verb: verb,
+      name: name,
+      server: if(name != title, do: String.replace_prefix(title, name, "")),
       teaser: item.teaser,
       at: item[:at],
       href: NotificationLine.notification_url(item, viewer),
@@ -1910,13 +1950,13 @@ defmodule VutuvWeb.ShellLive do
 
   # Each row's one line of the post it is about (`NotificationLine.quote_line/3`
   # decides which), from one visibility-scoped query for the whole panel. Cut
-  # at 80 characters: the row shows about half of that before `truncate` ends it.
+  # at 120 characters: two lines of the panel hold a little over 100.
   defp with_teasers(%{items: items} = preview, viewer) do
     ids = for item <- items, {:post, id} <- [NotificationLine.quote_source(item)], do: id
     posts = Posts.visible_posts_by_ids(viewer, ids)
 
     teased =
-      Enum.map(items, &Map.put(&1, :teaser, NotificationLine.quote_line(&1, posts, length: 80)))
+      Enum.map(items, &Map.put(&1, :teaser, NotificationLine.quote_line(&1, posts, length: 120)))
 
     %{preview | items: teased}
   end
