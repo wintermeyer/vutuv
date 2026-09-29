@@ -319,7 +319,6 @@ defmodule Vutuv.Tags.Trending do
       name: entry.name,
       uses: today,
       baseline: median(previous),
-      history: entry.history,
       servers: map_size(entry.hosts),
       # Most uses first: what `follow/2` names as sources, and the first of them
       # is the server with the most material to vet the tag on.

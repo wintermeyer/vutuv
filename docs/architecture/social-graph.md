@@ -514,13 +514,12 @@ times the median of the six days before it, and at least two servers list it at
 all. Measured on 10 September 2026 against the shipped ten, `#warntag` stood at
 5,994 uses against a median of 25 and `#xbox` at 130 against 78 — the second is
 what `#xbox` does every day, and a rule that read volume alone would offer it
-forever. Each pill wears those seven days as six quiet strokes and one accent
-bar, so the reader can see the judgement rather than take it on trust; the same
-figures are in the control's accessible name, grouped for the locale. The pill
-is the same pill as the tags offered a few pixels above it, with the week sized
-to fit inside it (issue #2180) — three rows of pills in one 309px card, and a
-bottom row drawn to a recipe of its own read as a fault rather than as
-emphasis.
+forever. The week is only read to judge, never stored or drawn: a seven-day
+sparkline in each pill read as noise, so the pill is the tag's name, and the
+figures it was judged on are in the control's accessible name, grouped for the
+locale. It is the same pill as the tags offered a few pixels above it (issue
+#2180) — three rows of pills in one 309px card, and a bottom row drawn to a
+recipe of its own read as a fault rather than as emphasis.
 
 **The row keeps its place when the offer is empty** (issue #2165). Judging on
 today's volume means nothing anywhere can clear the bar for the first few hours
