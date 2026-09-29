@@ -38,7 +38,13 @@ defmodule Vutuv.Bluesky do
   # A Bluesky handle is a lowercase domain (name.bsky.social, or a custom
   # domain). Only this shape may be embedded in the AppView query and the
   # bsky.app profile/post URLs.
-  @handle_format ~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/
+  @domain "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+"
+  @handle_format ~r/^#{@domain}$/
+
+  # An account may also be named by its DID, which never changes when the
+  # handle does (issue #2297): `did:plc:` plus 24 base32 characters, or
+  # `did:web:` plus a domain. The AppView and bsky.app take either form.
+  @did_format ~r/^did:(?:plc:[a-z2-7]{24}|web:#{@domain})$/
 
   # A record key from the post's at:// URI; anything else must not be
   # embedded in the post URL.
@@ -89,8 +95,8 @@ defmodule Vutuv.Bluesky do
   defp build_feed(handle, meta) do
     feed = %Feed{
       name: meta.name,
-      handle: handle,
-      url: profile_url(handle),
+      handle: meta.handle,
+      url: profile_url(meta.handle),
       avatar: nil,
       followers: meta.followers,
       posts: []
@@ -106,12 +112,22 @@ defmodule Vutuv.Bluesky do
     end
   end
 
+  @doc """
+  Whether a normalized (lowercase, no `@`) value names a Bluesky account: a
+  handle or a DID. The one shape check the stored account and every request to
+  the AppView share.
+  """
+  def actor?(value) when is_binary(value),
+    do: Regex.match?(@handle_format, value) or Regex.match?(@did_format, value)
+
+  def actor?(_value), do: false
+
   # Legacy rows may carry a leading "@" or mixed case; the changeset stores
   # the normalized form for new entries.
   defp normalize_handle(handle) when is_binary(handle) do
     normalized = handle |> String.trim() |> String.trim_leading("@") |> String.downcase()
 
-    if Regex.match?(@handle_format, normalized) do
+    if actor?(normalized) do
       {:ok, normalized}
     else
       {:error, :gone}
@@ -156,8 +172,16 @@ defmodule Vutuv.Bluesky do
     end
   end
 
-  defp profile_meta(profile, handle) do
+  # An account stored by its DID is shown by the handle the AppView answers
+  # with; a stored handle stays as it is.
+  defp profile_meta(profile, actor) do
+    handle =
+      if String.starts_with?(actor, "did:") and actor?(profile["handle"]),
+        do: profile["handle"],
+        else: actor
+
     %{
+      handle: handle,
       name: Post.presence(profile["displayName"]) || handle,
       avatar_url: Post.presence(profile["avatar"]),
       followers: Feed.follower_count(profile["followersCount"]),

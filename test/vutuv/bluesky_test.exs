@@ -135,6 +135,19 @@ defmodule Vutuv.BlueskyTest do
       assert_receive {:req, "/xrpc/app.bsky.actor.getProfile", "actor=alice.bsky.social"}
     end
 
+    # An account stored by its DID (issue #2297) is fetched by it, but the card
+    # shows the handle the AppView answers with, never the DID.
+    test "a stored DID fetches by the DID and shows the resolved handle" do
+      did = "did:plc:r6a2kv2wjv3vpkq5aqsy66mv"
+      serve([item()])
+
+      assert {:ok, %Feed{} = feed} = Bluesky.fetch_posts(did)
+      assert feed.handle == @handle
+      assert feed.url == "https://bsky.app/profile/#{@handle}"
+
+      assert_receive {:req, "/xrpc/app.bsky.actor.getProfile", "actor=did%3Aplc%3A" <> _}
+    end
+
     test "skips reposts, pins, labeled and text-less posts, keeps at most three" do
       serve([
         item(%{"text" => "boosted"},

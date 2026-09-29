@@ -197,6 +197,37 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert Repo.aggregate(from(e in Education, where: e.user_id == ^user.id), :count) == 1
   end
 
+  # Somebody who left and later came back to the same role has two rows with
+  # the same company and title; only the dates tell them apart (issue #2318).
+  test "two stints with the same employer and title both import, and only once" do
+    user = insert(:user)
+
+    archive =
+      zip([
+        {"Positions.csv",
+         "Company Name,Title,Description,Location,Started On,Finished On\n" <>
+           "Acme,Engineer,,Berlin,Jan 2022,\n" <>
+           "Acme,Engineer,,Berlin,Mar 2015,Dec 2018\n"}
+      ])
+
+    {:ok, parsed} = LinkedIn.parse(archive)
+    assert length(parsed.positions) == 2
+
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+    assert summary.created.positions == 2
+
+    starts =
+      from(w in WorkExperience, where: w.user_id == ^user.id, select: w.start_year)
+      |> Repo.all()
+      |> Enum.sort()
+
+    assert starts == [2015, 2022]
+
+    {:ok, again} = LinkedIn.apply_selection(user, parsed)
+    assert again.created.positions == 0
+    assert again.skipped.positions == 2
+  end
+
   # The (value, provider) unique index on social_media_accounts is GLOBAL: a
   # handle someone else already claimed can never be imported. It must be
   # counted as skipped WITHOUT the insert firing the constraint — inside the

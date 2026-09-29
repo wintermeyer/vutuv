@@ -158,6 +158,32 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
                "alice.bsky.social"
     end
 
+    # An account can be named by its DID instead of its handle, and bsky.app
+    # opens either (issue #2297).
+    test "accepts a DID, typed or inside a pasted profile URL" do
+      did = "did:plc:r6a2kv2wjv3vpkq5aqsy66mv"
+
+      for input <- [did, "https://bsky.app/profile/#{did}", "did:PLC:R6A2KV2WJV3VPKQ5AQSY66MV"] do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Bluesky", value: input})
+
+        assert changeset.valid?, "#{input} was rejected"
+        assert Ecto.Changeset.get_field(changeset, :value) == did
+      end
+
+      assert value_for(%{provider: "Bluesky", value: "did:web:alice.example.com"}) ==
+               "did:web:alice.example.com"
+    end
+
+    test "rejects a malformed DID" do
+      for input <- ["did:plc:short", "did:foo:bar", "did:web:"] do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Bluesky", value: input})
+
+        refute changeset.valid?, "#{input} was accepted"
+      end
+    end
+
     test "rejects a handle that overflows varchar(255) only after normalization" do
       # 250 chars fits the column, but ".bsky.social" is appended AFTER, so the
       # length must be validated on the normalized value (else Postgres 22001).
