@@ -72,6 +72,32 @@ defmodule VutuvWeb.MobileOverflowTest do
     assert class =~ "overflow-x-auto"
   end
 
+  # At 320px each of the footer's two columns is 128px, and the German
+  # "Mitgliederverzeichnis" alone is 138px, so the page scrolled 3px sideways
+  # on every page. `hyphens-auto` lets the word break (the page sets `lang`).
+  test "the footer's link columns hyphenate long German words" do
+    content = File.read!(Path.join(@web, "templates/layout/app.html.heex"))
+
+    [_, class] =
+      Regex.run(~r/<nav aria-label=\{gettext\("Footer navigation"\)\} class="([^"]*)"/, content)
+
+    assert class =~ "hyphens-auto"
+  end
+
+  # A logged-out bar is wordmark + "6.379 Personen" + "Einloggen": 392px with
+  # `gap-4` and a `px-2` pill, so it pushed every phone page sideways (375 and
+  # 390 alike). The phone gap and the pill's padding buy the 20px back.
+  test "the top bar fits a 375px phone for a logged-out visitor" do
+    content = File.read!(Path.join(@web, "live/shell_live.ex"))
+
+    [_, bar] = Regex.run(~r/"(mx-auto grid h-16[^"]*)"/, content)
+    assert bar =~ ~r/(^| )gap-2( |$)/
+    assert bar =~ "sm:gap-4"
+
+    [_, pill] = Regex.run(~r/id="people-total"[^>]*?class="([^"]*)"/s, content)
+    assert pill =~ ~r/(^| )px-1\.5( |$)/
+  end
+
   test "components.css lets rendered Markdown break long unbreakable tokens" do
     # A long unbreakable token (a pasted URL, a long word) in a post body has
     # `overflow-wrap: normal` by default and overflows its column on a phone

@@ -1338,7 +1338,7 @@ defmodule VutuvWeb.ShellLive do
         over. The side tracks are equal (1fr), so the pill stays put as the nav
         and the icon row change with the viewer and the breakpoint. --%>
         <div class={[
-          "mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 lg:gap-6",
+          "mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 lg:gap-6",
           gutter_class()
         ]}>
           <div class="flex items-center gap-4 lg:gap-6">
@@ -1444,7 +1444,7 @@ defmodule VutuvWeb.ShellLive do
               href={~p"/system/members"}
               title={people_total_title(@people_count)}
               aria-label={people_total_label(@people_count.total)}
-              class="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-brand-700 sm:px-3 md:hidden lg:inline-flex dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-brand-100"
+              class="inline-flex items-center gap-1.5 rounded-full px-1.5 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-brand-700 sm:px-3 md:hidden lg:inline-flex dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-brand-100"
             >
               <.icon_users />
               <%!-- The id carries the value on purpose: LiveView patches text in
@@ -1465,6 +1465,9 @@ defmodule VutuvWeb.ShellLive do
                     whose bar also carries search, bookmarks, messages, alerts
                     and an avatar; a logged-out phone bar holds a wordmark, this
                     pill and a Log in button, and measures ~330px free at 606px.
+                    On a phone it is tight: the bar's gap and this pill's
+                    padding shrink below sm to fit 375px (see
+                    mobile_overflow_test.exs).
                     So the word shows unconditionally for a visitor — the one who
                     needs it, since they are the one meeting the number for the
                     first time — and waits for `lg` once the bar is carrying a
