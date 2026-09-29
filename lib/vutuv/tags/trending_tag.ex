@@ -9,10 +9,9 @@ defmodule Vutuv.Tags.TrendingTag do
   topic on this installation at all; `Vutuv.Tags.Trending.follow/2` is what
   turns one into one.
 
-  `history` is the seven daily totals, newest first, as the servers reported
-  them — the evidence for **suddenly** rather than for **a lot**. `uses` is its
-  first entry and `baseline` the median of the other six, both stored because
-  the two numbers are what the offer was judged on and what the reader is shown.
+  `uses` is today's total and `baseline` the median of the six days before,
+  both as the servers reported them — the evidence for **suddenly** rather than
+  for **a lot**, and what the reader is shown. The week itself is not kept.
   `servers` is how many of them listed it, and it is the only figure here
   without a second denominator: a pass asks every server it offers, so a tag
   that only three list is a tag only three list.
@@ -43,7 +42,6 @@ defmodule Vutuv.Tags.TrendingTag do
     field(:name, :string)
     field(:uses, :integer)
     field(:baseline, :integer)
-    field(:history, {:array, :integer})
     field(:servers, :integer)
     field(:hosts, {:array, :string})
     field(:author_hosts, :integer)
@@ -54,9 +52,9 @@ defmodule Vutuv.Tags.TrendingTag do
     timestamps()
   end
 
-  @fields ~w(name uses baseline history servers hosts
+  @fields ~w(name uses baseline servers hosts
              author_hosts bot_posts sampled checked_at)a
-  @required ~w(name uses baseline history servers hosts checked_at)a
+  @required ~w(name uses baseline servers hosts checked_at)a
 
   def changeset(model, params \\ %{}) do
     model
