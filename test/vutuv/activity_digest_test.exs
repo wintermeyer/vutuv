@@ -122,8 +122,9 @@ defmodule Vutuv.Activity.DigestTest do
       member = mailable_member()
 
       # Mirror image: the member followed first, `other` closed the circle an
-      # hour ago. Somebody else acted, so this is news worth a mail.
-      insert(:follow, follower: member, followee: other)
+      # hour ago. Somebody else acted, so this is news worth a mail, and it is
+      # the connection that carries it, not a second "follows you" entry.
+      aged_follower(other, member, 180)
       aged_follower(member, other, 60)
       seen_minutes_ago(member, 120)
 

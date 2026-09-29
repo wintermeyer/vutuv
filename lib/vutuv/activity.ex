@@ -1416,7 +1416,7 @@ defmodule Vutuv.Activity do
         email_pref: :email_on_follower?,
         max_arms: [follower_max(user_id)],
         items: &follower_items(user_id, &1, &2),
-        counts: [count_followers(user_id, read_at)],
+        counts: [user_id |> count_followers(read_at) |> unless_closing_pair(user_id)],
         dismiss: [{"follower", :id}]
       },
       %{
@@ -1716,6 +1716,7 @@ defmodule Vutuv.Activity do
   defp follower_items(user_id, limit, cursor) do
     newest =
       from(c in Follow,
+        as: :follow,
         where: c.followee_id == ^user_id,
         order_by: [desc: c.inserted_at, desc: c.id],
         limit: ^limit,
@@ -1726,6 +1727,7 @@ defmodule Vutuv.Activity do
           actor_organization_id: c.follower_organization_id
         }
       )
+      |> unless_closing_pair(user_id)
       |> at_or_before(cursor)
 
     from(e in subquery(newest))
@@ -2648,11 +2650,26 @@ defmodule Vutuv.Activity do
   # Each count helper returns a query selecting a single count, so total_count/2
   # can fold all three into one round trip via scalar subqueries.
   defp count_followers(user_id, read_at) do
-    from(c in Follow, where: c.followee_id == ^user_id)
+    from(c in Follow, as: :follow, where: c.followee_id == ^user_id)
     |> join_party(:follower_id, :follower_organization_id)
     |> where([c, u, o], shown_party(u, o))
     |> select([c], %{count: count()})
     |> since(read_at)
+  end
+
+  # A follow-back that closes a mutual follow is announced as the connection,
+  # never as "started following you" beside it, just like the live push in
+  # `Vutuv.Social`. Earlier is compared by id, as in `count_connections/3`. Not
+  # part of `count_followers/2`: the 30-day card counts every new follower.
+  defp unless_closing_pair(query, user_id) do
+    back =
+      from(b in Follow,
+        where:
+          b.follower_id == ^user_id and b.followee_id == parent_as(:follow).follower_id and
+            b.id < parent_as(:follow).id
+      )
+
+    where(query, not exists(back))
   end
 
   defp count_endorsements(user_id, read_at) do
