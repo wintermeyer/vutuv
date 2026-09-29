@@ -27,6 +27,15 @@ defmodule VutuvWeb.UITest do
     |> DateTime.to_naive()
   end
 
+  describe "checkbox_class/0" do
+    # The box sits in a flex row beside its label; without shrink-0 a long
+    # label (the sign-up's "mara.demotest@example.com is visible" line)
+    # squeezes it from 16 to 13 px, visibly smaller than its neighbours.
+    test "never shrinks beside a long label" do
+      assert UI.checkbox_class() =~ "shrink-0"
+    end
+  end
+
   describe "compact_count/1" do
     test "shows numbers up to 999 exactly" do
       assert UI.compact_count(0) == "0"

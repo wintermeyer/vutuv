@@ -100,7 +100,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
           </.link>
         </.card>
       <% else %>
-        <div id="organization-directory" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div id="organization-directory" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <.link
             :for={organization <- @result.entries}
             navigate={~p"/organizations/#{organization.slug}"}

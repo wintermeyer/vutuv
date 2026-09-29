@@ -1289,6 +1289,21 @@ const TagComma = {
       this.el.value = rest
       this.pushEvent("add_typed", { value: parts.join(","), rest })
     })
+
+    // Enter finishes the whole field, and needs the same care: the server's
+    // cleared value never reaches a focused input, so "Wandern" stayed on
+    // screen beside its new badge. Enter in a form field also submits the form
+    // once the button is enabled (three tags in), which would create the
+    // account and drop the tag being typed. An empty field keeps Enter's
+    // ordinary meaning.
+    this.el.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || this.el.value.trim() === "") return
+
+      event.preventDefault()
+      const value = this.el.value
+      this.el.value = ""
+      this.pushEvent("add_typed", { value, rest: "" })
+    })
   },
 }
 

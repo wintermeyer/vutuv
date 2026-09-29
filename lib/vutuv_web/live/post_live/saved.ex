@@ -541,8 +541,13 @@ defmodule VutuvWeb.PostLive.Saved do
           </.tab>
         </nav>
 
-        <%!-- Posts / People sub-tabs: each keeps the active search + sort. --%>
-        <nav class="flex gap-4 border-b border-slate-200 text-sm font-semibold dark:border-slate-800" aria-label={gettext("Saved type")}>
+        <%!-- Posts / People sub-tabs: each keeps the active search + sort.
+              Wider than a phone, so the row scrolls; the base line is a shadow
+              because a scroll box clips the `-mb-px` a border would need. --%>
+        <nav
+          class="flex gap-4 overflow-x-auto text-sm font-semibold shadow-[inset_0_-1px_0_var(--color-slate-200)] [scrollbar-width:none] dark:shadow-[inset_0_-1px_0_var(--color-slate-800)]"
+          aria-label={gettext("Saved type")}
+        >
           <.subtab patch={saved_path(@live_action, :posts, @q, @sort)} active?={@type == :posts} id="subtab-posts">
             {gettext("Posts")}
           </.subtab>
@@ -780,7 +785,7 @@ defmodule VutuvWeb.PostLive.Saved do
       id={@id}
       aria-current={@active? && "page"}
       class={[
-        "-mb-px border-b-2 px-1 py-2",
+        "shrink-0 whitespace-nowrap border-b-2 px-1 py-2",
         @active? && "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200",
         !@active? &&
           "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"

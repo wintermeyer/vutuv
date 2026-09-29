@@ -3,7 +3,7 @@ defmodule Vutuv.Profiles.Url do
 
   use VutuvWeb, :model
 
-  import Vutuv.ChangesetHelpers, only: [validate_url: 1]
+  import Vutuv.ChangesetHelpers, only: [trim_fields: 2, validate_url: 1]
 
   alias Vutuv.ScreenshotTrust
 
@@ -59,6 +59,7 @@ defmodule Vutuv.Profiles.Url do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, [:value, :description, :broken?])
+    |> trim_fields([:value, :description])
     |> put_screenshot(params)
     |> validate_required([:value])
     # varchar(255) column: an overlong URL must fail as a changeset error,

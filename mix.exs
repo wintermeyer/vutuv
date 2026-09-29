@@ -168,6 +168,9 @@ defmodule Vutuv.MixProject do
 
       # HTTP client
       {:req, "~> 0.5"},
+      # Punycode for umlaut domains before a DNS lookup (Vutuv.Ssrf). Already
+      # locked through Swoosh; named here because vutuv calls it directly.
+      {:idna, "~> 6.1"},
 
       # Phone numbers: parse/validate/format to E.164 and national formats
       # (Google's libphonenumber port). Used by Vutuv.Phone to render German

@@ -31,6 +31,28 @@ defmodule VutuvWeb.EmailControllerTest do
       assert Repo.get_by(Email, value: "work@example.com").email_type == "Work"
     end
 
+    test "a pasted address with spaces and capitals is confirmed as its clean form", %{
+      conn: conn
+    } do
+      {conn, _user} = create_and_login_user(conn)
+      flush_emails()
+
+      conn =
+        post(conn, ~p"/settings/emails",
+          email: %{"value" => "  Pasted@Example.com ", "email_type" => "Work"}
+        )
+
+      assert html_response(conn, 200) =~ "_csrf_token"
+      assert_received {:email, %{to: [{_, "pasted@example.com"}], text_body: body}}
+      [pin] = Regex.run(~r/\b\d{6}\b/, body)
+
+      submit_with_csrf(conn, ~p"/settings/emails/confirmation", %{
+        "email_confirmation" => %{"pin" => pin}
+      })
+
+      assert Repo.get_by(Email, value: "pasted@example.com")
+    end
+
     test "rejects a malformed address before mailing a PIN", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       # Drain the login PIN (and any stragglers) so the refute below is precise.
@@ -41,7 +63,7 @@ defmodule VutuvWeb.EmailControllerTest do
 
       # Re-renders the new form with the format error instead of advancing to
       # the PIN step...
-      assert html_response(conn, 200) =~ "valid email"
+      assert html_response(conn, 422) =~ "valid email"
       # ...and crucially never mails a PIN to the bogus address.
       refute_received {:email, _}
     end

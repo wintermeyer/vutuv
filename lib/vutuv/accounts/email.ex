@@ -2,7 +2,7 @@ defmodule Vutuv.Accounts.Email do
   @moduledoc false
 
   use VutuvWeb, :model
-  import Vutuv.ChangesetHelpers, only: [downcase_value: 1]
+  import Vutuv.ChangesetHelpers, only: [downcase_value: 1, trim_fields: 2]
 
   schema "emails" do
     field(:value, :string)
@@ -38,6 +38,9 @@ defmodule Vutuv.Accounts.Email do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, [:value, :public?, :email_type])
+    # A pasted address often carries a space; refusing it as "not a valid
+    # address" is wrong when the address is fine.
+    |> trim_fields([:value])
     |> validate_required([:value, :email_type])
     |> validate_inclusion(:email_type, @email_types)
     |> downcase_value

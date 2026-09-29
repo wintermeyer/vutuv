@@ -5,6 +5,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   alias PhoenixHTMLHelpers.Link, as: HTMLLink
   alias Vutuv.Bluesky
+  alias Vutuv.ChangesetHelpers
 
   schema "social_media_accounts" do
     field(:provider, :string)
@@ -178,6 +179,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @required_fields ++ @optional_fields)
+    # Before anything parses it: " octocat " was stored as typed and linked to
+    # https://github.com/ octocat .
+    |> ChangesetHelpers.trim_fields([:value])
     |> validate_required([:provider, :value])
     |> unique_constraint(:value_provider, message: "Someone has already claimed this account")
     # Run on the RAW input, before normalize_value/1 collapses a pasted URL to

@@ -7,8 +7,6 @@
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
 
-  <%= hidden_input f, :country %>
-
   <.editform_field form={f} field={:description}>
     <%= label f, :description, gettext("Description") %>
     <%= text_input f, :description, [autofocus: true, placeholder: gettext("Home, Office")] ++ err_attrs(f, :description) %>

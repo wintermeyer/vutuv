@@ -69,14 +69,15 @@ defmodule VutuvWeb.EmailController do
   # address — and so we never mail a PIN to something that isn't an address.
   def create(conn, %{"email" => email_params}) do
     user = conn.assigns[:current_user]
-    email = email_params["value"]
 
     changeset =
       user
       |> build_assoc(:emails)
       |> Email.changeset(email_params)
 
-    with {:ok, _} <- Ecto.Changeset.apply_action(changeset, :insert),
+    # The PIN is minted for the address as the changeset normalized it
+    # (trimmed, downcased), so the confirmation inserts that same value.
+    with {:ok, %Email{value: email}} <- Ecto.Changeset.apply_action(changeset, :insert),
          :ok <- RateLimit.check(conn, :email_change, email) do
       user
       |> Accounts.gen_pin_for("email", email)
@@ -91,7 +92,9 @@ defmodule VutuvWeb.EmailController do
       |> render("confirm.html", user: conn.assigns[:user])
     else
       {:error, %Ecto.Changeset{} = changeset} ->
-        render(conn, "new.html", changeset: changeset)
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render("new.html", changeset: changeset)
 
       :rate_limited ->
         conn

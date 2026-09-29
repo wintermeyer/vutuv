@@ -22,6 +22,14 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert changeset.valid?
     end
 
+    # " octocat " was stored as typed and linked to https://github.com/ octocat .
+    test "trims a handle typed with spaces around it" do
+      assert value_for(%{provider: "GitHub", value: " octocat "}) == "octocat"
+
+      assert value_for(%{provider: "Mastodon", value: " @Gargron@mastodon.social "}) ==
+               "Gargron@mastodon.social"
+    end
+
     test "accepts each provider that carries its own instance, and Bluesky" do
       for {provider, value} <- [
             {"Mastodon", "@Gargron@mastodon.social"},

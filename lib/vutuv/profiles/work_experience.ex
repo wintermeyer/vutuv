@@ -65,6 +65,7 @@ defmodule Vutuv.Profiles.WorkExperience do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @cast_fields)
+    |> ChangesetHelpers.trim_fields([:title, :organization])
     |> CvSection.cast_announcement(params)
     |> validate_required([:title, :organization, :kind])
     |> validate_inclusion(:kind, @kinds)

@@ -59,7 +59,7 @@ defmodule VutuvWeb.DevDocController do
   defp show_page(conn, page) do
     case AgentDocs.negotiate(conn, [:md]) do
       :md ->
-        send_markdown(conn, Map.fetch!(@docs, page))
+        send_markdown(conn, this_installation(Map.fetch!(@docs, page)))
 
       :html ->
         # The leading `# Heading` was stripped at compile time: the page
@@ -70,9 +70,22 @@ defmodule VutuvWeb.DevDocController do
           page: page,
           page_title: Map.fetch!(@titles, page),
           nav: @nav,
-          body: Map.fetch!(@docs_html, page)
+          body: this_installation(Map.fetch!(@docs_html, page))
         )
     end
+  end
+
+  # The docs are written against vutuv.de; another installation's readers
+  # need its own address in every curl line and link. Only the bare host is
+  # matched, never inside a longer name or an email address. On vutuv.de the
+  # two replacements change nothing.
+  defp this_installation(text) do
+    base = VutuvWeb.Endpoint.public_url() |> String.trim_trailing("/")
+    host = String.replace(base, ~r{\Ahttps?://}, "")
+
+    text
+    |> String.replace("https://vutuv.de", base)
+    |> String.replace(~r/(?<![\w@.\/-])vutuv\.de(?![\w-])/, host)
   end
 
   # The raw file, not a doc map — these pages ARE Markdown. The private flag

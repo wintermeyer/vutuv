@@ -213,10 +213,9 @@ defmodule VutuvWeb.RegistrationLive do
   # save splits it, so "Elixir, Kochen" adds two topics rather than one topic
   # called "Elixir, Kochen".
   #
-  # Two things reach here — Enter in the field and the button beside it — and
-  # they carry the value differently: a `phx-keydown` brings the input's own
-  # `value`, a `phx-click` brings nothing and the field map answers. Reading
-  # both is what keeps Enter working ahead of the change event.
+  # Only the `TagComma` hook sends it, for a comma or for Enter, always with
+  # the field's own `value`, so it never waits on the debounced change event.
+  # The field map is the fallback for a push without one.
   @impl true
   def handle_event("add_typed", params, socket) do
     typed = params["value"] || socket.assigns.fields["typed"] || ""
@@ -822,8 +821,6 @@ defmodule VutuvWeb.RegistrationLive do
               phx-debounce="300"
               aria-invalid={@tag_errors != [] && "true"}
               placeholder={tag_placeholder(@tags)}
-              phx-keydown="add_typed"
-              phx-key="Enter"
             />
           </div>
         </div>

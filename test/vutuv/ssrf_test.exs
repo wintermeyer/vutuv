@@ -145,6 +145,16 @@ defmodule Vutuv.SsrfTest do
       assert Ssrf.vetted_address("93.184.216.34") == {:ok, {93, 184, 216, 34}}
     end
 
+    # A resolver takes ASCII only: `:inet.getaddrs('bücher.de', …)` answers
+    # einval, so every link to an umlaut domain was "unresolvable" and never got
+    # its screenshot. The lookup has to ask for the punycode name.
+    test "an internationalized domain is looked up by its ASCII form" do
+      stub_resolver(%{"xn--bcher-kva.de" => [{93, 184, 216, 34}]})
+
+      assert Ssrf.vetted_address("bücher.de") == {:ok, {93, 184, 216, 34}}
+      assert Ssrf.vetted_address("BÜCHER.de") == {:ok, {93, 184, 216, 34}}
+    end
+
     test "a literal internal host is refused without any lookup" do
       Application.put_env(:vutuv, :ssrf_resolver, fn _h, _f -> raise "must not resolve" end)
       assert Ssrf.vetted_address("169.254.169.254") == {:error, :internal}

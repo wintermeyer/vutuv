@@ -341,7 +341,8 @@ defmodule VutuvWeb.SettingsController do
     |> put_status(:unprocessable_entity)
     |> render("auto_post_deletion.html",
       user: conn.assigns[:user],
-      changeset: changeset,
+      # Phoenix shows a changeset's errors only once it has an action.
+      changeset: %{changeset | action: :update},
       due_count: AutoDeletion.count_due(conn.assigns[:user]),
       confirm: nil,
       page_title: gettext("Automatic post deletion")

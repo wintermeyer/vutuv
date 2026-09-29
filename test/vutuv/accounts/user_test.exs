@@ -13,6 +13,24 @@ defmodule Vutuv.Accounts.UserTest do
     assert changeset.valid?
   end
 
+  # A name typed with a stray space ended up in the vCard ("FN:  Setti    Probe")
+  # and in every mail's To: header; the prod copy had 268 padded first names.
+  test "changeset trims the name fields and the headline" do
+    changeset =
+      User.changeset(%User{}, %{
+        "first_name" => "  Setti  ",
+        "last_name" => " Probe",
+        "nickname" => "   ",
+        "headline" => " Kochen und Laufen "
+      })
+
+    assert changeset.valid?
+    assert Ecto.Changeset.get_change(changeset, :first_name) == "Setti"
+    assert Ecto.Changeset.get_change(changeset, :last_name) == "Probe"
+    assert Ecto.Changeset.get_field(changeset, :nickname) == nil
+    assert Ecto.Changeset.get_change(changeset, :headline) == "Kochen und Laufen"
+  end
+
   test "changeset ignores email params (emails change only via the PIN flow)" do
     changeset = User.changeset(%User{}, @invalid_email_attrs)
     assert changeset.valid?

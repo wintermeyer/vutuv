@@ -50,6 +50,28 @@ defmodule VutuvWeb.MobileOverflowTest do
     end
   end
 
+  # The same implicit-track trap in a card grid with no base column count: the
+  # organization directory's `truncate` names ("Julian Rademacher – Die drei
+  # Webstandards") widened every card to 420px on a 390px phone. `grid-cols-1`
+  # is `minmax(0, 1fr)`, a track that shrinks.
+  test "the organization directory grid has a shrinkable phone track" do
+    content = File.read!(Path.join(@web, "live/organization_live/index.ex"))
+    [_, class] = Regex.run(~r/id="organization-directory" class="([^"]*)"/, content)
+
+    assert class =~ "grid-cols-1"
+  end
+
+  # Five saved-item tabs are wider than a phone; the row must scroll inside
+  # itself rather than push the page 58px wider.
+  test "the saved-items sub-tabs scroll instead of widening the page" do
+    content = File.read!(Path.join(@web, "live/post_live/saved.ex"))
+
+    [_, class] =
+      Regex.run(~r/<nav\s+class="([^"]*)"\s+aria-label=\{gettext\("Saved type"\)\}/, content)
+
+    assert class =~ "overflow-x-auto"
+  end
+
   test "components.css lets rendered Markdown break long unbreakable tokens" do
     # A long unbreakable token (a pasted URL, a long word) in a post body has
     # `overflow-wrap: normal` by default and overflows its column on a phone

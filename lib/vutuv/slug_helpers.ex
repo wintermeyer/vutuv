@@ -156,10 +156,17 @@ defmodule Vutuv.SlugHelpers do
     end
   end
 
+  # Capped so that the slug plus a ".<short sha>" suffix fits a varchar(255)
+  # column: a CV entry's slug joins two fields of up to 255 characters each,
+  # and a slug too long for its column is an error on a field no form shows.
+  @slug_max_length 255 - (1 + @short_sha_length)
+
   defp gen_slug(resource) do
     resource
     |> to_string()
     |> slugify_downcase()
+    |> String.slice(0, @slug_max_length)
+    |> String.trim_trailing("-")
   end
 
   @doc """
