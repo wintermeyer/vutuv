@@ -7409,6 +7409,15 @@ defmodule Vutuv.Fediverse do
   defp read_object(%Req.Response{status: status}) when status in [403, 404, 410],
     do: {:gone, status}
 
+  # Still an error for every caller: `ap_get/3` follows nothing. Only the
+  # lookup acts on the target (`fetch_lookup_document/3`).
+  defp read_object(%Req.Response{status: status} = response) when status in 300..399 do
+    case Req.Response.get_header(response, "location") do
+      [location | _rest] -> {:error, {:redirect, location}}
+      [] -> {:error, {:http, status}}
+    end
+  end
+
   defp read_object(%Req.Response{status: status}), do: {:error, {:http, status}}
 
   defp response_etag(%Req.Response{} = response) do
@@ -11024,13 +11033,24 @@ defmodule Vutuv.Fediverse do
   # here makes, plus the object-type gate: a `Video`, an `Article` or an `Event`
   # with a `content` field is not a post, and neither is an actor document
   # somebody pasted the profile URL of.
-  defp fetch_lookup_document(url, key) do
+  #
+  # One redirect on the same host is followed: Friendica answers the display URL
+  # people copy (`/display/<guid>`) with a 302 to the object (`/objects/<guid>`).
+  # Another host is refused, since `own_object?/3` would reject its answer anyway.
+  defp fetch_lookup_document(url, key, redirects \\ 1) do
     case fetch_remote_note(url, key) do
       {:ok, doc} ->
         case remote_post_object(doc) do
           %{} = note -> {:ok, note}
           nil -> {:error, :not_a_post}
         end
+
+      {:error, {:redirect, location}} when redirects > 0 ->
+        target = url |> URI.merge(location) |> URI.to_string()
+
+        if same_host?(url, target),
+          do: fetch_lookup_document(target, key, redirects - 1),
+          else: {:error, :post_unreachable}
 
       _unreachable ->
         {:error, :post_unreachable}

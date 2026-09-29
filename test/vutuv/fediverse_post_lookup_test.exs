@@ -34,7 +34,8 @@ defmodule Vutuv.FediversePostLookupTest do
 
   # The far server answering for the post and for its author. `calls` counts the
   # requests it saw, so a test can prove a lookup made none.
-  defp serve(note_overrides \\ %{}) do
+  # `redirects` maps a request path to the `location` its 302 names.
+  defp serve(note_overrides \\ %{}, redirects \\ %{}) do
     test = self()
 
     note =
@@ -62,13 +63,22 @@ defmodule Vutuv.FediversePostLookupTest do
     Application.put_env(:vutuv, :fediverse_req_options,
       plug: fn conn ->
         send(test, {:fetched, conn.request_path})
-        # The actor lives at exactly one path; everything else this stub is
-        # asked for is the post — under its canonical id or its display URL.
-        body = if conn.request_path == "/users/autorin", do: actor, else: note
 
-        conn
-        |> Plug.Conn.put_resp_content_type("application/activity+json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(body))
+        case Map.fetch(redirects, conn.request_path) do
+          {:ok, location} ->
+            conn
+            |> Plug.Conn.put_resp_header("location", location)
+            |> Plug.Conn.send_resp(302, "")
+
+          :error ->
+            # The actor lives at exactly one path; everything else this stub is
+            # asked for is the post — under its canonical id or its display URL.
+            body = if conn.request_path == "/users/autorin", do: actor, else: note
+
+            conn
+            |> Plug.Conn.put_resp_content_type("application/activity+json")
+            |> Plug.Conn.send_resp(200, Jason.encode!(body))
+        end
       end
     )
 
@@ -155,6 +165,22 @@ defmodule Vutuv.FediversePostLookupTest do
 
       refute_received {:fetched, _}
       assert Repo.aggregate(RemotePost, :count) == 1
+    end
+
+    # Friendica answers its display URL (`/display/<guid>`) with a 302 to the
+    # object (`/objects/<guid>`) when asked for ActivityPub.
+    test "follows one redirect on the same host to the object" do
+      serve(%{}, %{"/@autorin/1" => @object})
+
+      assert {:ok, %RemotePost{object_uri: @object}} = Fediverse.look_up_post(member(), @display)
+      assert_received {:fetched, "/users/autorin/statuses/1"}
+    end
+
+    test "does not follow a redirect to another host" do
+      serve(%{}, %{"/@autorin/1" => "https://andere.example/objects/1"})
+
+      assert {:error, :post_unreachable} = Fediverse.look_up_post(member(), @display)
+      refute_received {:fetched, "/objects/1"}
     end
 
     test "is capped per member per hour" do
