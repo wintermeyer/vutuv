@@ -34,4 +34,18 @@ defmodule Vutuv.SocialFeed.HttpTest do
     assert body == ~s({"handle":"alice"})
     assert {:ok, %{"handle" => "alice"}} = Http.decode(body)
   end
+
+  # A `plug:` stub never opens a socket, so the option can only be asserted.
+  test "every request turns off TLS 1.3 middlebox compatibility mode" do
+    options =
+      Http.request_options("https://codefloe.com/", @options_key,
+        connect_options: [timeout: 9_000]
+      )
+
+    assert options[:connect_options][:timeout] == 9_000
+    assert options[:connect_options][:transport_opts][:middlebox_comp_mode] == false
+
+    %{default: pool} = Http.pinned_pools("codefloe.com", {142, 132, 154, 80})
+    assert pool[:conn_opts][:transport_opts][:middlebox_comp_mode] == false
+  end
 end
