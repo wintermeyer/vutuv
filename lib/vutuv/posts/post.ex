@@ -101,6 +101,9 @@ defmodule Vutuv.Posts.Post do
     # own copy of the delivery target so it outlives the cached remote note.
     has_one(:remote_reply_ref, Vutuv.Posts.PostRemoteReply, foreign_key: :post_id)
 
+    # The `@user@host` accounts the body names (`Vutuv.Fediverse.PostRemoteMention`).
+    has_many(:remote_mentions, Vutuv.Fediverse.PostRemoteMention)
+
     has_many(:denials, Vutuv.Posts.PostDenial, on_replace: :delete)
     has_many(:images, Vutuv.Posts.PostImage, preload_order: [asc: :position])
 

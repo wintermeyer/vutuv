@@ -25,6 +25,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Accounts.User
   alias Vutuv.Attachments
   alias Vutuv.Fediverse.Actor
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Mentions
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -57,7 +58,9 @@ defmodule VutuvWeb.Fediverse.Docs do
     {:post_hashtags, :tag},
     # Both kinds of parent author (issue #1336), or an answer to a page's post
     # would render with no `inReplyTo` — see `parent_author/1`.
-    {:reply_ref, [:parent_author, :parent_organization]}
+    {:reply_ref, [:parent_author, :parent_organization]},
+    # The `@user@host` accounts the body names, for their `Mention` and `cc`.
+    {:remote_mentions, :remote_account}
   ]
 
   @doc "The associations `note/2` needs loaded on a post."
@@ -749,6 +752,7 @@ defmodule VutuvWeb.Fediverse.Docs do
     parent = if remote, do: nil, else: reply_parent(post)
     answered = answered_actors(parent)
     hashtags = hashtags(post)
+    mentioned = remote_mention_accounts(post)
 
     %{
       "id" => note_url(user, post.id),
@@ -757,12 +761,16 @@ defmodule VutuvWeb.Fediverse.Docs do
       "content" => content_html(post, remote, hashtags),
       "published" => iso8601(post.inserted_at),
       "to" => [@public],
-      "cc" => cc(user, remote) ++ Enum.map(answered, &actor_url/1),
+      "cc" =>
+        Enum.uniq(
+          cc(user, remote) ++
+            Enum.map(answered, &actor_url/1) ++ Enum.map(mentioned, & &1.actor_uri)
+        ),
       "url" => note_url(user, post.id)
     }
     |> put_content_map(post)
     |> put_in_reply_to(remote || parent)
-    |> put_tag(post, remote, answered, hashtags)
+    |> put_tag(post, remote, answered, mentioned, hashtags)
     |> put_attachments(post)
     |> put_updated(post)
   end
@@ -845,9 +853,11 @@ defmodule VutuvWeb.Fediverse.Docs do
   # Deduplicated by `href`: an answer whose text also writes `@ada` would
   # otherwise carry the same account twice, once because it is answered and once
   # because the body names it.
-  defp put_tag(note, post, remote, answered, hashtags) do
+  defp put_tag(note, post, remote, answered, mentioned, hashtags) do
     mentions =
-      (mention_tag(remote) ++ Enum.map(answered, &mention_of/1) ++ local_mention_tags(post))
+      (mention_tag(remote) ++
+         Enum.map(answered, &mention_of/1) ++
+         local_mention_tags(post) ++ Enum.map(mentioned, &remote_mention_of/1))
       |> Enum.uniq_by(& &1["href"])
 
     case mentions ++ Enum.map(hashtags, &hashtag_tag/1) do
@@ -864,8 +874,8 @@ defmodule VutuvWeb.Fediverse.Docs do
   # Parsing the body is safe **here and only here**, which is what separates it
   # from the rule above: every handle is resolved against our own tables, so the
   # actor it points at is one this installation serves and vouching for it costs
-  # nothing. A `@someone@anywhere` in the same sentence is left to the reader's
-  # server, exactly as before.
+  # nothing. A `@someone@anywhere` in the same sentence gets its `Mention` only
+  # once resolved (`remote_mention_of/1`).
   #
   # Gated on `federated?/1`: an account that keeps out of the Fediverse serves no
   # actor document, and naming one would send every receiving server after a
@@ -878,6 +888,27 @@ defmodule VutuvWeb.Fediverse.Docs do
   end
 
   defp local_mention_tags(_post), do: []
+
+  # The accounts on other networks the body names, once resolved
+  # (`Vutuv.Fediverse.PostRemoteMention`). Not a parse of the text either: each
+  # is a stored account whose actor document we fetched ourselves after its own
+  # server's WebFinger named it, so the `Mention` points at an actor that
+  # exists. An unresolved address stays text, exactly as before.
+  #
+  # Named in `cc` as well (`build_note/2`), the way a public reply names the
+  # person it answers: the post stays public and lands in their notifications.
+  defp remote_mention_of(%RemoteAccount{} = account) do
+    %{
+      "type" => "Mention",
+      "href" => account.actor_uri,
+      "name" => RemoteAccount.display_handle(account)
+    }
+  end
+
+  defp remote_mention_accounts(%Post{remote_mentions: mentions}) when is_list(mentions),
+    do: for(%{remote_account: %RemoteAccount{} = account} <- mentions, do: account)
+
+  defp remote_mention_accounts(_post), do: []
 
   # `mentioned_organizations/1` answers with the four columns the *renderer*
   # needs (id, name, slug, username), and `federated?/1` asks about two it does

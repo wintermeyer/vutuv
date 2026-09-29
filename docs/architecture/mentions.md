@@ -173,10 +173,10 @@ Two consequences worth knowing:
   would chip `@hilwiller`, ask whether that member exists and spend one of the
   five mentions a post may carry.
 
-Out of scope on purpose: completing a remote `@user@host` address. Only local
-mentions become `Mention` tags in the outgoing Note (`VutuvWeb.Fediverse.Docs`),
-and a remote address in the body is left to the reader's server — offering
-remote accounts would promise a notification we do not send. Raw **source
+Out of scope on purpose: completing a remote `@user@host` address in the
+picker. A typed one is resolved once the post is saved (see "Accounts on other
+networks a post names" in [fediverse.md](fediverse.md)), but offering remote
+accounts while typing would mean an outbound lookup per keystroke. Raw **source
 mode** has no picker either: the caret there is in a plain `<textarea>`, where
 placing a panel means measuring text in a mirror element, and the people who
 switch to it are the people who type handles from memory anyway.

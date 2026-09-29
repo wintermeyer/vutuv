@@ -7665,7 +7665,9 @@ defmodule Vutuv.Posts do
     mention_ids = insert_mentions(post, added)
     Enum.each(added, &notify_mentioned(post, &1, mention_ids[&1.id]))
     sync_organization_mentions(post)
-    :ok
+    # And the accounts on other networks it names as `@user@host`, before
+    # federation reads them as recipients and `Mention` tags.
+    Vutuv.Fediverse.sync_remote_mentions(post)
   end
 
   # The same reconcile for the pages a body names by their root handle (issue

@@ -72,6 +72,9 @@ defmodule Vutuv.Fediverse.NoteSweeper do
     # A reposted copy outlives the ceiling, so something has to keep asking
     # whether its original is still published (issue #1166). Bounded per run.
     log_refresh(Fediverse.refresh_reposted_posts())
+    # A mention whose resolve task a deploy stopped, or that failed once.
+    resolved = Fediverse.resolve_stale_remote_mentions()
+    if resolved > 0, do: Logger.info("Fediverse sweep: resolved #{resolved} mentioned account(s)")
     log("remote account nothing refers to", Fediverse.purge_unreferenced_remote_accounts())
   end
 

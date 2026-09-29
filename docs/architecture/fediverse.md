@@ -1275,6 +1275,28 @@ meant whether or not they federate.
 The mirror direction is `Vutuv.Mentions.to_local_form/1`; the whole picture is
 in [mentions.md](mentions.md).
 
+### Accounts on other networks a post names
+
+`@doris@friendica.example` in a post is resolved after the save, not parsed into
+a `Mention`: `Vutuv.Fediverse.sync_remote_mentions/1` (called from
+`Posts.sync_mentions/1`) writes one `post_remote_mentions` row per address, at
+most five, linked at once when we already hold the account. The rest are pending
+and a task resolves them (WebFinger, then the actor document we fetch
+ourselves), so every `Mention` still points at an actor that exists. The
+followers' copy is held `mention_hold_seconds/0` (30) through the same
+`rebuild_from` marker the picture hold uses, and the resolve releases it early,
+so it goes out carrying the tag. A newly resolved account also gets the post in
+its own inbox unless a copy already went to that inbox, and joins the recipients
+of every later edit and takedown.
+
+The row is the state, so a deploy that stops the task loses nothing:
+`resolve_stale_remote_mentions/0` in the hourly sweeper takes rows whose attempt
+is ten minutes old. Every try stamps `attempts` and `attempted_at` first, and a
+row gives up after three. A mention row also keeps its account from being purged,
+which is what keeps the mention's link on the real profile page. The budget is
+`FEDIVERSE_MENTION_RESOLVE_LIMIT` per author per hour; a post from a member who
+keeps out of the Fediverse is resolved for the link and sends nothing.
+
 ## A topic federates too (issue #1330)
 
 A tag is an ActivityPub `Group` actor, so anybody on any server can follow a

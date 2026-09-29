@@ -119,6 +119,7 @@ config :vutuv, :reach_runner, false
 # Vutuv.Fediverse.Media.fetch_now/1 directly with a stubbed HTTP layer.
 config :vutuv, :fediverse_media_fetch, false
 config :vutuv, :fediverse_quote_resolve, false
+config :vutuv, :fediverse_mention_resolve, false
 # Post link-screenshots drain via a polling GenServer that would touch the
 # sandbox from outside; tests call Vutuv.Posts.Screenshots.deliver_due/1 directly
 # with a stubbed capture. ScreenshotWorker.nudge/0 casts into the void then.
