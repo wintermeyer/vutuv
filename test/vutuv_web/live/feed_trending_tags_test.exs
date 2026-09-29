@@ -30,11 +30,11 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
   # As measured on 10 September 2026: 1,084 uses against a median of 3.
   @warntag [1084, 16, 11, 3, 1, 3, 2]
 
-  # Everything the trending pill may wear that the pill above it does not: it is
-  # the one that lays a sparkline out beside its label. Named as the whole
-  # allowed difference rather than as a list of size spellings — an allowlist of
-  # utilities to compare reads green for every spelling nobody thought of.
-  @layout_extras MapSet.new(~w(flex max-w-full items-center gap-1.5))
+  # Everything the trending pill may wear that the pill above it does not: the
+  # layout that lets a long name truncate. Named as the whole allowed difference
+  # rather than as a list of size spellings — an allowlist of utilities to
+  # compare reads green for every spelling nobody thought of.
+  @layout_extras MapSet.new(~w(flex max-w-full))
 
   setup %{conn: conn} do
     put_config(:fetch_external_tag_posts, true)
@@ -83,17 +83,15 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
   end
 
   describe "the row" do
-    test "offers what is spiking, with the week it was judged on", %{conn: conn} do
+    test "offers what is spiking, as its bare name", %{conn: conn} do
       {:ok, live, html} = live(conn, ~p"/feed")
 
       assert html =~ "Very busy on other servers right now:"
       assert render(pill(live)) =~ "warntag"
 
-      # Six quiet strokes plus today, and today is the tall one — the evidence
-      # for "suddenly" rather than "a lot".
-      bars = live |> element("#trending-tags button span[aria-hidden]") |> render()
-      assert bars =~ "height:100%"
-      assert length(Regex.scan(~r/height:/, bars)) == 7
+      # No sparkline: the week it was judged on is in the label, not drawn.
+      refute has_element?(live, "#trending-tags button span[aria-hidden]")
+      refute render(pill(live)) =~ "height:"
     end
 
     test "says the figures in grouped form, never as run-together digits", %{conn: conn} do
@@ -250,22 +248,10 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
       trending = classes(live, "#trending-tags button")
       offered = classes(live, ~s(#rail-followed_tags button[phx-value-name="#{name}"]))
 
-      # Both directions: the trending pill may add the layout its sparkline
+      # Both directions: the trending pill may add the layout its truncation
       # needs and nothing else, and it may drop nothing the pill above wears.
       assert MapSet.difference(trending, offered) == @layout_extras
       assert MapSet.difference(offered, trending) == MapSet.new()
-    end
-
-    test "sizes the seven-day sparkline to fit that pill", %{conn: conn} do
-      {:ok, live, _html} = live(conn, ~p"/feed")
-
-      bars = live |> element("#trending-tags button span[aria-hidden]") |> render()
-
-      # The sparkline is as tall as the pill's own line box (h-4 = 1rem, the
-      # `text-xs` line height) and all seven strokes are hairlines, so the week
-      # rides inside the pill instead of setting its size.
-      assert bars =~ "h-4"
-      assert length(Regex.scan(~r/w-0\.5/, bars)) == 7
     end
   end
 
