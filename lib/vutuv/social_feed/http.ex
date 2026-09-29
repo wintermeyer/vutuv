@@ -27,6 +27,13 @@ defmodule Vutuv.SocialFeed.Http do
   # by a pinned request's own Finch instance, which cannot read that keyword.
   @connect_timeout 2_000
 
+  # TLS options for every socket this module opens, plain or pinned. Erlang's
+  # TLS 1.3 client defaults to middlebox compatibility mode and then aborts the
+  # handshake when a server skips the dummy ChangeCipherSpec, which curl and
+  # browsers tolerate: codefloe.com does exactly that, so a member's Forgejo
+  # account there was refused as "that instance did not answer".
+  @transport_opts [middlebox_comp_mode: false]
+
   # How many pinned requests may be in flight at once. Built at compile time
   # because the point is that no atom is ever minted at runtime — see
   # `get_pinned/4` for what that costs when it is. Sixteen is far more than the
@@ -152,7 +159,7 @@ defmodule Vutuv.SocialFeed.Http do
   instance it did not start.
   """
   def pinned_pools(host, address) do
-    transport = [timeout: @connect_timeout] ++ ipv6_options(address)
+    transport = [timeout: @connect_timeout] ++ @transport_opts ++ ipv6_options(address)
 
     %{default: [protocols: [:http1], conn_opts: [hostname: host, transport_opts: transport]]}
   end
@@ -227,7 +234,7 @@ defmodule Vutuv.SocialFeed.Http do
     [
       url: url,
       receive_timeout: 4_000,
-      connect_options: [timeout: @connect_timeout],
+      connect_options: [timeout: @connect_timeout, transport_opts: @transport_opts],
       retry: false,
       redirect: false,
       # The callers decode the body themselves behind `is_binary` guards, so
