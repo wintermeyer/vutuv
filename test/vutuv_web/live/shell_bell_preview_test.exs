@@ -105,6 +105,64 @@ defmodule VutuvWeb.ShellBellPreviewTest do
     end
   end
 
+  describe "a row about a post says only the verb" do
+    # The post is quoted right under the name, so "your post" and "on another
+    # network" only pushed it out of view: the verb is enough, the globe on the
+    # badge says where it came from, and the quote gets two lines.
+    defp remote_reaction(post, kind) do
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: "https://moppels.bar/users/crossgolf_rebel",
+        handle: "crossgolf_rebel",
+        kind: kind,
+        received_at: DateTime.utc_now(:second)
+      })
+    end
+
+    test "a like from here", %{conn: conn} do
+      user = insert(:user, locale: "de")
+      post = insert(:post, user: user, body: "Gesten kam die Frage auf")
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Marcel", last_name: "K"), post)
+
+      {:ok, view, _html} = shell(conn, user)
+      render_hook(view, "bell:preview", %{})
+
+      assert has_element?(view, "[data-bell-preview-verb]", "gefällt")
+      refute render(view) =~ "gefällt Ihr Beitrag"
+      refute has_element?(view, "[data-bell-preview-remote]")
+    end
+
+    test "a like and a share from another network", %{conn: conn} do
+      user = insert(:user, locale: "de")
+      remote_reaction(insert(:post, user: user, body: "Erster"), "like")
+      remote_reaction(insert(:post, user: user, body: "Zweiter"), "announce")
+
+      {:ok, view, _html} = shell(conn, user)
+      html = render_hook(view, "bell:preview", %{})
+
+      assert has_element?(view, "[data-bell-preview-verb]", "gefällt")
+      assert has_element?(view, "[data-bell-preview-verb]", "teilt")
+      refute html =~ "in einem anderen Netzwerk"
+      # The server is set apart from the name; the globe says "elsewhere".
+      assert has_element?(view, "[data-bell-preview-server]", "@moppels.bar")
+      assert has_element?(view, "[data-bell-preview-remote]")
+      # Still said in words for a screen reader.
+      assert html =~ "Reaktion aus einem anderen Netzwerk"
+    end
+
+    test "the quote gets two lines and the time is short", %{conn: conn} do
+      user = insert(:user, locale: "de")
+      post = insert(:post, user: user, body: "Zwei Zeilen")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, view, _html} = shell(conn, user)
+      render_hook(view, "bell:preview", %{})
+
+      assert has_element?(view, "[data-bell-preview-teaser].line-clamp-2")
+      assert has_element?(view, "[data-bell-preview-time]", "gerade eben")
+    end
+  end
+
   test "opening one row takes that event off the badge and leaves the rest", %{conn: conn} do
     # Clicking a row takes the member off this page, so the close event the
     # pointer would have sent never arrives — the row has to say for itself

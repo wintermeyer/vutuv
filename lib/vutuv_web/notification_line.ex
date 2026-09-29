@@ -312,7 +312,9 @@ defmodule VutuvWeb.NotificationLine do
 
   def kind_glyph("follower"), do: "+"
   def kind_glyph("endorsement"), do: "★"
-  def kind_glyph("reply"), do: "↩"
+  # With the text-presentation selector: bare U+21A9 is drawn as a blue emoji
+  # tile on Apple systems, the one badge on the list that is not a plain glyph.
+  def kind_glyph("reply"), do: "↩\uFE0E"
   # A reply elsewhere in a thread the recipient writes in.
   def kind_glyph("thread"), do: "⤷"
   # Being named by @handle. Shares the glyph with the (rare, "More"-chip)
@@ -391,6 +393,54 @@ defmodule VutuvWeb.NotificationLine do
       _actorless -> {text, nil}
     end
   end
+
+  @doc """
+  The verb alone, for a row that quotes the post right under the actor's name
+  (the bell's preview), or `nil` for a kind that has to keep its whole phrase.
+
+  Under a quote, "liked your post on another network." says three things the
+  row already shows: whose post it is, which post, and — through the globe on
+  the badge — where the like came from. So only the kinds that quote a post
+  get a short form, and the caller falls back to `notification_text/1` when
+  there is nothing to quote. Own msgids in their own context: "liked" alone
+  must not borrow the German of some other "liked".
+  """
+  def short_text(%{milestone: _}), do: nil
+  def short_text(%{kind: "like"}), do: pgettext("bell preview", "liked")
+
+  def short_text(%{kind: "fediverse_reaction", reaction_kind: "like"}),
+    do: pgettext("bell preview", "liked")
+
+  def short_text(%{kind: "fediverse_reaction", reaction_kind: "announce"}),
+    do: pgettext("bell preview", "shared")
+
+  def short_text(%{kind: "fediverse_reaction"}), do: pgettext("bell preview", "reacted")
+
+  def short_text(%{kind: kind}) when kind in ~w(reply fediverse_reply),
+    do: pgettext("bell preview", "replied")
+
+  def short_text(%{kind: "thread"}), do: pgettext("bell preview", "replied in a thread")
+  def short_text(%{kind: "mention"}), do: pgettext("bell preview", "mentioned you")
+  def short_text(_n), do: nil
+
+  @doc """
+  The kind whose badge a row draws once "from another network" moves to a
+  corner of it (`remote?/1`): a like from out there is a heart like any other,
+  a re-share the arrows, a remote reply the reply arrow.
+  """
+  # Anything that is not a re-share counts as a like, as the notifications
+  # page's reaction row counts it (`NotificationLive.Timeline`).
+  def badge_kind(%{kind: "fediverse_reaction", reaction_kind: "announce"}), do: "share"
+  def badge_kind(%{kind: "fediverse_reaction"}), do: "like"
+  def badge_kind(%{kind: "fediverse_reply"}), do: "reply"
+  def badge_kind(%{kind: kind}), do: kind
+
+  @doc """
+  Whether the actor wrote from another network: only a remote actor carries
+  the account URL `Vutuv.Activity` stamps on it, so a new remote kind is
+  covered without being listed here.
+  """
+  def remote?(notification), do: is_binary(notification[:actor_url])
 
   @doc """
   What a notification quotes: `{:post, id}`, `{:note, text}` or `nil`.
