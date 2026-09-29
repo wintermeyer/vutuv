@@ -348,9 +348,16 @@ export function revealPreviewClamp(el) {
   // description hits this every time it is open, since the clamped copy is
   // `group-open:hidden` while the full one shows. Put back what we found and
   // leave the answer to the pass that sees it painted.
+  //
+  // Nothing guarantees that pass comes, so the body is watched until it has a
+  // size. The feed draws an arriving post into the timeline `hidden` and the
+  // "new posts" press only removes the attribute; no sweep, hook or toggle
+  // fires then, and the post sat height-cut through a line with neither fade
+  // nor "Read more".
   if (body.clientHeight === 0) {
     el.classList.toggle("is-uncut", wasUncut)
     el.classList.toggle("is-clamped", wasClamped)
+    measureOncePainted(el, body)
     return
   }
 
@@ -371,6 +378,28 @@ export function revealPreviewClamp(el) {
   // unannounced: the box would otherwise keep swallowing those last lines with
   // no control left to reveal them (the `.is-uncut` rules in components.css).
   el.classList.toggle("is-uncut", clipped && !worth)
+}
+
+// One observer for every unpainted body on the page. A ResizeObserver reports
+// the step from no box to a box however it happens (a removed `hidden`, a lid
+// opening, a class change), and a body that is gone from the document by then
+// is just dropped.
+let unpaintedBodies
+const unpaintedOwners = new WeakMap()
+
+function measureOncePainted(el, body) {
+  if (unpaintedOwners.has(body)) return
+  unpaintedBodies ||= new ResizeObserver((entries) => {
+    for (const { target, contentRect } of entries) {
+      if (target.isConnected && contentRect.height === 0) continue
+      unpaintedBodies.unobserve(target)
+      const owner = unpaintedOwners.get(target)
+      unpaintedOwners.delete(target)
+      if (target.isConnected) revealPreviewClamp(owner)
+    }
+  })
+  unpaintedOwners.set(body, el)
+  unpaintedBodies.observe(body)
 }
 
 // What the reader would click to undo a cut, in both spellings the two clamps
