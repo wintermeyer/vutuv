@@ -14,8 +14,14 @@ defmodule VutuvWeb.OrganizationManageGateTest do
   The sibling of `embedded_subject_gate_test.exs`: that one asks whether the
   **subject** may be shown, this one whether the **actor** may still act. A new
   page under `OrganizationController.manage/4` belongs in `@managed`.
+
+  `async: false` because the setup flips the global
+  `:verify_organization_domains` flag and deletes the
+  `:organizations_dns_resolver` stub on exit, which every sync organization
+  test reads (deleting the stub mid-run dropped a page's inbox Follow in
+  `organization_fediverse_inbox_test.exs`).
   """
-  use VutuvWeb.ConnCase, async: true
+  use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
   import Vutuv.OrganizationsHelpers
