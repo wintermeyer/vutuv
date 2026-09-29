@@ -134,13 +134,13 @@ defmodule Vutuv.ActivityTest do
     test "derives a connection event for both sides of a mutual follow" do
       me = insert(:user)
       other = insert(:user, first_name: "Wojtek", last_name: "Mach")
-      # A mutual follow makes them vernetzt; each side's feed carries both the
-      # follower event (the other's follow) and the derived connection event.
+      # I follow first, the other follows back: that follow-back is one piece
+      # of news on my side, "vernetzt", never "follows you" beside it. The
+      # other side keeps my earlier follow as its own event.
       connect!(me, other)
 
-      kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
-      assert "follower" in kinds
-      assert "connection" in kinds
+      assert me.id |> recent_notifications() |> Enum.map(& &1.kind) == ["connection"]
+      assert Activity.unread_notification_count(me.id) == 1
 
       other_kinds = other.id |> recent_notifications() |> Enum.map(& &1.kind)
       assert "follower" in other_kinds
@@ -845,9 +845,8 @@ defmodule Vutuv.ActivityTest do
     test "equals the sum of the feed sources for a mixed constellation" do
       me = insert(:user)
 
-      # One mutual follow (a follower event + a derived connection event) plus
-      # one more plain incoming follower, one endorsement and one like.
-      # Sources: 2 followers + 1 connection + 1 endorsement + 1 like.
+      # One follow-back (a connection event only) plus one more plain
+      # incoming follower, one endorsement and one like.
       mutual = insert(:user)
       connect!(me, mutual)
       insert(:follow, follower: insert(:user), followee: me)
@@ -862,14 +861,14 @@ defmodule Vutuv.ActivityTest do
         me.id |> recent_notifications() |> Enum.frequencies_by(& &1.kind)
 
       assert sources == %{
-               "follower" => 2,
+               "follower" => 1,
                "connection" => 1,
                "endorsement" => 1,
                "like" => 1
              }
 
-      # The collapsed single-query count must still equal that source total (5).
-      assert Activity.unread_notification_count(me.id) == 5
+      # The collapsed single-query count must still equal that source total (4).
+      assert Activity.unread_notification_count(me.id) == 4
     end
 
     test "folds the marker read and the source counts into two queries" do
@@ -935,9 +934,11 @@ defmodule Vutuv.ActivityTest do
       follow!(other, me)
       follow!(me, other)
 
-      # Same pair, other seat: `me` closed the circle, so `other` learns both
-      # that they were followed and that the two are now vernetzt.
-      assert Activity.unread_notification_count(other.id) == 2
+      # Same pair, other seat: `me` closed the circle, so for `other` my
+      # follow-back is one piece of news, the connection, never "follows you"
+      # beside it as well.
+      assert Activity.unread_notification_count(other.id) == 1
+      assert other.id |> recent_notifications() |> Enum.map(& &1.kind) == ["connection"]
     end
 
     test "counts the connection when the other side closes the circle" do
@@ -947,8 +948,8 @@ defmodule Vutuv.ActivityTest do
       follow!(me, other)
       follow!(other, me)
 
-      # I followed first and was followed back — nothing here is my own doing.
-      assert Activity.unread_notification_count(me.id) == 2
+      # I followed first and was followed back: one entry, one badge count.
+      assert Activity.unread_notification_count(me.id) == 1
     end
 
     test "the list, the pager and the 30-day summary keep counting it" do

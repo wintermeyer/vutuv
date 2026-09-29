@@ -1077,7 +1077,8 @@ defmodule VutuvWeb.NotificationLive.Index do
       <.link
         :if={@post}
         href={Posts.path(@post)}
-        class="block truncate text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300 dark:hover:text-brand-300"
+        data-post-teaser
+        class="line-clamp-2 text-sm leading-snug text-slate-700 hover:text-brand-700 dark:text-slate-300 dark:hover:text-brand-300"
       >
         „{PostTeaser.plain_line(@post, length: 200)}“
       </.link>
@@ -1241,7 +1242,7 @@ defmodule VutuvWeb.NotificationLive.Index do
           href={Posts.path(post)}
           class="block text-sm text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
         >
-          <span class="line-clamp-1">{PostTeaser.plain_line(post, length: 120)}</span>
+          <span class="line-clamp-2 leading-snug">{PostTeaser.plain_line(post, length: 200)}</span>
         </.link>
         <p :if={change_posts_more(@n) > 0} class="mb-0 text-xs text-slate-600 dark:text-slate-400">
           {gettext("and %{count} more", count: compact_count(change_posts_more(@n)))}
