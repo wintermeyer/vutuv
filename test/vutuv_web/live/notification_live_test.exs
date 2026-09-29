@@ -341,6 +341,10 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, ~s([data-row="reactions"] [data-reactor]), "Anna A")
       assert has_element?(live, ~s([data-row="reactions"] [data-reactor]), "Ben B")
       assert length(Regex.scan(~r/data-row="reactions"/, render(live))) == 1
+
+      # The post they liked gets two lines, as in the bell's preview, not a
+      # single truncated one that a phone cuts after a few words.
+      assert has_element?(live, ~s([data-row="reactions"] [data-post-teaser].line-clamp-2))
     end
 
     test "a re-share from another network shows the arrows, not a heart", %{conn: conn} do
