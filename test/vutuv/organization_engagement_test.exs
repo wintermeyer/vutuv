@@ -88,6 +88,7 @@ defmodule Vutuv.OrganizationEngagementTest do
     # The self-vote rule is about the AUTHOR, and for an organization post the
     # author is the page.
     assert {:error, :self} = Posts.like_post(page, owner, post)
+    assert {:error, :self} = Posts.repost_post(page, owner, post)
 
     # Its publishers are **not** refused, and this reverses what this test
     # asserted until v7.273.1. The old reading leaned on `author?/2` treating
@@ -183,6 +184,22 @@ defmodule Vutuv.OrganizationEngagementTest do
     # The page is the actor a reader sees; the publisher who pressed it is not
     # named in the notification at all.
     assert entry.actor_name == page.name
+  end
+
+  # A page's like and repost carry no member id, and the block filter asks
+  # `user_id NOT IN (...)`, which is never true for NULL: without its own arm a
+  # single block of anybody made every page reaction vanish from the bell.
+  test "a page's like and repost stay in the bell once the author blocks somebody" do
+    {page, owner} = page_with_publisher()
+    {post, author} = a_post()
+    {:ok, _} = Vutuv.Social.block_user(author, insert(:activated_user))
+
+    assert :ok = Posts.like_post(page, owner, post)
+    assert :ok = Posts.repost_post(page, owner, post)
+
+    kinds = Vutuv.Activity.notifications_page(author.id).entries |> Enum.map(& &1.kind)
+    assert Enum.sort(kinds) == ["like", "repost"]
+    assert Vutuv.Activity.unread_notification_count(author.id) == 2
   end
 
   describe "a page's repost in the feed" do

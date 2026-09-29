@@ -169,6 +169,46 @@ defmodule Vutuv.ActivityTest do
                author.id |> recent_notifications() |> Enum.filter(&(&1.kind == "like"))
     end
 
+    # A repost from another network was news, one from a member here was not:
+    # the author never learned that their post had been passed on.
+    test "derives repost events for the post's author, counted in the bell" do
+      author = insert(:user)
+      fan = insert(:user, first_name: "Rita", last_name: "Repost")
+      post = insert(:post, user: author)
+      Activity.subscribe(author.id)
+
+      :ok = Vutuv.Posts.repost_post(fan, post)
+
+      assert_receive {:new_notification, %{kind: "repost"}}
+
+      assert [%{kind: "repost", actor_name: "Rita Repost", post_id: post_id}] =
+               author.id |> recent_notifications() |> Enum.filter(&(&1.kind == "repost"))
+
+      assert post_id == post.id
+      assert Activity.unread_notification_count(author.id) == 1
+    end
+
+    # A block ends the conversation; what the blocked member did before it must
+    # not keep sitting in the bell, the same as for mentions and thread replies.
+    test "a block hides the other side's earlier likes, reposts and replies" do
+      author = insert(:user)
+      other = insert(:user)
+      post = insert(:post, user: author)
+
+      :ok = Vutuv.Posts.like_post(other, post)
+      :ok = Vutuv.Posts.repost_post(other, post)
+      reply = insert(:post, user: other)
+      insert(:post_reply, post: reply, parent_post: post, parent_author: author)
+
+      kinds = fn -> author.id |> recent_notifications() |> Enum.map(& &1.kind) end
+      assert Enum.sort(kinds.()) == ["like", "reply", "repost"]
+
+      {:ok, _} = Vutuv.Social.block_user(author, other)
+
+      assert kinds.() == []
+      assert Activity.unread_notification_count(author.id) == 0
+    end
+
     test "a one-way follow produces no connection event" do
       me = insert(:user)
       insert(:follow, follower: insert(:user), followee: me)

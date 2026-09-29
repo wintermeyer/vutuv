@@ -142,6 +142,19 @@ defmodule VutuvWeb.DevDocControllerTest do
     end
   end
 
+  # The docs are public, so their readers are mostly logged out. Links to the
+  # login-only pages go through /login?return_to=…, because those pages answer
+  # a logged-out visitor with a 404 on purpose.
+  test "no docs link dead-ends in a 404 for a logged-out reader" do
+    for page <- dev_doc_pages(),
+        {path, _fragment} <- internal_links(dev_doc_markdown(page)) do
+      status = get(build_conn(), path).status
+
+      assert status in [200, 302],
+             "#{path} in #{page}.md returned #{status} to a logged-out reader"
+    end
+  end
+
   test "every docs page links every other docs page in the nav", %{conn: conn} do
     response = conn |> get(~p"/developers") |> html_response(200)
 

@@ -14,6 +14,8 @@ defmodule VutuvWeb.SessionController do
   # The login page is logged-out-only, like registration. An already-logged-in
   # visitor is redirected to their home (the feed or, with no follows yet, their
   # profile). :delete (logout) stays unguarded.
+  # `follow_return_to` runs first so that redirect cannot swallow it.
+  plug(:follow_return_to when action == :new)
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create, :resend, :cancel])
 
   def new(conn, _) do
@@ -449,6 +451,24 @@ defmodule VutuvWeb.SessionController do
     |> Accounts.delete_pin_cookie()
     |> put_flash(:error, gettext("Too many incorrect attempts."))
     |> redirect(to: ~p"/login")
+  end
+
+  # The `return_to` query of `GET /login` (the developer docs' links to
+  # login-only pages): remembered for after the PIN, or followed at once by a
+  # visitor already signed in. Checked like the session value below; a foreign
+  # or malformed one is dropped, never an error.
+  defp follow_return_to(conn, _opts) do
+    case ControllerHelpers.safe_return_to(conn.params["return_to"]) do
+      nil ->
+        conn
+
+      path ->
+        if conn.assigns[:current_user] do
+          conn |> redirect(to: path) |> halt()
+        else
+          put_session(conn, :login_return_to, path)
+        end
+    end
   end
 
   # Only local paths ("/...", but not protocol-relative "//...") are ever

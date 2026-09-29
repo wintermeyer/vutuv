@@ -52,6 +52,9 @@ defmodule VutuvWeb.NotificationDigestText do
   def line(%{kind: "like"} = item),
     do: gettext("%{who} liked your post.", who: handle(item))
 
+  def line(%{kind: "repost"} = item),
+    do: gettext("%{who} reposted your post.", who: handle(item))
+
   def line(%{kind: "fediverse_reply"} = item),
     do: gettext("%{who} replied to your post from another network.", who: handle(item))
 
