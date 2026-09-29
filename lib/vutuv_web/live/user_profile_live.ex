@@ -1526,13 +1526,14 @@ defmodule VutuvWeb.UserProfileLive do
       # is the one entry here that fills several profile sections in a single
       # go, so it belongs where the eye already is. Done once the profile
       # carries a career entry (typed by hand counts too, so nobody without a
-      # LinkedIn account is stuck on it) or once any import ran, since an
-      # archive may hold nothing but skills.
+      # LinkedIn account is stuck on it) or once an archive was uploaded at
+      # all: whoever tried has done the step, even if it brought nothing. An
+      # apply logged before uploads were logged has only `import_applied`.
       %{
         label: gettext("Import from LinkedIn"),
         done:
           totals.jobs > 0 or totals.educations > 0 or
-            AccountEvents.recorded?(user, "import_applied"),
+            AccountEvents.recorded?(user, ~w(import_uploaded import_applied)),
         href: ~p"/settings/import/linkedin"
       }
       # There is deliberately NO "write your first post" step. It asked the one
