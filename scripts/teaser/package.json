@@ -4,6 +4,6 @@
   "type": "module",
   "description": "Records the vutuv teaser video from a local dev server. See README.md.",
   "dependencies": {
-    "playwright": "1.55.0"
+    "playwright": "1.55.1"
   }
 }
