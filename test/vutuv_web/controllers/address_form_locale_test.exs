@@ -37,6 +37,12 @@ defmodule VutuvWeb.AddressFormLocaleTest do
         |> html_response(200)
 
       assert html =~ "form", "the #{locale} address form did not render"
+
+      # Each variant once carried a hidden country field beside the select:
+      # two inputs named address[country], both with the id address_country,
+      # which LiveView logs as a duplicate id on every visit.
+      assert length(Regex.scan(~r/id="address_country"/, html)) == 1,
+             "the #{locale} address form renders address_country twice"
     end
   end
 

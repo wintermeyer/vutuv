@@ -17,6 +17,13 @@ defmodule Vutuv.Accounts.EmailTest do
       end
     end
 
+    test "accepts a pasted address with a space around it, stored trimmed" do
+      changeset = Email.changeset(%Email{}, %{"value" => " Jane@Example.com "})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :value) == "jane@example.com"
+    end
+
     test "rejects an address longer than the varchar(255) column" do
       # Passes the format regex but would raise Postgres 22001 on insert.
       long = String.duplicate("a", 290) <> "@ex.co"

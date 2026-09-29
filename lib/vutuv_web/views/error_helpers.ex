@@ -211,7 +211,86 @@ defmodule VutuvWeb.ErrorHelpers do
       dgettext_noop("errors", "That instance did not answer. Please try again in a moment."),
       dgettext_noop("errors", "Too many checks for now. Please try again later."),
       # Vutuv.ScreenshotTrust.Host, the admin's trusted-sites form.
-      dgettext_noop("errors", "must be a site without a path, e.g. tagesschau.de")
+      dgettext_noop("errors", "must be a site without a path, e.g. tagesschau.de"),
+      # Ecto's `validate_number/3` interpolates %{number}, not %{count}, so the
+      # plural entries above never match it (feed page size, post lines).
+      dgettext_noop("errors", "must be less than %{number}"),
+      dgettext_noop("errors", "must be greater than %{number}"),
+      dgettext_noop("errors", "must be less than or equal to %{number}"),
+      dgettext_noop("errors", "must be greater than or equal to %{number}"),
+      dgettext_noop("errors", "must be equal to %{number}"),
+      # Vutuv.Accounts.Email / Vutuv.Accounts.User.
+      dgettext_noop("errors", "must be a valid email address"),
+      dgettext_noop("errors", "is not a known time zone"),
+      dgettext_noop("errors", "can't be in the future"),
+      dgettext_noop("errors", "is not a valid birthdate"),
+      # Vutuv.ChangesetHelpers / Vutuv.Profiles.Qualification, CV date ranges.
+      dgettext_noop("errors", "If month is present, year must be present."),
+      dgettext_noop("errors", "End date must be later than start date"),
+      dgettext_noop("errors", "Expiry must not precede the award date."),
+      # Vutuv.ContentFilters.ContentFilter and Vutuv.Mutes.AccountMute.
+      dgettext_noop("errors", "may use at most %{max} wildcards (*)."),
+      dgettext_noop("errors", "must contain something to match, not only wildcards"),
+      dgettext_noop("errors", "you already mute this"),
+      dgettext_noop("errors", "You cannot mute yourself."),
+      # Vutuv.Profiles.PhoneNumber / Messenger / Url.
+      dgettext_noop("errors", "Please enter a valid phone number"),
+      dgettext_noop("errors", "This field is required"),
+      dgettext_noop("errors", "You have already added this messenger"),
+      dgettext_noop("errors", "Enter a phone number or a username"),
+      dgettext_noop("errors", "is not a valid image"),
+      # Vutuv.References.JobReference.
+      dgettext_noop(
+        "errors",
+        "Please confirm that this reference is yours to upload. Somebody else's reference needs their explicit agreement first."
+      ),
+      dgettext_noop(
+        "errors",
+        "is missing. Upload the document, or paste the text of the reference."
+      ),
+      dgettext_noop(
+        "errors",
+        "Please confirm that this reference may be shown publicly. Without your consent it stays private."
+      ),
+      # Vutuv.Organizations and its domain and name schemas.
+      dgettext_noop("errors", "is not a valid country"),
+      dgettext_noop("errors", "must start with http:// or https://"),
+      dgettext_noop("errors", "is not a valid URL"),
+      dgettext_noop("errors", "is not an allowed address"),
+      dgettext_noop("errors", "is not a valid domain"),
+      dgettext_noop("errors", "is not an allowed domain"),
+      dgettext_noop("errors", "is required to verify the domain"),
+      dgettext_noop("errors", "is already listed for this organization"),
+      # Vutuv.Tags.Tag.
+      dgettext_noop("errors", "must be a single line"),
+      # Vutuv.ApiAuth.App / Token and Vutuv.Webhooks.Subscription, /settings/apps.
+      dgettext_noop("errors", "must each be at most 255 characters"),
+      dgettext_noop(
+        "errors",
+        "must be exact https:// URLs (http://localhost is allowed for development)"
+      ),
+      dgettext_noop("errors", "needs at least one redirect URL"),
+      dgettext_noop("errors", "select at least one permission"),
+      dgettext_noop(
+        "errors",
+        "must be an https:// URL (http://localhost is allowed for development)"
+      ),
+      dgettext_noop("errors", "must not point at a private, loopback or link-local address"),
+      dgettext_noop("errors", "select at least one event"),
+      # Ecto's own `unique_constraint/3` default, missing from the stock list.
+      dgettext_noop("errors", "has already been taken"),
+      # Vutuv.Social.Follow, Vutuv.Tags.TagFollow and TagFollowSource.
+      dgettext_noop("errors", "You're already following this person."),
+      dgettext_noop("errors", "You're already following this organization."),
+      dgettext_noop("errors", "Cannot follow yourself"),
+      dgettext_noop("errors", "You're already following this tag."),
+      dgettext_noop("errors", "This page already follows this tag."),
+      dgettext_noop("errors", "This follow already reads that source."),
+      dgettext_noop("errors", "is not an allowed server"),
+      # Vutuv.Ads, booking a day and redeeming a code.
+      dgettext_noop("errors", "is outside the booking window"),
+      dgettext_noop("errors", "has already been used"),
+      dgettext_noop("errors", "is already over")
     ]
   end
 end

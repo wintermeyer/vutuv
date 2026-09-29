@@ -693,21 +693,12 @@ defmodule Vutuv.Notifications.Emailer do
     |> to({to_name, to_email})
     |> newsletter_unsubscribe(unsubscribe_url)
     |> subject(subject_line)
-    |> html_body(
-      EmailComponents.render_to_string("newsletter_#{locale}.html", %{
-        preheader: subject_line,
-        locale: locale,
-        content_html: content_html,
-        unsubscribe_url: unsubscribe_url
-      })
-    )
-    |> text_body(
-      EmailText.render("newsletter_#{locale}.text", %{
-        locale: locale,
-        content_text: content_text,
-        unsubscribe_url: unsubscribe_url
-      })
-    )
+    |> render_bodies("newsletter", locale, %{
+      preheader: subject_line,
+      content_html: content_html,
+      content_text: content_text,
+      unsubscribe_url: unsubscribe_url
+    })
   end
 
   defp newsletter_unsubscribe(email, nil), do: email
@@ -1657,9 +1648,13 @@ defmodule Vutuv.Notifications.Emailer do
   defp render_bodies(email, template_base, locale, assigns) do
     assigns = Map.put(assigns, :locale, locale)
 
-    email
-    |> text_body(EmailText.render("#{template_base}_#{locale}.text", assigns))
-    |> html_body(EmailComponents.render_to_string("#{template_base}_#{locale}.html", assigns))
+    # In the recipient's locale, like the subject: the shared footer is one
+    # template for every language and translates its sentence through gettext.
+    in_locale(locale, fn ->
+      email
+      |> text_body(EmailText.render("#{template_base}_#{locale}.text", assigns))
+      |> html_body(EmailComponents.render_to_string("#{template_base}_#{locale}.html", assigns))
+    end)
   end
 
   # The configured canonical host (with a trailing slash), e.g.

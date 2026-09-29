@@ -10,6 +10,20 @@ defmodule Vutuv.Profiles.WorkExperienceTest do
     WorkExperience.changeset(%WorkExperience{}, Map.merge(base, params))
   end
 
+  # Title and organization each fit their column, but the slug built from both
+  # did not fit its own; the error sat on the hidden slug, so the form said
+  # "check the fields marked red" and marked none.
+  test "a long title and a long organization still make a valid entry" do
+    cs =
+      changeset(%{
+        "title" => String.duplicate("Entwicklerin ", 15),
+        "organization" => String.duplicate("Beispiel GmbH ", 15)
+      })
+
+    assert cs.valid?
+    assert String.length(Ecto.Changeset.get_change(cs, :slug)) <= 255
+  end
+
   describe "month" do
     test "accepts a month in 1..12" do
       assert changeset(%{"start_year" => 2000, "start_month" => 12}).valid?

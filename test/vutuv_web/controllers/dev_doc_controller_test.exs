@@ -42,7 +42,7 @@ defmodule VutuvWeb.DevDocControllerTest do
 
     # The recipes the docs must answer concretely: posting and direct
     # messages ($API is the base-URL shorthand the page defines up top).
-    assert response =~ "https://vutuv.de/api/2.0"
+    assert response =~ "http://localhost:4000/api/2.0"
     assert response =~ "$API/posts"
     assert response =~ "/messages"
     assert response =~ "$API/conversations"
@@ -97,11 +97,24 @@ defmodule VutuvWeb.DevDocControllerTest do
     assert response =~ "profile:read"
   end
 
+  # vutuv is installable elsewhere: the docs are written against vutuv.de and
+  # must name the installation that serves them, in HTML and in the raw .md.
+  test "the docs name this installation, not vutuv.de", %{conn: conn} do
+    html = conn |> get(~p"/developers/authentication") |> html_response(200)
+    md = build_conn() |> get("/developers/authentication.md") |> response(200)
+
+    for body <- [html, md] do
+      refute body =~ "https://vutuv.de"
+      refute body =~ ~r/(?<![\w@.-])vutuv\.de\//
+      assert body =~ "http://localhost:4000/api/2.0/me"
+    end
+  end
+
   test "the overview gives a no-token, no-signup example to play with", %{conn: conn} do
     response = conn |> get(~p"/developers") |> html_response(200)
     # The example sits in a ```bash fence, so `curl` is wrapped in a highlight
     # span (VutuvWeb.CodeHighlight) — match the URL, which stays contiguous.
-    assert response =~ "https://vutuv.de/wintermeyer.json"
+    assert response =~ "http://localhost:4000/wintermeyer.json"
   end
 
   test "every internal link in the developer docs resolves (page and anchor)", %{conn: conn} do

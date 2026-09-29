@@ -191,7 +191,11 @@ defmodule VutuvWeb.SettingsAutoPostDeletionTest do
           "user" => rule(%{"auto_post_deletion_after_days" => ""})
         })
 
-      assert html_response(conn, 422) =~ "auto-post-deletion-form"
+      html = html_response(conn, 422)
+      assert html =~ "auto-post-deletion-form"
+      # The reason has to reach the page: a changeset without an action keeps
+      # its errors to itself, and the member saw the form come back unchanged.
+      assert html =~ "be blank"
       refute Repo.reload!(user).auto_post_deletion?
     end
 

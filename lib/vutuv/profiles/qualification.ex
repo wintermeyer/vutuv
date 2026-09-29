@@ -12,7 +12,7 @@ defmodule Vutuv.Profiles.Qualification do
 
   use VutuvWeb, :model
   import Ecto.Query
-  import Vutuv.ChangesetHelpers, only: [validate_url: 2]
+  import Vutuv.ChangesetHelpers, only: [trim_fields: 2, validate_url: 2]
 
   alias Vutuv.BerlinTime
   alias Vutuv.Moderation.ImageScans
@@ -77,6 +77,7 @@ defmodule Vutuv.Profiles.Qualification do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @cast_fields)
+    |> trim_fields([:name, :issuer, :credential_id, :url])
     |> CvSection.cast_announcement(params)
     |> validate_required([:name, :kind])
     |> validate_inclusion(:kind, @kinds)

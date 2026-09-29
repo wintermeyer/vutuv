@@ -391,3 +391,258 @@ msgstr "Saisissez votre identifiant Friendica complet, p. ex. @nom@friendica.exa
 #, elixir-autogen, elixir-format
 msgid "Enter your full Pixelfed handle, e.g. @user@pixelfed.social"
 msgstr "Saisissez votre identifiant Pixelfed complet, p. ex. @nom@pixelfed.social"
+
+#: lib/vutuv_web/views/error_helpers.ex:285
+#, elixir-autogen, elixir-format
+msgid "Cannot follow yourself"
+msgstr "Vous ne pouvez pas vous suivre vous-même."
+
+#: lib/vutuv_web/views/error_helpers.ex:229
+#, elixir-autogen, elixir-format
+msgid "End date must be later than start date"
+msgstr "La date de fin doit être postérieure à la date de début."
+
+#: lib/vutuv_web/views/error_helpers.ex:240
+#, elixir-autogen, elixir-format
+msgid "Enter a phone number or a username"
+msgstr "Saisissez un numéro de téléphone ou un nom d'utilisateur."
+
+#: lib/vutuv_web/views/error_helpers.ex:230
+#, elixir-autogen, elixir-format
+msgid "Expiry must not precede the award date."
+msgstr "La date d'expiration ne peut pas précéder la date d'obtention."
+
+#: lib/vutuv_web/views/error_helpers.ex:228
+#, elixir-autogen, elixir-format
+msgid "If month is present, year must be present."
+msgstr "Si le mois est indiqué, l'année doit l'être aussi."
+
+#: lib/vutuv_web/views/error_helpers.ex:243
+#, elixir-autogen, elixir-format
+msgid "Please confirm that this reference is yours to upload. Somebody else's reference needs their explicit agreement first."
+msgstr "Veuillez confirmer que vous avez le droit de téléverser cette référence. La référence d'une autre personne nécessite d'abord son accord explicite."
+
+#: lib/vutuv_web/views/error_helpers.ex:251
+#, elixir-autogen, elixir-format
+msgid "Please confirm that this reference may be shown publicly. Without your consent it stays private."
+msgstr "Veuillez confirmer que cette référence peut être affichée publiquement. Sans votre accord, elle reste privée."
+
+#: lib/vutuv_web/views/error_helpers.ex:237
+#, elixir-autogen, elixir-format
+msgid "Please enter a valid phone number"
+msgstr "Veuillez saisir un numéro de téléphone valide."
+
+#: lib/vutuv_web/views/error_helpers.ex:238
+#, elixir-autogen, elixir-format
+msgid "This field is required"
+msgstr "Ce champ est obligatoire."
+
+#: lib/vutuv_web/views/error_helpers.ex:288
+#, elixir-autogen, elixir-format
+msgid "This follow already reads that source."
+msgstr "Ce suivi lit déjà cette source."
+
+#: lib/vutuv_web/views/error_helpers.ex:287
+#, elixir-autogen, elixir-format
+msgid "This page already follows this tag."
+msgstr "Cette page suit déjà ce tag."
+
+#: lib/vutuv_web/views/error_helpers.ex:235
+#, elixir-autogen, elixir-format
+msgid "You cannot mute yourself."
+msgstr "Vous ne pouvez pas vous masquer vous-même."
+
+#: lib/vutuv_web/views/error_helpers.ex:239
+#, elixir-autogen, elixir-format
+msgid "You have already added this messenger"
+msgstr "Vous avez déjà ajouté cette messagerie."
+
+#: lib/vutuv_web/views/error_helpers.ex:284
+#, elixir-autogen, elixir-format
+msgid "You're already following this organization."
+msgstr "Vous suivez déjà cette organisation."
+
+#: lib/vutuv_web/views/error_helpers.ex:283
+#, elixir-autogen, elixir-format
+msgid "You're already following this person."
+msgstr "Vous suivez déjà cette personne."
+
+#: lib/vutuv_web/views/error_helpers.ex:286
+#, elixir-autogen, elixir-format
+msgid "You're already following this tag."
+msgstr "Vous suivez déjà ce tag."
+
+#: lib/vutuv_web/views/error_helpers.ex:225
+#, elixir-autogen, elixir-format
+msgid "can't be in the future"
+msgstr "ne peut pas être dans le futur"
+
+#: lib/vutuv_web/views/error_helpers.ex:281
+#, elixir-autogen, elixir-format
+msgid "has already been taken"
+msgstr "est déjà utilisé"
+
+#: lib/vutuv_web/views/error_helpers.ex:292
+#, elixir-autogen, elixir-format
+msgid "has already been used"
+msgstr "a déjà été utilisé"
+
+#: lib/vutuv_web/views/error_helpers.ex:263
+#, elixir-autogen, elixir-format
+msgid "is already listed for this organization"
+msgstr "est déjà indiqué pour cette organisation"
+
+#: lib/vutuv_web/views/error_helpers.ex:293
+#, elixir-autogen, elixir-format
+msgid "is already over"
+msgstr "est déjà terminé"
+
+#: lib/vutuv_web/views/error_helpers.ex:247
+#, elixir-autogen, elixir-format
+msgid "is missing. Upload the document, or paste the text of the reference."
+msgstr "est manquant. Téléversez le document ou collez le texte de la référence."
+
+#: lib/vutuv_web/views/error_helpers.ex:224
+#, elixir-autogen, elixir-format
+msgid "is not a known time zone"
+msgstr "n'est pas un fuseau horaire connu"
+
+#: lib/vutuv_web/views/error_helpers.ex:258
+#, elixir-autogen, elixir-format
+msgid "is not a valid URL"
+msgstr "n'est pas une URL valide"
+
+#: lib/vutuv_web/views/error_helpers.ex:226
+#, elixir-autogen, elixir-format
+msgid "is not a valid birthdate"
+msgstr "n'est pas une date de naissance valide"
+
+#: lib/vutuv_web/views/error_helpers.ex:256
+#, elixir-autogen, elixir-format
+msgid "is not a valid country"
+msgstr "n'est pas un pays valide"
+
+#: lib/vutuv_web/views/error_helpers.ex:260
+#, elixir-autogen, elixir-format
+msgid "is not a valid domain"
+msgstr "n'est pas un domaine valide"
+
+#: lib/vutuv_web/views/error_helpers.ex:241
+#, elixir-autogen, elixir-format
+msgid "is not a valid image"
+msgstr "n'est pas une image valide"
+
+#: lib/vutuv_web/views/error_helpers.ex:259
+#, elixir-autogen, elixir-format
+msgid "is not an allowed address"
+msgstr "n'est pas une adresse autorisée"
+
+#: lib/vutuv_web/views/error_helpers.ex:261
+#, elixir-autogen, elixir-format
+msgid "is not an allowed domain"
+msgstr "n'est pas un domaine autorisé"
+
+#: lib/vutuv_web/views/error_helpers.ex:289
+#, elixir-autogen, elixir-format
+msgid "is not an allowed server"
+msgstr "n'est pas un serveur autorisé"
+
+#: lib/vutuv_web/views/error_helpers.ex:291
+#, elixir-autogen, elixir-format
+msgid "is outside the booking window"
+msgstr "est en dehors de la période de réservation"
+
+#: lib/vutuv_web/views/error_helpers.ex:262
+#, elixir-autogen, elixir-format
+msgid "is required to verify the domain"
+msgstr "est nécessaire pour vérifier le domaine"
+
+#: lib/vutuv_web/views/error_helpers.ex:232
+#, elixir-autogen, elixir-format
+msgid "may use at most %{max} wildcards (*)."
+msgstr "peut contenir au plus %{max} jokers (*)."
+
+#: lib/vutuv_web/views/error_helpers.ex:265
+#, elixir-autogen, elixir-format
+msgid "must be a single line"
+msgstr "doit tenir sur une seule ligne"
+
+#: lib/vutuv_web/views/error_helpers.ex:223
+#, elixir-autogen, elixir-format
+msgid "must be a valid email address"
+msgstr "doit être une adresse e-mail valide"
+
+#: lib/vutuv_web/views/error_helpers.ex:274
+#, elixir-autogen, elixir-format
+msgid "must be an https:// URL (http://localhost is allowed for development)"
+msgstr "doit être une URL https:// (http://localhost est autorisé pour le développement)"
+
+#: lib/vutuv_web/views/error_helpers.ex:221
+#, elixir-autogen, elixir-format
+msgid "must be equal to %{number}"
+msgstr "doit être égal à %{number}"
+
+#: lib/vutuv_web/views/error_helpers.ex:268
+#, elixir-autogen, elixir-format
+msgid "must be exact https:// URLs (http://localhost is allowed for development)"
+msgstr "doivent être des URL https:// exactes (http://localhost est autorisé pour le développement)"
+
+#: lib/vutuv_web/views/error_helpers.ex:218
+#, elixir-autogen, elixir-format
+msgid "must be greater than %{number}"
+msgstr "doit être supérieur à %{number}"
+
+#: lib/vutuv_web/views/error_helpers.ex:220
+#, elixir-autogen, elixir-format
+msgid "must be greater than or equal to %{number}"
+msgstr "doit être supérieur ou égal à %{number}"
+
+#: lib/vutuv_web/views/error_helpers.ex:217
+#, elixir-autogen, elixir-format
+msgid "must be less than %{number}"
+msgstr "doit être inférieur à %{number}"
+
+#: lib/vutuv_web/views/error_helpers.ex:219
+#, elixir-autogen, elixir-format
+msgid "must be less than or equal to %{number}"
+msgstr "doit être inférieur ou égal à %{number}"
+
+#: lib/vutuv_web/views/error_helpers.ex:233
+#, elixir-autogen, elixir-format
+msgid "must contain something to match, not only wildcards"
+msgstr "doit contenir quelque chose à rechercher, pas seulement des jokers"
+
+#: lib/vutuv_web/views/error_helpers.ex:267
+#, elixir-autogen, elixir-format
+msgid "must each be at most 255 characters"
+msgstr "ne doivent pas dépasser 255 caractères chacune"
+
+#: lib/vutuv_web/views/error_helpers.ex:278
+#, elixir-autogen, elixir-format
+msgid "must not point at a private, loopback or link-local address"
+msgstr "ne doit pas pointer vers une adresse privée, de bouclage ou link-local"
+
+#: lib/vutuv_web/views/error_helpers.ex:257
+#, elixir-autogen, elixir-format
+msgid "must start with http:// or https://"
+msgstr "doit commencer par http:// ou https://"
+
+#: lib/vutuv_web/views/error_helpers.ex:272
+#, elixir-autogen, elixir-format
+msgid "needs at least one redirect URL"
+msgstr "nécessite au moins une URL de redirection"
+
+#: lib/vutuv_web/views/error_helpers.ex:279
+#, elixir-autogen, elixir-format
+msgid "select at least one event"
+msgstr "sélectionnez au moins un événement"
+
+#: lib/vutuv_web/views/error_helpers.ex:273
+#, elixir-autogen, elixir-format
+msgid "select at least one permission"
+msgstr "sélectionnez au moins une autorisation"
+
+#: lib/vutuv_web/views/error_helpers.ex:234
+#, elixir-autogen, elixir-format
+msgid "you already mute this"
+msgstr "est déjà masqué"

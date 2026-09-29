@@ -13,6 +13,14 @@ defmodule Vutuv.Profiles.UrlTest do
     Url.changeset(%Url{}, %{"value" => value, "description" => "x"}).valid?
   end
 
+  test "a pasted link with spaces around it is accepted and stored trimmed" do
+    changeset =
+      Url.changeset(%Url{}, %{"value" => " https://example.org/b ", "description" => "x"})
+
+    assert changeset.valid?
+    assert Ecto.Changeset.get_change(changeset, :value) == "https://example.org/b"
+  end
+
   # The capture is what the profile presents as an automatic picture *of the
   # linked page*, and it is taken server-side for exactly that reason. The
   # changeset leaves `:screenshot` out of `cast/3` and then read it back out of

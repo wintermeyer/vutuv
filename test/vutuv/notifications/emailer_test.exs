@@ -692,6 +692,20 @@ defmodule Vutuv.Notifications.EmailerTest do
       refute html =~ "The vutuv team"
     end
 
+    # The operator line under every mail was English whatever the recipient's
+    # language, so a German PIN mail ended in "vutuv is a service provided by".
+    # The process locale is deliberately English here: the recipient's decides.
+    test "the footer follows the recipient's locale in both bodies" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      user = insert(:user, email_confirmed?: true, locale: "de")
+      email = Emailer.login_email(@pin, "login@example.com", user)
+
+      for body <- [email.text_body, email.html_body] do
+        assert body =~ "vutuv ist ein Dienst von Wintermeyer Consulting."
+        refute body =~ "is a service provided by"
+      end
+    end
+
     test "the unread-message HTML names the sender by @handle, never the clear name" do
       user = insert(:activated_user, locale: "en")
       other = insert(:user, username: "the-sender")

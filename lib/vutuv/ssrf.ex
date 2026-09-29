@@ -123,8 +123,26 @@ defmodule Vutuv.Ssrf do
   defp literal_ip?(bare), do: match?({:ok, _}, :inet.parse_address(to_charlist(bare)))
 
   defp resolved_addresses(bare) do
-    charlist = to_charlist(bare)
+    charlist = ascii_host(bare)
     getaddrs(charlist, :inet) ++ getaddrs(charlist, :inet6)
+  end
+
+  # The resolver only takes ASCII names: an umlaut domain has to be asked for
+  # by its punycode form ("bücher.de" is "xn--bcher-kva.de"), or it answers
+  # einval and the host reads as unresolvable. A name IDNA refuses is left as
+  # typed, which the resolver then refuses the same way it always did.
+  defp ascii_host(bare) do
+    charlist = to_charlist(bare)
+
+    if Enum.all?(charlist, &(&1 < 128)) do
+      charlist
+    else
+      try do
+        bare |> String.downcase() |> to_charlist() |> :idna.encode(uts46: true)
+      catch
+        _, _ -> charlist
+      end
+    end
   end
 
   defp getaddrs(charlist, family) do

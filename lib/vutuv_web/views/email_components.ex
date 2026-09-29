@@ -133,7 +133,7 @@ defmodule VutuvWeb.EmailComponents do
                 </tr>
                 <tr>
                   <td class="email-footer" style={footer_style()}>
-                    <p style="margin:0 0 2px;">vutuv is a service provided by {operator_name()}.
+                    <p style="margin:0 0 2px;">{operator_line()}
                       <a href={operator_url()} style="color:#475569;">{operator_url_label()}</a>
                     </p>
                     <p style="margin:0 0 2px;">{operator_address()}</p>
@@ -515,6 +515,14 @@ defmodule VutuvWeb.EmailComponents do
     </.email_muted>
     """
   end
+
+  @doc """
+  The footer's "who runs this" sentence, shared with `_footer.text.eex`. It is
+  translated in the process locale, which the emailer sets to the recipient's
+  while it renders both bodies.
+  """
+  def operator_line,
+    do: gettext("vutuv is a service provided by %{operator}.", operator: operator_name())
 
   # The operator credit in the footer follows the per-installation config
   # (see the "Operator identity" block in config/config.exs).

@@ -58,6 +58,7 @@ defmodule Vutuv.Profiles.Education do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @cast_fields)
+    |> ChangesetHelpers.trim_fields([:school, :degree, :field_of_study])
     |> CvSection.cast_announcement(params)
     |> validate_required([:school, :kind])
     |> validate_inclusion(:kind, @kinds)

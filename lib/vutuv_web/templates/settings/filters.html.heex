@@ -41,10 +41,10 @@
           aria-invalid={@form[:pattern].errors != [] && "true"}
         />
         <p
-          :for={{msg, _} <- @form[:pattern].errors}
+          :for={error <- @form[:pattern].errors}
           class="mt-1 text-sm font-medium text-red-600 dark:text-red-400"
         >
-          {msg}
+          {translate_error(error)}
         </p>
         <p :if={@form[:pattern].errors == []} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {gettext("Use * as a wildcard (crypto* → cryptobro). Whole-word by default.")}
@@ -60,10 +60,10 @@
           aria-invalid={@form[:account].errors != [] && "true"}
         />
         <p
-          :for={{msg, _} <- @form[:account].errors}
+          :for={error <- @form[:account].errors}
           class="mt-1 text-sm font-medium text-red-600 dark:text-red-400"
         >
-          {msg}
+          {translate_error(error)}
         </p>
         <label class="mt-2 inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
           <input type="hidden" name={@form[:whole_word].name} value="false" />
