@@ -73,6 +73,7 @@ defmodule VutuvWeb.RegistrationLive do
      |> assign(:csrf_token, session["csrf_token"])
      |> assign(:step, 1)
      |> assign(:tags, [])
+     |> assign(:submitted_tags, [])
      |> assign(:tag_counts, %{})
      |> assign(:tag_errors, tag_errors([]))
      |> assign(:suggestions, [])
@@ -183,7 +184,11 @@ defmodule VutuvWeb.RegistrationLive do
 
   @impl true
   def handle_event("validate", params, socket) do
-    {:noreply, socket |> merge_fields(params) |> absorb_finished_tags() |> assign(:errors, [])}
+    {:noreply,
+     socket
+     |> merge_fields(params)
+     |> absorb_finished_tags()
+     |> assign(:errors, [])}
   end
 
   @impl true
@@ -213,14 +218,15 @@ defmodule VutuvWeb.RegistrationLive do
   # save splits it, so "Elixir, Kochen" adds two topics rather than one topic
   # called "Elixir, Kochen".
   #
-  # Only the `TagComma` hook sends it, for a comma or for Enter, always with
-  # the field's own `value`, so it never waits on the debounced change event.
-  # The field map is the fallback for a push without one.
+  # Everything that finishes a tag in the `TagComma` hook lands here with the
+  # value it finished: a comma, Enter, Tab or a pick from the suggestion list,
+  # so it never waits on the debounced change event. Without a `value` the
+  # field map answers, so an event that carries none still takes what was typed.
   @impl true
   def handle_event("add_typed", params, socket) do
     typed = params["value"] || socket.assigns.fields["typed"] || ""
-    # What the hook left standing in the field, or nothing when Enter or the
-    # button got here (both finish the whole field).
+    # What the hook left standing in the field after a comma; nothing when
+    # anything else finished the whole field.
     rest = params["rest"] || ""
 
     {:noreply, socket |> absorb(typed, rest) |> assign(:errors, [])}
@@ -238,8 +244,9 @@ defmodule VutuvWeb.RegistrationLive do
   # is broken.
   defp absorb_finished_tags(socket) do
     case String.split(socket.assigns.fields["typed"] || "", ",") do
+      # Nothing finished, but what is typed changed, and it counts.
       [_nothing_finished] ->
-        socket
+        refresh_submitted_tags(socket)
 
       parts ->
         {finished, [rest]} = Enum.split(parts, -1)
@@ -252,8 +259,8 @@ defmodule VutuvWeb.RegistrationLive do
   # left over stays in the field.
   defp absorb(socket, finished, rest) do
     socket
-    |> put_tags(socket.assigns.tags ++ Tags.parse_tag_names(finished))
     |> assign(:fields, Map.put(socket.assigns.fields, "typed", rest))
+    |> put_tags(socket.assigns.tags ++ Tags.parse_tag_names(finished))
   end
 
   defp merge_fields(socket, %{"step" => params}) when is_map(params) do
@@ -309,7 +316,23 @@ defmodule VutuvWeb.RegistrationLive do
     socket
     |> assign(:tags, tags)
     |> assign(:tag_counts, Map.new(Tags.member_counts_by_name(tags)))
-    |> assign(:tag_errors, tag_errors(tags))
+    |> refresh_submitted_tags()
+  end
+
+  # What the submit sends: the chips plus whatever is still in the field.
+  # Nobody types a comma after the last topic, so that word is a topic like the
+  # others — it counts toward the minimum and it is saved — rather than a grey
+  # button over a tag the member can see.
+  defp refresh_submitted_tags(socket) do
+    submitted =
+      case Tags.parse_tag_names(socket.assigns.fields["typed"] || "") do
+        [] -> socket.assigns.tags
+        typed -> Tags.canonical_tag_names(socket.assigns.tags ++ typed)
+      end
+
+    socket
+    |> assign(:submitted_tags, submitted)
+    |> assign(:tag_errors, tag_errors(submitted))
   end
 
   defp advance(socket) do
@@ -458,7 +481,7 @@ defmodule VutuvWeb.RegistrationLive do
           name="user[low_bandwidth?]"
           value={to_string(@fields["low_bandwidth"])}
         />
-        <input type="hidden" name="user[tag_list]" value={Enum.join(@tags, ", ")} />
+        <input type="hidden" name="user[tag_list]" value={Enum.join(@submitted_tags, ", ")} />
 
         <.error_list errors={@errors} />
 
@@ -787,12 +810,12 @@ defmodule VutuvWeb.RegistrationLive do
               twice on a screen whose heading already asks the question, so the
               label stays for a screen reader only — a placeholder is not one. --%>
         <label for="signup-topic" class="sr-only">{gettext("Your tags")}</label>
-        <%!-- No button beside it: the comma in the placeholder and the line
-              below name the way in, and the shared pill box has none anywhere
-              else on the site either. --%>
+        <%!-- No button beside it: Enter, Tab, a comma or a pick from the list
+              finishes a tag, the line below says so, and the shared pill box
+              has no button anywhere else on the site either. --%>
         <div class={@tag_errors != [] && "tag-input--error"}>
           <div class="tag-input__box">
-            <span :for={name <- @tags} class="tag-input__pill">
+            <span :for={name <- @tags} class="tag-input__pill" data-tag-pill={name}>
               <span class="tag-input__name">{name}</span>
               <span
                 :if={count_of(@tag_counts, name) > 0}
@@ -821,8 +844,13 @@ defmodule VutuvWeb.RegistrationLive do
               phx-debounce="300"
               aria-invalid={@tag_errors != [] && "true"}
               placeholder={tag_placeholder(@tags)}
+              {tag_suggest_attrs()}
             />
           </div>
+          <%!-- The suggestion list the hook hangs under the box
+                (`assets/js/tag_suggest.js`). Ignored, because it is the
+                browser's: a patch of the box around it would sweep it away. --%>
+          <div id="signup-topic-suggest" class="tag-suggest-holder" phx-update="ignore"></div>
         </div>
         <p :if={@tag_errors != []} class="mt-1 text-sm text-rose-700 dark:text-rose-300">
           {Enum.join(messages(@tag_errors), " ")}
@@ -832,7 +860,7 @@ defmodule VutuvWeb.RegistrationLive do
               two are different questions. --%>
         <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {gettext(
-            "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
+            "Press Enter after each tag. A tag may be several words long, like Ruby on Rails."
           )}
         </p>
       </div>

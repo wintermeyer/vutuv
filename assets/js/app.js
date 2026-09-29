@@ -49,7 +49,7 @@ import {
 // The tag pill box shared by every field that takes a batch of tags
 // (VutuvWeb.UI.tag_input/1); registered as the TagInput hook below and swept
 // over classic pages further down. See tag_input.js.
-import { TagInput, enhanceTagInput } from "./tag_input"
+import { TagComma, TagInput, enhanceTagInput } from "./tag_input"
 // The photo lightbox on the post permalink (self-contained page-level
 // enhancement, deliberately outside every LiveView root; see lightbox.js).
 import "./lightbox"
@@ -1266,46 +1266,6 @@ document.addEventListener(
   },
   true,
 )
-
-// The sign-up form's tag field: a comma finishes a tag, and the browser has to
-// be the one that shortens the field. LiveView deliberately never overwrites
-// the value of a FOCUSED input — it would throw away what somebody is in the
-// middle of typing — so a server that clears the field has no effect at all
-// while the cursor is still in it, and "Hund," stays on screen beside the badge
-// it just became. So the hook cuts the finished part out of the DOM value and
-// tells the server both halves in one event: what was finished, and what it
-// left standing. The two then agree, and the next patch has nothing to correct.
-//
-// It reads only its own input, never the server's echo, so the late-echo trap
-// the composer's editor documents cannot form here.
-const TagComma = {
-  mounted() {
-    this.el.addEventListener("input", () => {
-      if (!this.el.value.includes(",")) return
-
-      const parts = this.el.value.split(",")
-      const rest = parts.pop().replace(/^\s+/, "")
-
-      this.el.value = rest
-      this.pushEvent("add_typed", { value: parts.join(","), rest })
-    })
-
-    // Enter finishes the whole field, and needs the same care: the server's
-    // cleared value never reaches a focused input, so "Wandern" stayed on
-    // screen beside its new badge. Enter in a form field also submits the form
-    // once the button is enabled (three tags in), which would create the
-    // account and drop the tag being typed. An empty field keeps Enter's
-    // ordinary meaning.
-    this.el.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" || this.el.value.trim() === "") return
-
-      event.preventDefault()
-      const value = this.el.value
-      this.el.value = ""
-      this.pushEvent("add_typed", { value, rest: "" })
-    })
-  },
-}
 
 const Hooks = {
   ComposerFiles,

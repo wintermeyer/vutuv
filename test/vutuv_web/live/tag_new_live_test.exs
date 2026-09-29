@@ -47,11 +47,11 @@ defmodule VutuvWeb.TagNewLiveTest do
       {:ok, live: live, html: html, user: user}
     end
 
-    test "explains the separator rule as a tip above the input", %{html: html} do
-      assert html =~ "Separate tags with a comma."
+    test "explains how to finish a tag as a tip above the input", %{html: html} do
+      assert html =~ "Press Enter after each tag."
       # The tip moved above the input (issue #848, variant one): the hint
       # paragraph must come before the <input> in source order.
-      {tip_at, _} = :binary.match(html, "Separate tags with a comma.")
+      {tip_at, _} = :binary.match(html, "Press Enter after each tag.")
       {input_at, _} = :binary.match(html, ~s(id="tag_param_value"))
       assert tip_at < input_at
     end

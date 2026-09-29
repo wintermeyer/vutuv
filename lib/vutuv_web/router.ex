@@ -754,6 +754,11 @@ defmodule VutuvWeb.Router do
     get("/system/members", DirectoryController, :index)
     get("/system/members/:letter", DirectoryController, :show)
 
+    # The suggestion list under every tag field (`assets/js/tag_suggest.js`).
+    # Public: the first tag field anybody meets is the sign-up form's, and it
+    # says nothing a tag page does not (topic names and member counts).
+    get("/system/tags/suggest", TagSuggestController, :index)
+
     # The public post calendar: the same idea applied to the posts. Nothing on
     # this site links to the post of somebody a visitor does not already follow
     # — the feed is login-only and the landing page shows screenshots — so a

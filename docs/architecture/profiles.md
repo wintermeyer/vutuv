@@ -854,6 +854,22 @@ mirrors the assign, and the hook re-seeds from it while ignoring the echo of
 what it sent itself. `test/vutuv_web/tag_input_test.exs` fails the build if a
 surface drifts back to a bare text input.
 
+The comma is still nothing a member has to know. Enter and Tab finish a tag as
+well, and a list under the field (`assets/js/tag_suggest.js`) offers the topics
+that already exist, each with how many listed members carry it. Its first row is
+always what was typed, resolved to the topic it would be saved as ("js" reads
+javascript), so Enter never takes something else; the rows below come from
+`Vutuv.Tags.suggest/2`, which matches on the folded `MatchKey` and prefers a
+whole-name match to a later word, then the bigger topic. The JSON is
+`GET /system/tags/suggest` (`TagSuggestController`), public because sign-up is
+the first tag field anybody meets; with `names=` it also tells a box which topic
+and count each of its pills stands for. Sign-up keeps its pills on the server,
+so it uses the same list through the `TagComma` hook, and it counts and submits
+whatever is still in the field: nobody types a comma after the last topic. The
+list floats over the form rather than pushing it down, because it closes on
+blur, and a list in the flow collapsed under the pointer and swallowed the first
+click on the button below it.
+
 ## A tag has to name something
 
 Two shapes of tag name are refused, both by `Vutuv.Tags.Tag`: a **web address**

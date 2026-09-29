@@ -277,6 +277,7 @@ defmodule VutuvWeb.UI do
       data-remove-label={remove_tag_label()}
       data-max={@max}
       data-limit-message={@max && tag_limit_message(@max)}
+      {tag_suggest_attrs()}
     >
       <input
         type="text"
@@ -291,6 +292,30 @@ defmodule VutuvWeb.UI do
       />
     </div>
     """
+  end
+
+  @doc """
+  What the suggestion list under a tag field (`assets/js/tag_suggest.js`)
+  needs from the server: the address it asks and its sentences, translated.
+
+  One definition for both places that type tags — `tag_input/1` and the
+  sign-up form's own field — so the two lists can only ever say the same
+  thing. The `%{…}` placeholders survive translation on purpose: the JS fills
+  in the name and the count, the count already formatted for the page's
+  language, which is also why the plural forms travel as two strings (a
+  `count:` binding would be swallowed by `ngettext`).
+  """
+  def tag_suggest_attrs do
+    %{
+      "data-tag-suggest-url" => ~p"/system/tags/suggest",
+      "data-tag-suggest-new" => gettext("Add “%{name}” as a new tag", name: "%{name}"),
+      "data-tag-suggest-taken" => gettext("Already added"),
+      "data-tag-suggest-alias" => gettext("also “%{name}”", name: "%{name}"),
+      "data-tag-suggest-members-one" =>
+        ngettext("%{formatted} member", "%{formatted} members", 1, formatted: "%{formatted}"),
+      "data-tag-suggest-members-other" =>
+        ngettext("%{formatted} member", "%{formatted} members", 2, formatted: "%{formatted}")
+    }
   end
 
   # The ✕ button's accessible name. The `%{name}` deliberately survives

@@ -68,6 +68,29 @@ defmodule VutuvWeb.TagInputTest do
     assert render(live) =~ "At most #{Posts.max_tags_per_post()} tags"
   end
 
+  # The suggestion list (`assets/js/tag_suggest.js`) reads its address and its
+  # translated sentences off the widget root; a box without them simply offers
+  # nothing, which no test of the pills would notice.
+  test "every box carries what its suggestion list needs, translated", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    user |> Ecto.Changeset.change(%{locale: nil}) |> Vutuv.Repo.update!()
+
+    {:ok, live, _html} =
+      conn
+      |> recycle()
+      |> put_req_header("accept-language", "de-DE,de;q=0.9")
+      |> live(~p"/jobs/new")
+
+    assert has_element?(live, ~s([data-tag-input][data-tag-suggest-url="/system/tags/suggest"]))
+
+    html = render(live)
+    assert html =~ ~s(data-tag-suggest-new="„%{name}“ als neues Tag")
+    assert html =~ ~s(data-tag-suggest-taken="Schon hinzugefügt")
+    assert html =~ ~s(data-tag-suggest-alias="auch „%{name}“")
+    assert html =~ ~s(data-tag-suggest-members-one="%{formatted} Mitglied")
+    assert html =~ ~s(data-tag-suggest-members-other="%{formatted} Mitglieder")
+  end
+
   test "the pill cap explains itself in German", %{conn: conn} do
     # The member has no locale of their own, so the browser's Accept-Language
     # decides — the way a real German visitor arrives.

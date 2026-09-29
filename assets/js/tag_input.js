@@ -9,6 +9,10 @@
 // the moment its comma is typed, and each pill has its own ✕ — so the rule is
 // visible in the box instead of explained in a hint nobody reads.
 //
+// The comma is still nothing a member has to know: Enter and Tab finish a tag
+// too, and the list under the box (tag_suggest.js) offers
+// the topics that already exist, with how many members carry them.
+//
 // This is progressive enhancement, not a widget: the server renders one
 // ordinary `<input type="text">` holding the comma-joined value, and with JS
 // off that input IS the feature. The enhancement switches it to `hidden`
@@ -26,6 +30,8 @@
 // we did not send ourselves (a restored draft, the composer clearing after a
 // post). Values we did send come back to us on every keystroke, so they are
 // remembered and ignored — re-seeding on one would yank half-typed text away.
+
+import { attachTagSuggest, foldTagName, formatCount } from "./tag_suggest"
 
 // Straight, curly, German and guillemet quotes. Quoting used to be how a
 // multi-word tag was grouped; multi-word is the default now, so a quote carries
@@ -62,6 +68,10 @@ export function splitTags(text) {
     .filter(Boolean)
 }
 
+// The keys that finish the tag being typed, in both tag fields: Enter and Tab,
+// so nobody has to know about the comma. Shift+Tab keeps walking back.
+const finishesTag = (e) => e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)
+
 // Enhance one `[data-tag-input]` root. Idempotent: the API is parked on the
 // element, so the app.js sweep and the LiveView hook can both ask for it.
 export function enhanceTagInput(root) {
@@ -85,6 +95,10 @@ function build(root, field) {
   const limitMessage = root.dataset.limitMessage || ""
   const sent = []
   let tags = []
+  // What each pill's name resolves to: `{name, count}` by folded name, filled
+  // from the suggestion answers and, for a pill that came some other way, by
+  // asking (`resolvePills`).
+  const known = new Map()
 
   const box = document.createElement("div")
   box.className = "tag-input__box"
@@ -121,6 +135,26 @@ function build(root, field) {
   box.insertAdjacentElement("afterend", notice)
   root.classList.add("tag-input--enhanced")
 
+  // The list of existing topics under the box (tag_suggest.js); null where the
+  // page carries no suggestion address, and the box then works as it always did.
+  const suggest = attachTagSuggest(entry, {
+    // Inside the box, which positions it (components.css); the root is
+    // `phx-update="ignore"`, so nothing patches it away.
+    place: (list) => box.appendChild(list),
+    source: root,
+    // Only the tag still being typed, and nothing once the box is full: a list
+    // of topics the box would refuse is an offer it cannot keep.
+    query: () => (isFull() ? "" : entry.value.split(SEPARATOR).pop()),
+    taken: () => tags,
+    onPick: (name, row) => {
+      known.set(foldTagName(name), { name, count: row.count })
+      const parts = entry.value.split(SEPARATOR)
+      parts.pop()
+      entry.value = parts.concat([name]).join(",")
+      commitPending()
+    },
+  })
+
   function renderPills() {
     box.querySelectorAll("[data-tag-pill]").forEach((pill) => pill.remove())
 
@@ -132,6 +166,14 @@ function build(root, field) {
       const label = document.createElement("span")
       label.className = "tag-input__name"
       label.textContent = tag
+
+      // How many members carry it, once that is known: the reason to pick an
+      // existing topic over a new spelling is visible on the pill itself.
+      const count = document.createElement("span")
+      count.className = "tag-input__count"
+      const info = known.get(foldTagName(tag))
+      if (info && info.count > 0) count.textContent = formatCount(info.count)
+      else count.hidden = true
 
       const remove = document.createElement("button")
       remove.type = "button"
@@ -150,11 +192,45 @@ function build(root, field) {
         entry.focus()
       })
 
-      pill.append(label, remove)
+      pill.append(label, count, remove)
       box.insertBefore(pill, entry)
     })
 
     entry.placeholder = tags.length ? morePlaceholder : placeholder
+    resolvePills()
+  }
+
+  // A pill that arrived without the list (a comma, a paste, a restored draft)
+  // is asked about once: it takes the name of the topic it will be saved as
+  // ("js" turns into javascript, as the save would do anyway) and its count.
+  function resolvePills() {
+    if (!suggest) return
+    const unknown = tags.filter((tag) => !known.has(foldTagName(tag)))
+    if (unknown.length === 0) return
+    // Asked once, answered or not: a name the answer leaves out must not send
+    // the next render asking again, and again.
+    unknown.forEach((tag) => known.set(foldTagName(tag), null))
+
+    suggest
+      .counts(unknown)
+      .then((answers) => {
+        let changed = false
+        answers.forEach((answer, key) => {
+          known.set(key, answer)
+          known.set(foldTagName(answer.name), answer)
+        })
+        tags = tags.reduce((out, tag) => {
+          const answer = answers.get(foldTagName(tag))
+          const name = answer ? answer.name : tag
+          if (name !== tag) changed = true
+          if (!out.some((t) => foldTagName(t) === foldTagName(name))) out.push(name)
+          else changed = true
+          return out
+        }, [])
+        renderPills()
+        if (changed) sync()
+      })
+      .catch(() => {})
   }
 
   // Mirror the box into the real form field: the committed pills plus whatever
@@ -173,8 +249,12 @@ function build(root, field) {
   // Say why nothing more goes in, for as long as that is true. Shown the moment
   // the box fills rather than only on the refusal, so the limit is visible
   // before it bites — and cleared by taking a pill back out.
+  function isFull() {
+    return limit !== null && tags.length >= limit
+  }
+
   function updateNotice() {
-    const full = limit !== null && tags.length >= limit
+    const full = isFull()
     notice.textContent = full ? limitMessage : ""
     notice.hidden = !full || limitMessage === ""
   }
@@ -187,8 +267,8 @@ function build(root, field) {
     if (!name) return "skipped"
     // Case-insensitive, like the server's dedupe — two pills reading the same
     // thing would promise a tag the save then collapses.
-    if (tags.some((tag) => tag.toLowerCase() === name.toLowerCase())) return "skipped"
-    if (limit !== null && tags.length >= limit) return "full"
+    if (tags.some((tag) => foldTagName(tag) === foldTagName(name))) return "skipped"
+    if (isFull()) return "full"
     tags.push(name)
     return "added"
   }
@@ -243,12 +323,18 @@ function build(root, field) {
 
     updateNotice()
     sync()
+    suggest?.refresh()
   })
 
   entry.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      // Enter finishes the tag being typed; on an empty box it belongs to the
-      // form, so a member can still submit from here.
+    // An open list takes its keys first (arrows, Enter and Tab pick, Escape
+    // closes); what it leaves alone falls through to the box.
+    if (suggest?.keydown(e)) return
+
+    if (finishesTag(e)) {
+      // Enter and Tab finish the tag being typed, so nobody has to know about
+      // the comma. On an empty box both keep their ordinary meaning: Enter
+      // submits the form, Tab moves on to the next field.
       if (entry.value.trim()) {
         e.preventDefault()
         commitPending()
@@ -264,7 +350,12 @@ function build(root, field) {
     }
   })
 
-  entry.addEventListener("blur", commitPending)
+  // Leaving the box only closes the list. `sync()` already carries the word
+  // still being typed into the form field, so a submit keeps it; turning it
+  // into a pill on blur could wrap the box onto a new row between the mousedown
+  // and the mouseup of a click on the button below, and that click then landed
+  // on nothing (found on the sign-up form, which shares this rule).
+  entry.addEventListener("blur", () => suggest?.close())
 
   // The box looks like one input, so a click anywhere in it lands in the entry.
   box.addEventListener("click", (e) => {
@@ -321,5 +412,66 @@ export const TagInput = {
   },
   updated() {
     this.el.tagInput?.maybeReseed(this.el.dataset.value || "")
+  },
+}
+
+// The sign-up form's tag field. Its pills are the server's (they carry member
+// counts and feed the three-tag rule), so this hook only finishes tags and
+// tells `VutuvWeb.RegistrationLive` about them: a comma, Enter, Tab or a pick
+// from the suggestion list, the same ways the shared box above finishes one.
+//
+// The browser has to be the one that shortens the field. LiveView deliberately
+// never overwrites the value of a FOCUSED input (it would throw away what
+// somebody is in the middle of typing), so a server that clears the field has
+// no effect while the cursor is still in it, and "Hund," stays on screen beside
+// the badge it just became. So the hook cuts the finished part out of the DOM
+// value and tells the server both halves in one event: what was finished, and
+// what it left standing. It reads only its own input, never the server's echo,
+// so the late-echo trap the composer's editor documents cannot form here.
+export const TagComma = {
+  mounted() {
+    const el = this.el
+    const finish = (value, rest = "") => {
+      el.value = rest
+      this.pushEvent("add_typed", { value, rest })
+    }
+
+    const suggest = attachTagSuggest(el, {
+      place: (list) => document.getElementById(`${el.id}-suggest`)?.append(list),
+      source: el,
+      query: () => el.value,
+      taken: () =>
+        [...(el.closest(".tag-input__box")?.querySelectorAll("[data-tag-pill]") || [])].map(
+          (pill) => pill.dataset.tagPill,
+        ),
+      onPick: (name) => finish(name),
+    })
+
+    el.addEventListener("input", () => {
+      if (el.value.includes(",")) {
+        const parts = el.value.split(",")
+        const rest = parts.pop().replace(/^\s+/, "")
+        finish(parts.join(","), rest)
+      }
+      suggest?.refresh()
+    })
+
+    el.addEventListener("keydown", (e) => {
+      if (suggest?.keydown(e)) return
+      // Enter or Tab with a tag in the field finishes that tag and does nothing
+      // else: the whole wizard is one form, and an Enter meant for a tag must
+      // not submit it. On an empty field both keep their ordinary meaning.
+      if (finishesTag(e) && el.value.trim()) {
+        e.preventDefault()
+        finish(el.value)
+      }
+    })
+
+    // Leaving the field only closes the list. The server already counts and
+    // submits what is still typed (`RegistrationLive.refresh_submitted_tags/1`);
+    // turning it into a pill here as well grew the box by a row between the
+    // mousedown and the mouseup of a click on the submit button below, and
+    // that click landed on nothing.
+    el.addEventListener("blur", () => suggest?.close())
   },
 }

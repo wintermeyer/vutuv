@@ -826,6 +826,71 @@ body.stretch main {
 .tag-input__entry:focus {
   outline: none;
 }
+/* How many members carry the pill's topic (assets/js/tag_input.js). */
+.tag-input__count {
+  margin-left: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+.tag-input__count[hidden] { display: none; }
+/* The suggestion list under a tag field (assets/js/tag_suggest.js). It floats
+   over what follows instead of pushing it down, because it closes on blur: a
+   list in the flow collapsed under the pointer between mousedown and mouseup,
+   so the first click on the button below it (sign-up's submit, found in a
+   browser) landed on nothing. Its container is positioned: the pill box
+   itself, or the empty holder the sign-up form renders under its box.
+   `.is-active` is the one "highlighted row" name every suggestion list shares
+   (assets/js/suggest_list.js). */
+.tag-input__box,
+.tag-suggest-holder {
+  position: relative;
+}
+.tag-suggest {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 8px 20px -6px rgb(15 23 42 / 0.15);
+}
+.tag-suggest[hidden] { display: none; }
+.tag-suggest__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.tag-suggest__row.is-active { background: #dbeafe; }
+.tag-suggest__text { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.tag-suggest__name {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-suggest__name mark { background: transparent; color: var(--color-brand-600); font-weight: 700; }
+.tag-suggest__name--new { color: var(--color-brand-600); font-weight: 600; }
+.tag-suggest__note { color: #64748b; font-size: 0.75rem; }
+.tag-suggest__count {
+  flex: none;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 /* The classic `.editform input` recipe above would put a border and a white
    slab back on the entry; it is inside the box, so it must stay bare. */
 .editform .tag-input__entry[type="text"] {
@@ -3652,6 +3717,11 @@ html[data-no-pull-refresh] body {
   }
   .tag-input__remove:hover { background: rgb(30 58 138 / 0.7); }
   .editform .tag-input__entry[type="text"] { background: transparent; }
+  .tag-suggest { background: #0f172a; border-color: #334155; }
+  .tag-suggest__row.is-active { background: #1e293b; }
+  .tag-suggest__name { color: #f1f5f9; }
+  .tag-suggest__name mark, .tag-suggest__name--new { color: var(--color-brand-400); }
+  .tag-suggest__note, .tag-suggest__count { color: #94a3b8; }
   hr { background: #1e293b; }
   /* Element defaults ported from legacy (light values above). */
   label { color: #cbd5e1; }
