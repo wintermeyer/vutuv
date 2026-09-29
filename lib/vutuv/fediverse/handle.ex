@@ -141,9 +141,11 @@ defmodule Vutuv.Fediverse.Handle do
   def host(_uri), do: nil
 
   @doc """
-  Where a `@user@host` address reads on the web: `https://host/@user`, the
-  Mastodon-web convention that geno.social and the vast majority of servers
-  follow.
+  The **guess** at where a `@user@host` address reads on the web:
+  `https://host/@user`, the Mastodon-web convention. Only for an account this
+  installation holds no row for; one it holds names its real page
+  (`RemoteAccount.web_url/1`), because Friendica (`/profile/user`), PeerTube,
+  Lemmy and vutuv itself all answer this spelling with a 404.
 
   A pure string mapping, no WebFinger — so it costs nothing, works on an
   air-gapped installation, and leaks no reader's request to the remote host.

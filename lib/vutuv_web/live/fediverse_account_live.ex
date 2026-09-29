@@ -327,7 +327,7 @@ defmodule VutuvWeb.FediverseAccountLive do
               one is where they actually live, and the reader must always be one
               click from the real thing. --%>
               <a
-                href={@account.actor_uri}
+                href={RemoteAccount.web_url(@account)}
                 target="_blank"
                 rel="nofollow noopener noreferrer"
                 data-remote-origin
@@ -511,7 +511,7 @@ defmodule VutuvWeb.FediverseAccountLive do
         <%!-- In EVERY state, not only when the cap cut something: for an account
         nobody follows this card is otherwise a dead end, and this link is the
         page's own thesis — a preview here, the whole person over there. --%>
-        <.card_footer_link href={@account.actor_uri}>
+        <.card_footer_link href={RemoteAccount.web_url(@account)}>
           {gettext("View their full profile on %{host}", host: @account.host)}
         </.card_footer_link>
       </.card>

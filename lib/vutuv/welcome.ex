@@ -37,9 +37,6 @@ defmodule Vutuv.Welcome do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Identity
-  alias Vutuv.Repo
-
-  import Ecto.Query
 
   # One suggestion as the window shows it: what to call the account, the
   # address the checkbox posts back, and either a member struct (for the
@@ -237,7 +234,7 @@ defmodule Vutuv.Welcome do
           {:ok, {name, host}} <- [RemoteFollow.parse_address(handle)],
           do: {String.downcase(name), String.downcase(host)}
 
-    accounts = remote_accounts_by_pair(pairs)
+    accounts = Fediverse.remote_accounts_by_pairs(pairs)
 
     Enum.map(suggestions, fn
       %__MODULE__{user: nil, handle: handle} = suggestion ->
@@ -256,17 +253,5 @@ defmodule Vutuv.Welcome do
       suggestion ->
         suggestion
     end)
-  end
-
-  defp remote_accounts_by_pair([]), do: %{}
-
-  defp remote_accounts_by_pair(pairs) do
-    {handles, hosts} = Enum.unzip(pairs)
-
-    RemoteAccount
-    |> where([a], fragment("lower(?)", a.handle) in ^handles)
-    |> where([a], fragment("lower(?)", a.host) in ^hosts)
-    |> Repo.all()
-    |> Map.new(&{{String.downcase(&1.handle || ""), String.downcase(&1.host)}, &1})
   end
 end

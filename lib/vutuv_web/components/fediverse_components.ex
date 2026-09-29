@@ -402,8 +402,9 @@ defmodule VutuvWeb.FediverseComponents do
   The **one** remote handle that does not come through here is a `@user@host`
   written inside a body, which `VutuvWeb.Markdown` links at render time and
   which writes the same `data-remote-actor` hook by hand. That one always leads
-  out: it is a string mapping with no database lookup, so it works on an
-  air-gapped install and never tells us whether we hold the account.
+  out, to `RemoteAccount.web_url/1` for an account we hold and to the
+  `https://host/@user` guess otherwise, and it never asks the network, so it
+  works on an air-gapped install.
 
   Takes the handle rather than reading it off a record, because the callers hold
   eight different record shapes and only some of them have one.

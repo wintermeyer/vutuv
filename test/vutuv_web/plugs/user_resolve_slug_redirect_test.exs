@@ -52,4 +52,31 @@ defmodule VutuvWeb.Plug.UserResolveSlugRedirectTest do
     conn = get(conn, "/nope.nope")
     assert conn.status == 404
   end
+
+  # `https://host/@user` is how Mastodon spells a profile, and servers that
+  # cannot resolve a vutuv member properly guess it. Our page is `/user`.
+  describe "the Mastodon spelling /@handle" do
+    test "301s to the profile", %{conn: conn} do
+      conn = get(conn, "/@oliver_gassner")
+      assert redirected_to(conn, 301) == "/oliver_gassner"
+    end
+
+    test "301s a sub-page, the agent format and the query too", %{conn: conn} do
+      assert redirected_to(get(conn, "/@oliver_gassner/posts"), 301) == "/oliver_gassner/posts"
+      assert redirected_to(get(conn, "/@oliver_gassner.md"), 301) == "/oliver_gassner.md"
+
+      assert redirected_to(get(conn, "/@oliver_gassner?lang=de"), 301) ==
+               "/oliver_gassner?lang=de"
+    end
+
+    test "301s a page's handle", %{conn: conn} do
+      insert(:organization, username: "acmepage")
+
+      assert redirected_to(get(conn, "/@acmepage"), 301) == "/acmepage"
+    end
+
+    test "an unknown handle still 404s, never a redirect", %{conn: conn} do
+      assert get(conn, "/@nope_nope").status == 404
+    end
+  end
 end

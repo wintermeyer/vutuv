@@ -72,6 +72,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.PostLike
   alias Vutuv.Fediverse.PostLookup
+  alias Vutuv.Fediverse.PostRemoteMention
   alias Vutuv.Fediverse.PostRepost
   alias Vutuv.Fediverse.PrivateMessage
   alias Vutuv.Fediverse.Reaction
@@ -82,6 +83,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.FeedPage
   alias Vutuv.Handles
   alias Vutuv.Keyset
+  alias Vutuv.Mentions
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
@@ -1400,14 +1402,22 @@ defmodule Vutuv.Fediverse do
   Returns `{:ok, account}` or the same `{:error, reason}` vocabulary
   `follow_remote/2` speaks.
   """
-  def resolve_remote_account(follower, address) do
+  def resolve_remote_account(follower, address),
+    do: resolve_gated(address, follower, fn -> claim_remote_follow_budget(follower) end)
+
+  # The whole resolve behind every gate: the installation switch, the host
+  # gate on each hop (each can land somewhere other than the last), the
+  # caller's budget, then WebFinger, the actor document signed as
+  # `signer_subject`, and the stored row. One copy, because a follow and a
+  # mention in a post must refuse exactly the same hosts.
+  defp resolve_gated(address, signer_subject, claim_budget) do
     with :ok <- check_can_resolve(),
          {:ok, {_name, host}} <- RemoteFollow.parse_address(address),
          :ok <- check_follow_host(host),
-         :ok <- claim_remote_follow_budget(follower),
+         :ok <- claim_budget.(),
          {:ok, actor_uri} <- RemoteFollow.resolve_actor(address),
          :ok <- check_follow_host(actor_uri),
-         {:ok, remote} <- fetch_follow_target(actor_uri, follower),
+         {:ok, remote} <- fetch_follow_target(actor_uri, signer_subject),
          :ok <- check_follow_host(remote.id) do
       upsert_remote_account(remote)
     end
@@ -1480,6 +1490,331 @@ defmodule Vutuv.Fediverse do
       _invalid ->
         nil
     end
+  end
+
+  ## Accounts a post of ours names as `@user@host`
+
+  # How many accounts one post may name and have resolved. Each unknown one
+  # costs two requests to a server the author picked, so a post is not a way to
+  # make this installation knock on twenty doors.
+  @max_remote_mentions 5
+  # Tries per address before it is left as an unresolved guess for good.
+  @mention_attempts 3
+  # How long a claimed attempt is left alone before the sweeper takes it as
+  # dead (a deploy stopped the task). Far longer than two 8-second requests.
+  @mention_retry_seconds 600
+  # Resolves per author per hour, on top of the per-post cap
+  # (`FEDIVERSE_MENTION_RESOLVE_LIMIT`).
+  @mention_resolve_limit 30
+  # How long a post naming an unresolved account waits before it federates, so
+  # that the copy its followers get already carries the `Mention`. Released
+  # early the moment the resolve finishes.
+  @mention_hold_seconds 30
+
+  @doc """
+  Brings a post's `@user@host` rows in line with its body: an address the body
+  no longer names goes, a new one is added, resolved at once when this
+  installation already holds the account and left pending otherwise.
+
+  Only the first #{@max_remote_mentions} distinct addresses count. Pending rows
+  are resolved off the request path once the post has been handed to
+  federation (`resolve_remote_mentions_async/1`), because federation holds the
+  post's deliveries back for them.
+  """
+  def sync_remote_mentions(%Post{} = post) do
+    if enabled?() do
+      post.body
+      |> Mentions.remote_addresses()
+      |> Enum.filter(&(byte_size(&1) <= PostRemoteMention.max_address()))
+      |> Enum.take(@max_remote_mentions)
+      |> reconcile_remote_mentions(post.id)
+    end
+
+    :ok
+  end
+
+  # The common case, a body naming nobody elsewhere, is one statement.
+  defp reconcile_remote_mentions([], post_id),
+    do: Repo.delete_all(from(m in PostRemoteMention, where: m.post_id == ^post_id))
+
+  defp reconcile_remote_mentions(addresses, post_id) do
+    existing =
+      Repo.all(from(m in PostRemoteMention, where: m.post_id == ^post_id, select: m.address))
+
+    drop_remote_mentions(post_id, existing -- addresses)
+    insert_remote_mentions(post_id, addresses -- existing)
+  end
+
+  defp drop_remote_mentions(_post_id, []), do: :ok
+
+  defp drop_remote_mentions(post_id, addresses) do
+    Repo.delete_all(
+      from(m in PostRemoteMention, where: m.post_id == ^post_id and m.address in ^addresses)
+    )
+  end
+
+  defp insert_remote_mentions(_post_id, []), do: :ok
+
+  defp insert_remote_mentions(post_id, addresses) do
+    known = addresses |> Enum.map(&address_pair/1) |> remote_accounts_by_pairs()
+    stamp = NaiveDateTime.utc_now(:second)
+
+    rows =
+      for address <- addresses do
+        account = Map.get(known, address_pair(address))
+
+        %{
+          id: UUIDv7.generate(),
+          post_id: post_id,
+          remote_account_id: account && account.id,
+          address: address,
+          attempts: 0,
+          inserted_at: stamp,
+          updated_at: stamp
+        }
+      end
+
+    Repo.insert_all(PostRemoteMention, rows,
+      on_conflict: :nothing,
+      conflict_target: [:post_id, :address]
+    )
+  end
+
+  # Only ever handed an address `Mentions.remote_addresses/1` built, which
+  # always has its `@`.
+  defp address_pair(address) do
+    [user, host] = String.split(address, "@", parts: 2)
+    {user, host}
+  end
+
+  @doc """
+  Resolves a post's pending `@user@host` rows in a task, when there are any.
+  Off in the test env (`:fediverse_mention_resolve`), where tests call
+  `resolve_remote_mentions/1` themselves. A task a deploy kills loses nothing:
+  the rows stay pending and `resolve_stale_remote_mentions/0` finishes them.
+  """
+  def resolve_remote_mentions_async(%Post{id: post_id}) do
+    if Application.get_env(:vutuv, :fediverse_mention_resolve, true) and
+         Repo.exists?(pending_mentions(post_id)) do
+      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn -> resolve_remote_mentions(post_id) end)
+    end
+
+    :ok
+  end
+
+  @doc """
+  Resolves every pending `@user@host` row of one post, delivers the post to the
+  accounts that resolved, and lets the post's held deliveries go
+  (`release_held_deliveries/1`), which re-render with the `Mention` tags at
+  send time.
+  """
+  def resolve_remote_mentions(post_id) do
+    post_id |> pending_mentions() |> Repo.all() |> resolve_post_mentions(post_id)
+    :ok
+  end
+
+  @doc """
+  The sweeper's half (`Vutuv.Fediverse.NoteSweeper`): pending rows whose task
+  died, or whose last attempt failed long enough ago. Every try stamps the
+  row's clock whatever it answers, so an address that cannot be resolved moves
+  to the back and drops out after #{@mention_attempts} tries. Returns how many
+  were resolved.
+  """
+  def resolve_stale_remote_mentions(limit \\ 50) do
+    stale_before = DateTime.add(DateTime.utc_now(:second), -@mention_retry_seconds)
+    inserted_before = DateTime.to_naive(stale_before)
+
+    from(m in PostRemoteMention,
+      where: is_nil(m.remote_account_id) and m.attempts < @mention_attempts,
+      where:
+        m.attempted_at < ^stale_before or
+          (is_nil(m.attempted_at) and m.inserted_at < ^inserted_before),
+      order_by: [asc_nulls_first: m.attempted_at, asc: m.id],
+      limit: ^limit
+    )
+    |> Repo.all()
+    |> Enum.group_by(& &1.post_id)
+    |> Enum.map(fn {post_id, mentions} -> try_resolving_mentions(mentions, post_id) end)
+    |> Enum.sum()
+  end
+
+  defp pending_mentions(post_id) do
+    from(m in PostRemoteMention,
+      where: m.post_id == ^post_id,
+      where: is_nil(m.remote_account_id) and m.attempts < @mention_attempts,
+      order_by: [asc: m.id]
+    )
+  end
+
+  # One post raising (a hostile document, a bug) must not take the rest of the
+  # sweep, or the sweeper's later steps, with it. The claims already counted
+  # the attempts, so the rows cannot come back for ever either.
+  defp try_resolving_mentions(mentions, post_id) do
+    resolve_post_mentions(mentions, post_id)
+  rescue
+    error ->
+      Logger.warning("mention resolve for post #{post_id} raised: #{inspect(error)}")
+      0
+  end
+
+  # One post's rows, the post and its author loaded once. Returns how many
+  # resolved.
+  defp resolve_post_mentions(mentions, post_id) do
+    with [_ | _] = claimed <- Enum.filter(mentions, &claim_mention/1),
+         %Post{} = post <- Repo.get(Post, post_id),
+         author when not is_nil(author) <- Posts.author(post) do
+      accounts =
+        for mention <- claimed, {:ok, account} <- [mention_account(mention.address, author)] do
+          Repo.update_all(from(m in PostRemoteMention, where: m.id == ^mention.id),
+            set: [remote_account_id: account.id]
+          )
+
+          account
+        end
+
+      deliver_to_mentioned(post, accounts)
+      release_held_deliveries(post_id)
+      length(accounts)
+    else
+      _nothing -> 0
+    end
+  end
+
+  # The claim is the clock: it counts the attempt before any request goes out,
+  # and only succeeds for the process that read the row as it stands, so the
+  # task and the sweeper never work the same row twice.
+  defp claim_mention(%PostRemoteMention{} = mention) do
+    {claimed, _} =
+      Repo.update_all(
+        from(m in PostRemoteMention,
+          where: m.id == ^mention.id and m.attempts == ^mention.attempts,
+          where: is_nil(m.remote_account_id)
+        ),
+        set: [attempted_at: DateTime.utc_now(:second)],
+        inc: [attempts: 1]
+      )
+
+    claimed == 1
+  end
+
+  defp mention_account(address, author) do
+    case remote_account_by_address(address) do
+      %RemoteAccount{} = account ->
+        {:ok, account}
+
+      nil ->
+        resolve_gated(address, author, fn ->
+          claim_outbound_budget(
+            author.id,
+            :fediverse_mention_resolve,
+            mention_resolve_limit(),
+            :mention_capped
+          )
+        end)
+    end
+  end
+
+  @doc "How many unknown `@user@host` accounts one author's posts may resolve per hour."
+  def mention_resolve_limit,
+    do: Application.get_env(:vutuv, :fediverse_mention_resolve_limit, @mention_resolve_limit)
+
+  # Mentions resolved after the post was handed to federation. Per inbox:
+  #
+  #   * a held copy still queued for it re-renders at send time with the tag,
+  #     so nothing more is needed;
+  #   * one that already went out (a follower there shares the inbox, and the
+  #     hold ran out) carried no tag, and a server ignores a second `Create` of
+  #     a post it has, so it gets the `Update` an edit sends, which does carry
+  #     the new mention;
+  #   * everybody else has never seen the post and gets the `Create`.
+  defp deliver_to_mentioned(_post, []), do: :ok
+
+  defp deliver_to_mentioned(%Post{} = post, accounts) do
+    with {:ok, sender} <- federating_sender(post) do
+      inboxes = accounts |> Enum.map(&(&1.shared_inbox_uri || &1.inbox_uri)) |> Enum.uniq()
+      queued = held_inboxes(post.id, inboxes)
+      delivered = delivered_inboxes(post.id, inboxes)
+      {seen, fresh} = Enum.split_with(inboxes -- queued, &(&1 in delivered))
+      post = Repo.preload(post, Docs.note_preloads(), force: true)
+
+      if fresh != [] do
+        record_post_deliveries(sender, post, fresh)
+        enqueue(sender, fresh, Docs.create_activity(post, sender), hold_opts(post, "post_create"))
+      end
+
+      if seen != [], do: enqueue(sender, seen, Docs.update_activity(post, sender))
+      :ok
+    end
+  end
+
+  defp held_inboxes(post_id, inboxes) do
+    Repo.all(
+      from(d in held_deliveries(post_id), where: d.inbox_uri in ^inboxes, select: d.inbox_uri)
+    )
+  end
+
+  defp delivered_inboxes(post_id, inboxes) do
+    Repo.all(
+      from(d in PostDelivery,
+        where: d.post_id == ^post_id and d.inbox_uri in ^inboxes,
+        select: d.inbox_uri
+      )
+    )
+  end
+
+  # The inboxes of the accounts a post names, once resolved. Part of every
+  # recipient list, so an edit and a takedown reach them as the post did.
+  defp mentioned_inboxes(%Post{id: post_id}) do
+    Repo.all(
+      from(m in PostRemoteMention,
+        join: a in RemoteAccount,
+        on: a.id == m.remote_account_id,
+        where: m.post_id == ^post_id,
+        distinct: true,
+        select: coalesce(a.shared_inbox_uri, a.inbox_uri)
+      )
+    )
+  end
+
+  @doc """
+  Every account this installation holds for a list of `{user, host}` pairs
+  (both lowercased), as a map from the pair to the `RemoteAccount` — in one
+  query and without asking anybody. A pair we do not hold is simply absent, and
+  an empty list costs no query at all.
+
+  Matched the way `remote_account_by_address/1` matches, host as stored and
+  handle on `lower(…)`, which the `(host, lower(handle))` index answers. The
+  `IN` on both columns is a cross product, so rows no pair asked for are
+  dropped here.
+  """
+  def remote_accounts_by_pairs([]), do: %{}
+
+  def remote_accounts_by_pairs(pairs) when is_list(pairs) do
+    {names, hosts} = Enum.unzip(pairs)
+    wanted = MapSet.new(pairs)
+
+    from(a in RemoteAccount,
+      where: a.host in ^Enum.uniq(hosts),
+      where: fragment("lower(?)", a.handle) in ^Enum.uniq(names),
+      order_by: [asc: a.id]
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn account, acc ->
+      key = {String.downcase(account.handle), account.host}
+
+      if MapSet.member?(wanted, key), do: Map.put_new(acc, key, account), else: acc
+    end)
+  end
+
+  @doc """
+  `remote_accounts_by_pairs/1` answered with each account's
+  `RemoteAccount.web_url/1`: where a mention in a body links to. An empty list
+  costs no query, which keeps the Markdown renderer's plain bodies DB-free.
+  """
+  def remote_web_urls(pairs) do
+    pairs
+    |> remote_accounts_by_pairs()
+    |> Map.new(fn {key, account} -> {key, RemoteAccount.web_url(account)} end)
   end
 
   @doc """
@@ -2770,6 +3105,7 @@ defmodule Vutuv.Fediverse do
       public_key_id: remote.public_key_id,
       public_key_pem: remote.public_key_pem,
       followers_uri: remote[:followers],
+      profile_url: remote[:profile_url],
       refreshed_at: DateTime.utc_now(:second)
     }
   end
@@ -4731,6 +5067,12 @@ defmodule Vutuv.Fediverse do
           from(c in Vutuv.Chat.Conversation,
             where: c.remote_account_id == parent_as(:account).id
           )
+        ),
+      # A post of ours naming the account: without the row the mention's link
+      # falls back to a guess, and an edit or a takedown no longer reaches them.
+      where:
+        not exists(
+          from(m in PostRemoteMention, where: m.remote_account_id == parent_as(:account).id)
         )
     )
   end
@@ -11219,6 +11561,8 @@ defmodule Vutuv.Fediverse do
     # what a caller reads about the first.
     result = maybe_federate(post, &Docs.create_activity/2, "post_create")
     announce_to_tag_followers(post)
+    # After the deliveries are queued, so the resolve's release finds them.
+    resolve_remote_mentions_async(post)
     result
   end
 
@@ -11297,11 +11641,15 @@ defmodule Vutuv.Fediverse do
   deletion is advisory by protocol).
   """
   def federate_post_update(%Post{} = post) do
-    if Posts.restricted?(post) do
-      revoke_post(post)
-    else
-      maybe_federate(post, &Docs.update_activity/2, "post_update")
-    end
+    result =
+      if Posts.restricted?(post) do
+        revoke_post(post)
+      else
+        maybe_federate(post, &Docs.update_activity/2, "post_update")
+      end
+
+    resolve_remote_mentions_async(post)
+    result
   end
 
   # Nothing an organization publishes federates yet (issue #1334's fediverse half
@@ -11314,37 +11662,49 @@ defmodule Vutuv.Fediverse do
   # about an account. What a page needs instead is its own opt-in and its own
   # followers — and no `restricted?` check, because an organization post carries
   # no audience by construction.
-  defp maybe_federate(%Post{organization_id: id} = post, builder, kind) when is_binary(id) do
-    with true <- enabled?(),
-         %Organization{} = page <- Organizations.get_organization(id),
-         true <- federated?(page),
+  defp maybe_federate(%Post{} = post, builder, kind) do
+    with {:ok, sender} <- federating_sender(post),
          post = Repo.preload(post, Docs.note_preloads()),
-         [_ | _] = inboxes <- delivery_inboxes(page) do
-      record_post_deliveries(page, post, inboxes)
-      enqueue(page, inboxes, builder.(post, page), hold_opts(post, kind))
+         [_ | _] = inboxes <- post_recipients(sender, post) do
+      # Remember where this copy went and under which id, so the takedown can be
+      # addressed rather than broadcast at whoever follows today (issue #1102).
+      record_post_deliveries(sender, post, inboxes)
+      enqueue(sender, inboxes, builder.(post, sender), hold_opts(post, kind))
     else
       _ -> :skip
     end
   end
 
-  defp maybe_federate(%Post{user_id: nil}, _builder, _kind), do: :skip
+  # Who a post goes out as, when it goes out at all: `{:ok, page}` or
+  # `{:ok, member}`, else `:skip`.
+  defp federating_sender(%Post{organization_id: id}) when is_binary(id) do
+    with true <- enabled?(),
+         %Organization{} = page <- Organizations.get_organization(id),
+         true <- federated?(page) do
+      {:ok, page}
+    else
+      _ -> :skip
+    end
+  end
 
-  defp maybe_federate(%Post{} = post, builder, kind) do
+  defp federating_sender(%Post{user_id: nil}), do: :skip
+
+  defp federating_sender(%Post{} = post) do
     with true <- enabled?(),
          %User{} = user <- Repo.get(User, post.user_id),
          true <- federated?(user),
          false <- moved?(user),
-         false <- Posts.restricted?(post),
-         post = Repo.preload(post, Docs.note_preloads()),
-         [_ | _] = inboxes <- recipients(user, post) do
-      # Remember where this copy went and under which id, so the takedown can be
-      # addressed rather than broadcast at whoever follows today (issue #1102).
-      record_post_deliveries(user, post, inboxes)
-      enqueue(user, inboxes, builder.(post, user), hold_opts(post, kind))
+         false <- Posts.restricted?(post) do
+      {:ok, user}
     else
       _ -> :skip
     end
   end
+
+  defp post_recipients(%Organization{} = page, post),
+    do: Enum.uniq(delivery_inboxes(page) ++ mentioned_inboxes(post))
+
+  defp post_recipients(%User{} = user, post), do: recipients(user, post)
 
   ## Revocation: taking something back off the other servers (issue #1102)
 
@@ -11592,16 +11952,30 @@ defmodule Vutuv.Fediverse do
   # picture is enqueued with a complete, valid activity anyway (so a release that
   # knows nothing of `rebuild_from` still delivers something sane) plus the marker
   # that tells this release to re-render it at send time.
+  #
+  # A post naming an account not resolved yet waits too, far shorter and only
+  # once: the resolve releases it, and if that never comes the rebuild sends it
+  # with the mentions it has (only a picture parks a row again).
   defp hold_opts(%Post{} = post, kind) do
-    if Posts.awaiting_image_release?(post) do
-      [
-        delay_seconds: image_hold_seconds(),
-        rebuild_from: "#{kind}:#{post.id}"
-      ]
-    else
-      []
+    case max(image_hold(post), mention_hold(post)) do
+      0 -> []
+      hold -> [delay_seconds: hold, rebuild_from: "#{kind}:#{post.id}"]
     end
   end
+
+  defp image_hold(post),
+    do: if(Posts.awaiting_image_release?(post), do: image_hold_seconds(), else: 0)
+
+  # Only a member's post: a page's queued rows are sent as rendered at enqueue
+  # time and never re-rendered, so holding one would only delay it.
+  defp mention_hold(%Post{organization_id: id}) when is_binary(id), do: 0
+
+  defp mention_hold(post),
+    do: if(Repo.exists?(pending_mentions(post.id)), do: mention_hold_seconds(), else: 0)
+
+  @doc "How long a post naming an unresolved account waits before it federates."
+  def mention_hold_seconds,
+    do: Application.get_env(:vutuv, :fediverse_mention_hold_seconds, @mention_hold_seconds)
 
   @doc """
   The AI scan settled every picture on this post: send any held delivery now
@@ -11701,7 +12075,9 @@ defmodule Vutuv.Fediverse do
   answered, so the empty-follower case is not "nothing to do" any more.
   """
   def recipients(%User{} = user, %Post{} = post) do
-    (delivery_inboxes(user) ++ answered_inbox(post) ++ thread_inboxes(post)) |> Enum.uniq()
+    (delivery_inboxes(user) ++
+       answered_inbox(post) ++ thread_inboxes(post) ++ mentioned_inboxes(post))
+    |> Enum.uniq()
   end
 
   # The servers following whoever this post answers here, member or page. That
@@ -12294,7 +12670,11 @@ defmodule Vutuv.Fediverse do
          # checks our own actor URL is among them. AP allows a bare string or a
          # list; normalize to a list of strings.
          also_known_as: normalize_uri_list(doc["alsoKnownAs"]),
-         followers: web_uri(doc["followers"])
+         followers: web_uri(doc["followers"]),
+         # The page a human opens, which only Mastodon spells `/@user`. Only on
+         # the actor's own host: anything else would let a document send every
+         # mention of it wherever it liked.
+         profile_url: profile_url(id, doc["url"])
        }}
     else
       {:parse, _} -> {:error, :https_only}
@@ -12326,6 +12706,23 @@ defmodule Vutuv.Fediverse do
   end
 
   defp web_uri(_value), do: nil
+
+  # An actor's `url` is a string, a Link object or a list of either (the spec
+  # allows all three; Mastodon and Friendica send a string). From a list the
+  # HTML page wins over any other representation.
+  defp profile_url(id, url) when is_binary(url) do
+    if same_host?(id, url) and byte_size(url) <= RemoteAccount.max_uri(), do: url
+  end
+
+  defp profile_url(id, %{"href" => href}), do: profile_url(id, href)
+
+  defp profile_url(id, links) when is_list(links) do
+    html = Enum.filter(links, &match?(%{"mediaType" => "text/html"}, &1))
+
+    Enum.find_value(html ++ links, &profile_url(id, &1))
+  end
+
+  defp profile_url(_id, _url), do: nil
 
   defp ap_get(url, signer, etag \\ nil) do
     signature_headers =

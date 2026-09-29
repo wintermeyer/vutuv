@@ -50,12 +50,13 @@ defmodule VutuvWeb.RemoteActorCardHTML do
   def card_initials(%RemoteAccount{} = account, _address), do: remote_initials(account)
 
   @doc """
-  Where "View the original" goes: the canonical actor id once we hold the row,
-  and otherwise the same `https://host/@user` the mention's own `href` carries
-  (`Vutuv.Fediverse.Handle.web_profile_url/2` owns that spelling), so the card
-  can never send a reader somewhere the link would not have.
+  Where "View the original" goes: the profile page the account named, else its
+  actor id, once we hold the row (`RemoteAccount.web_url/1`), and otherwise the
+  same `https://host/@user` guess (`Vutuv.Fediverse.Handle.web_profile_url/2`).
+  Both are what the mention's own `href` carries, so the card can never send a
+  reader somewhere the link would not have.
   """
-  def origin_url(%RemoteAccount{actor_uri: uri}, _address), do: uri
+  def origin_url(%RemoteAccount{} = account, _address), do: RemoteAccount.web_url(account)
 
   def origin_url(nil, address) do
     case RemoteFollow.parse_address(address) do

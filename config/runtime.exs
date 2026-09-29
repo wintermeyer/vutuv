@@ -310,6 +310,12 @@ if config_env() == :prod do
     config :vutuv, :fediverse_outbound_reply_limit, String.to_integer(String.trim(limit))
   end
 
+  # How many unknown `@user@host` accounts one author's posts may resolve per
+  # hour: each costs a WebFinger and an actor fetch at a server the author named.
+  if limit = System.get_env("FEDIVERSE_MENTION_RESOLVE_LIMIT") do
+    config :vutuv, :fediverse_mention_resolve_limit, String.to_integer(String.trim(limit))
+  end
+
   # The same, for likes of posts on other networks (issue #1164). A separate
   # knob because the two are nothing alike in frequency: a like is one tap.
   if limit = System.get_env("FEDIVERSE_OUTBOUND_LIKE_LIMIT") do

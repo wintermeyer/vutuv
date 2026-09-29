@@ -1,9 +1,9 @@
 defmodule VutuvWeb.MarkdownMentionsTest do
   @moduledoc """
   `@handle` mentions in user-written Markdown become links to the member's
-  profile, with the member's name as a hover tooltip (`title`). This is the
-  one feature that gives the Markdown renderer DB access, so it lives in its
-  own `DataCase` file — `markdown_test.exs` stays a pure, DB-free unit test.
+  profile, with the member's name as a hover tooltip (`title`), and a
+  `@user@host` of an account this installation holds to that account's own
+  profile page.
   """
   use Vutuv.DataCase, async: true
 
@@ -126,5 +126,54 @@ defmodule VutuvWeb.MarkdownMentionsTest do
 
     assert html =~ ~s(href="/ghost")
     assert html =~ ~s(title="@ghost")
+  end
+
+  describe "@user@host of an account this installation holds" do
+    # Every network spells its profile pages its own way, so `https://host/@user`
+    # is only a guess (Friendica answers it with a 404). An account we hold
+    # tells us the real page.
+    defp remote_account(attrs) do
+      Repo.insert!(
+        struct(
+          %Vutuv.Fediverse.RemoteAccount{
+            actor_uri: "https://friendica.example/profile/doris",
+            host: "friendica.example",
+            handle: "doris",
+            inbox_uri: "https://friendica.example/inbox/doris"
+          },
+          attrs
+        )
+      )
+    end
+
+    test "links to the account's own profile page" do
+      remote_account(profile_url: "https://friendica.example/profile/doris")
+
+      for html <- [
+            render("Hallo @doris@friendica.example"),
+            render_post("Hallo @Doris@friendica.example")
+          ] do
+        assert html =~ ~s(href="https://friendica.example/profile/doris")
+        refute html =~ ~s(href="https://friendica.example/@doris")
+      end
+    end
+
+    test "falls back to the actor id when the account named no page" do
+      remote_account(actor_uri: "https://friendica.example/users/doris")
+
+      assert render("@doris@friendica.example") =~
+               ~s(href="https://friendica.example/users/doris")
+    end
+
+    test "guesses /@user only for an account nobody here holds" do
+      assert render("@doris@friendica.example") =~ ~s(href="https://friendica.example/@doris")
+    end
+
+    test "escapes the stored address, which a remote server wrote" do
+      remote_account(profile_url: ~s(https://friendica.example/p?a=1&b="x"))
+
+      html = render("@doris@friendica.example")
+      assert html =~ ~s(href="https://friendica.example/p?a=1&amp;b=&quot;x&quot;")
+    end
   end
 end

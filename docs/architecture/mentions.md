@@ -173,10 +173,10 @@ Two consequences worth knowing:
   would chip `@hilwiller`, ask whether that member exists and spend one of the
   five mentions a post may carry.
 
-Out of scope on purpose: completing a remote `@user@host` address. Only local
-mentions become `Mention` tags in the outgoing Note (`VutuvWeb.Fediverse.Docs`),
-and a remote address in the body is left to the reader's server — offering
-remote accounts would promise a notification we do not send. Raw **source
+Out of scope on purpose: completing a remote `@user@host` address in the
+picker. A typed one is resolved once the post is saved (see "Accounts on other
+networks a post names" in [fediverse.md](fediverse.md)), but offering remote
+accounts while typing would mean an outbound lookup per keystroke. Raw **source
 mode** has no picker either: the caret there is in a plain `<textarea>`, where
 placing a panel means measuring text in a mirror element, and the people who
 switch to it are the people who type handles from memory anyway.
@@ -223,6 +223,19 @@ organization's), the feed's filter band, and a member's forwarding address after
 they moved. A handle that is not a full `user@host` (the actor document carried
 no username, so `Handle.display/2` fell back to `@name` or a bare `@host`) gets
 no hook and keeps its plain link: the card is addressed by the address.
+
+**Where a remote mention's `href` goes.** Every network spells its profile pages
+its own way: Mastodon `/@ada`, Friendica `/profile/ada`, PeerTube `/accounts/…`,
+Lemmy `/u/…`, vutuv `/ada`. So an account we hold links to
+`RemoteAccount.web_url/1`: the `profile_url` its actor document named (its
+`url`, kept only when it sits on the actor's own host), else the actor id, which
+every server answers. `VutuvWeb.Markdown` reads them for a whole body in one
+query (`Vutuv.Fediverse.remote_web_urls/1`) and never asks the network at render
+time. Only an account nobody here holds gets the Mastodon guess
+`https://host/@user` (`Handle.web_profile_url/2`), and the card's "View the
+original" answers from the same two sources, so it cannot disagree with the
+link. The reverse guess reaches us too: `/@handle` 301s to `/handle`
+(`VutuvWeb.Plug.UserResolveSlug`), sub-pages and agent formats included.
 
 Nothing else about the anchor changes, so the `href` stays its whole truth — a
 middle click, a copied link, a logged-out visitor and a page whose JavaScript

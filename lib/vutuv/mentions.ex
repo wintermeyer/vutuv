@@ -331,6 +331,35 @@ defmodule Vutuv.Mentions do
   def local_handles(_), do: []
 
   @doc """
+  The unique, lowercased `user@host` addresses in `text` that name an account
+  on **another** server, in the order they are written: the `@user@host`
+  twin of `local_handles/1`, skipping code the same way, so it finds exactly
+  the mentions `VutuvWeb.Markdown` links out. Our own host and our tag host
+  are not somebody else's, so they are left out.
+  """
+  def remote_addresses(text) when is_binary(text) do
+    if String.contains?(text, "@") do
+      text
+      |> text_chunks()
+      |> Enum.flat_map(fn chunk -> chunk |> unescape_handle_chars() |> scan() end)
+      |> Enum.flat_map(&remote_address_of/1)
+      |> Enum.uniq()
+    else
+      []
+    end
+  end
+
+  def remote_addresses(_), do: []
+
+  defp remote_address_of({:fediverse, user, host}) do
+    if Fediverse.local_host?(host) or Fediverse.tag_host?(host),
+      do: [],
+      else: [String.downcase(user) <> "@" <> String.downcase(host)]
+  end
+
+  defp remote_address_of(_entity), do: []
+
+  @doc """
   The unique, lowercased `#hashtags` in `text` — the tag **names** they write.
 
   The `@handle` twin of `local_handles/1`, reading the same grammar and skipping

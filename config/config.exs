@@ -618,6 +618,12 @@ config :vutuv, :fediverse_media_fetch, true
 # installation that must not make outbound requests at all.
 config :vutuv, :fediverse_quote_resolve, true
 
+# The `@user@host` accounts a post names are resolved (WebFinger + actor
+# document) in a task after the post is saved, so its Note can carry a
+# `Mention` and the mention links to the real profile page. Off in the test env
+# for the SQL sandbox; tests call Vutuv.Fediverse.resolve_remote_mentions/1.
+config :vutuv, :fediverse_mention_resolve, true
+
 config :vutuv, :fediverse_remote_follow_limit, 30
 config :vutuv, :fediverse_max_remote_follows, 1_000
 

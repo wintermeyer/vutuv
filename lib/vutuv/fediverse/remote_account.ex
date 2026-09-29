@@ -70,6 +70,11 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     # The mirror of `users.moved_to`; nil for everybody who has not moved.
     field(:moved_to, :string)
 
+    # The page a human opens for this account (the actor document's `url`),
+    # nil when the document named none on its own host. Read through
+    # `web_url/1`, never directly.
+    field(:profile_url, :string)
+
     # The account's picture (issue #1163): the fingerprinted file we stored, the
     # AI gate's verdict on it, and the URL it came from so a re-delivered actor
     # document does not re-download an unchanged picture. Initials stay the
@@ -101,7 +106,8 @@ defmodule Vutuv.Fediverse.RemoteAccount do
       :follower_count,
       :follower_count_checked_at,
       :follower_count_attempted_at,
-      :moved_to
+      :moved_to,
+      :profile_url
     ])
     # Remote strings, and a NUL in one raises on insert (issue #1767).
     |> scrub_nul()
@@ -109,7 +115,7 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     # scheme it does not know, so one hostile value would take down every render
     # that shows this row. Dropped rather than refused — see
     # `Vutuv.ChangesetHelpers.drop_non_web_urls/2`.
-    |> drop_non_web_urls([:actor_uri, :moved_to])
+    |> drop_non_web_urls([:actor_uri, :moved_to, :profile_url])
     |> validate_required([:actor_uri, :host, :inbox_uri])
     |> validate_length(:actor_uri, max: @max_uri, count: :bytes)
     |> validate_length(:inbox_uri, max: @max_uri, count: :bytes)
@@ -119,12 +125,28 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     |> validate_length(:followers_uri, max: @max_uri, count: :bytes)
     |> validate_number(:follower_count, greater_than_or_equal_to: 0)
     |> validate_length(:moved_to, max: @max_uri, count: :bytes)
+    |> validate_length(:profile_url, max: @max_uri, count: :bytes)
     |> validate_length(:host, max: @max_display)
     |> validate_length(:handle, max: @max_display)
     |> validate_length(:name, max: @max_display)
     |> validate_length(:summary, max: @max_summary)
     |> unique_constraint(:actor_uri)
   end
+
+  @doc """
+  Where a reader goes to see this account on its own server: the profile page
+  its actor document named, else the actor id.
+
+  Never `https://host/@user`, which is only Mastodon's spelling: Friendica
+  answers it with a 404 (its page is `/profile/user`), and so do PeerTube,
+  Lemmy and vutuv itself. The actor id is the fallback because every server
+  answers it, and the common ones send a browser on to the profile page.
+  """
+  def web_url(%__MODULE__{profile_url: url}) when is_binary(url), do: url
+  def web_url(%__MODULE__{actor_uri: uri}), do: uri
+
+  @doc "The longest URI a row may carry."
+  def max_uri, do: @max_uri
 
   @doc "The longest self-description a row may carry."
   def max_summary, do: @max_summary
