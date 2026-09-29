@@ -434,6 +434,13 @@ defmodule VutuvWeb.UI do
   attr(:class, :string, default: nil)
   attr(:rest, :global)
 
+  slot(:attach,
+    doc:
+      "controls for attaching files, rendered at the left end of the footer " <>
+        "row; the footer then joins the editor's box as its bottom bar. Post " <>
+        "composer only"
+  )
+
   def markdown_editor(assigns) do
     # `Map.put/3`, deliberately, where `assign/3` is what you would reach for.
     # This runs on every render, and `assign/3` would mark the key changed every
@@ -488,7 +495,7 @@ defmodule VutuvWeb.UI do
         not @low_bandwidth? && @mention_limit && gettext("{used} of {max} mentions")
       }
       data-mde-langs={not @low_bandwidth? && code_fence_labels()}
-      class={["mde", @compact && "mde--compact", @class]}
+      class={["mde", @compact && "mde--compact", @attach != [] && "mde--tray", @class]}
       {@rest}
     >
       <%!-- Skipped in low-bandwidth mode for its BYTES, not for correctness:
@@ -627,6 +634,10 @@ defmodule VutuvWeb.UI do
       change, and would silently swallow anything the server later wants to
       render here. --%>
       <div data-mde-foot class="mde__foot">
+        <%!-- Works without the editor's hook (`ComposerFiles` sits on the
+        form), so components.css keeps it on screen in low-bandwidth mode. --%>
+        <div :if={@attach != []} class="mde__attach">{render_slot(@attach)}</div>
+
         <%!-- The way to the syntax page, on the same row as the switch that
         makes it worth reading — components.css (`.mde__help`) decides when it
         shows. --%>
@@ -750,9 +761,11 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @doc "The editor's outline glyph (a heroicons-style path), shared with the composer's attach row."
   attr(:d, :string, required: true)
+  attr(:class, :string, default: "h-4 w-4")
 
-  defp mde_icon(assigns) do
+  def mde_icon(assigns) do
     ~H"""
     <svg
       viewBox="0 0 24 24"
@@ -761,7 +774,7 @@ defmodule VutuvWeb.UI do
       stroke-width="1.7"
       stroke-linecap="round"
       stroke-linejoin="round"
-      class="h-4 w-4"
+      class={@class}
       aria-hidden="true"
     >
       <path d={@d} />

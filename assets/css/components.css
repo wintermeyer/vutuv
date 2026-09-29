@@ -2507,9 +2507,11 @@ div.footnotes li:target {
 }
 /* The help link is the exception: it is TRUE without JS, because what shows
    through then is the raw textarea, i.e. the Markdown source the linked page
-   documents. Everything else here is hidden — as a rule about the row, not a
-   list of today's controls, so the next control added is covered too. */
-.mde:not([data-mde-ready]) .mde__foot > :not(.mde__help) { display: none; }
+   documents. So is the composer's attach row, whose pickers hang off the
+   form's `ComposerFiles` hook rather than this editor. Everything else here
+   is hidden — as a rule about the row, not a list of today's controls, so the
+   next control added is covered too. */
+.mde:not([data-mde-ready]) .mde__foot > :not(.mde__help, .mde__attach) { display: none; }
 /* Same reason from the other side: with the hook up, the link goes away in
    the rich-text view, where a member never sees a character of Markdown. It
    takes the empty left half of the row rather than a line of its own. */
@@ -2537,6 +2539,61 @@ div.footnotes li:target {
   background: #fff;
   color: #0f172a;
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+/* The tray (post composer, `:attach` slot): the footer joins the editor's box
+   as its bottom bar, and the attach buttons open it on the left. The root
+   draws the one box, so every surface inside it (the rich frame, the source
+   textarea with or without the hook) simply drops its own. */
+.mde--tray {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+.mde--tray:focus-within { border-color: #3b82f6; }
+.mde--tray .mde__frame,
+.mde--tray .mde__source,
+.mde--tray[data-mde-ready][data-mde-mode="source"] .mde__source {
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+}
+.mde--tray .mde__foot {
+  flex-wrap: wrap;
+  margin-top: 0;
+  padding: 0.25rem 0.375rem;
+  border-top: 1px solid #e2e8f0;
+}
+/* Full screen is its own surface: the page-sized box needs no outline. */
+.mde--tray[data-mde-fullscreen="1"] { border: 0; border-radius: 0; }
+.mde__attach {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-right: auto;
+  min-width: 0;
+}
+/* `margin: 0` undoes the global `label` margin. */
+.mde__attach-btn { min-width: 2.25rem; height: 2.25rem; margin: 0; }
+.mde__attach-input:focus-visible + .mde__attach-btn {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+.mde__attach-hint {
+  padding-left: 0.25rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+/* The tray takes the row's empty left half; the help link then sits beside
+   the view switch. Nobody drags a file on a phone, so the hint goes there. */
+.mde--tray .mde__help { margin-right: 0; }
+/* On a phone the help link would push the view switch onto a second line, so
+   it takes that line itself, last and on the right, and the controls stay in
+   one row. */
+@media (width < 40rem) {
+  .mde__attach-hint { display: none; }
+  .mde--tray .mde__help { order: 1; margin-left: auto; }
 }
 
 /* Inline post images (post composer only). The prose previews the alignment
@@ -2807,13 +2864,15 @@ body.mde-fullscreen-lock { overflow: hidden; }
   padding: 1rem;
   background: #fff;
 }
+.mde[data-mde-fullscreen="1"] :is(.mde__frame, .mde__foot) {
+  width: 100%;
+  max-width: 56rem;
+  margin: 0 auto;
+}
 .mde[data-mde-fullscreen="1"] .mde__frame {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 56rem;
-  margin: 0 auto;
 }
 .mde[data-mde-fullscreen="1"] .mde__mount { flex: 1 1 auto; overflow-y: auto; max-height: none; }
 .mde[data-mde-fullscreen="1"] .mde__source { flex: 1 1 auto; }
@@ -3884,6 +3943,9 @@ html[data-no-pull-refresh] body {
   .mde__slash-glyph { color: #94a3b8; }
   .mde__slash-empty { color: #94a3b8; }
   .mde__views { background: #1e293b; }
+  .mde--tray { background: #0f172a; border-color: #334155; }
+  .mde--tray .mde__foot { border-top-color: #1e293b; }
+  .mde__attach-hint { color: #64748b; }
   .mde__view { color: #94a3b8; }
   .mde__view:hover { color: #f1f5f9; }
   .mde__view[aria-pressed="true"] {
