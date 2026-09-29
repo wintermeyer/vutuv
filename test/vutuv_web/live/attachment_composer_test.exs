@@ -174,7 +174,7 @@ defmodule VutuvWeb.AttachmentComposerTest do
     refute has_element?(live, "#composer-attachments")
   end
 
-  test "the German composer names the drop area in German", %{conn: conn} do
+  test "the German composer names its attach buttons in German", %{conn: conn} do
     html =
       conn
       |> Phoenix.ConnTest.recycle()
@@ -182,12 +182,13 @@ defmodule VutuvWeb.AttachmentComposerTest do
       |> open_composer()
       |> render()
 
-    # Each one by name: `gettext.extract --merge` fuzzy-filled "Choose a file"
-    # with "Sprache auswählen" and "Add more" with "Notiz hinzufügen".
-    assert html =~ "Dateien hierher ziehen"
-    assert html =~ "Fotos, Videos oder Dateien"
+    # Each one by name: `gettext.extract --merge` fuzzy-fills new msgids with
+    # the German of some lookalike string.
     assert html =~ "Zum Anhängen loslassen"
-    assert html =~ "Datei auswählen"
+    assert html =~ "Fotos anhängen"
+    assert html =~ "Video anhängen"
+    assert html =~ "Datei anhängen (PDF, Text)"
+    assert html =~ "oder hineinziehen"
     assert html =~ "Fotos, Videos, PDF, Text"
 
     # Under an empty composer the allowance was a sentence about nothing.

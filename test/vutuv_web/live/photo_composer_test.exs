@@ -256,20 +256,28 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, "#composer-add-photos")
     end
 
-    test "one drop area takes photos, clips and files, with a phone wording", %{conn: conn} do
-      # One picker for everything (the demo's variant E): the member picks or
-      # drops whatever they have, and the `ComposerFiles` hook sorts it into
-      # the right upload. "Drag files here" means nothing on a phone, so a
-      # second wording swaps in under Tailwind's `sm:` breakpoint — CSS, not
-      # assertable here; this guards that both are rendered.
+    test "the attach buttons sit in the editor's footer, and there is no drop area", %{
+      conn: conn
+    } do
+      # The drop area was nearly as tall as the text box (2026-09-29). The ways
+      # in are now buttons on the editor's own footer row, beside the view
+      # switch; a drop anywhere on the form still lands, and only while files
+      # hover it does an overlay say so.
       live = open_composer(conn)
-      zone = element(live, "#composer-drop") |> render()
 
-      assert zone =~ "Drag files here"
-      assert zone =~ "Photos, videos or files"
-      assert zone =~ "Choose a file"
-      assert has_element?(live, "#composer-drop input[type=file][data-composer-pick][multiple]")
-      assert has_element?(live, "#composer-drop [data-drop-full]")
+      assert has_element?(
+               live,
+               "#composer-body .mde__foot .mde__attach label[for=composer-pick-photos]"
+             )
+
+      assert has_element?(live, "#composer-pick-photos[type=file][data-composer-pick][multiple]")
+      assert has_element?(live, "#composer-drop [data-drop-overlay]")
+      assert element(live, "#composer-drop [data-drop-overlay]") |> render() =~ "Drop to attach"
+
+      html = render(live)
+      refute html =~ "Choose a file"
+      refute html =~ "Drag files here"
+      refute has_element?(live, "[data-drop-full]")
     end
 
     test "a photo grows into the grid: natural ratio, feed version, caption inline", %{
@@ -299,10 +307,10 @@ defmodule VutuvWeb.PhotoComposerTest do
       # Adding more photos sits in the row under the pictures, not as a tile
       # among them: the mosaic's cells are the arrangement, and a "+" occupying
       # one of them would be a seat the gallery does not have (issue #1892).
-      # The drop area keeps its full shape once something is attached: the
-      # composer does not change under the member's hands.
+      # The attach buttons stay where they were once something is attached:
+      # the composer does not change under the member's hands.
       refute has_element?(live, "[data-photo-add-tile]")
-      assert has_element?(live, "#composer-drop [data-drop-full]")
+      assert has_element?(live, "#composer-body .mde__attach label[for=composer-pick-photos]")
       refute has_element?(live, "[data-drop-more]")
     end
 
@@ -1413,7 +1421,7 @@ defmodule VutuvWeb.PhotoComposerTest do
                ~s(#composer-form[data-composer-dropzone][phx-hook="ComposerFiles"])
              )
 
-      assert has_element?(live, "#composer-form #composer-drop [data-drop-full]")
+      assert has_element?(live, "#composer-form #composer-drop [data-drop-overlay]")
     end
 
     test "no upload keeps LiveView's own drop target", %{live: live, user: user} do
@@ -1803,7 +1811,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert html =~ "Galerie"
       assert html =~ "Ein Foto auf ein anderes ziehen, um sie zu tauschen."
       assert html =~ "Foto zuschneiden"
-      assert html =~ "Datei auswählen"
+      assert html =~ "Fotos anhängen"
 
       # …and what the sheet says once it is.
       html = open_details(live)

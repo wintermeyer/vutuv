@@ -523,8 +523,8 @@ defmodule VutuvWeb.PostFeedLiveTest do
       ])
       |> render_upload("photo.png")
 
-      # A row with its remove control, and the drop area stays.
-      assert render(live) =~ "Choose a file"
+      # A row with its remove control, and the attach buttons stay.
+      assert has_element?(live, "#composer-body .mde__attach")
       assert has_element?(live, ~s([phx-click="remove-image"]))
 
       # Nothing tells the editor to place it in the prose, and the photo's own

@@ -2207,7 +2207,15 @@ defmodule VutuvWeb.PostLive.Composer do
           steps and are only hidden in step 2: the submit on that step still
           carries them, and the editor keeps its prose and caret. --%>
           <div class={@details_step? && "hidden"}>
-            <.body_editor id={@id} body={@body} post={@post} seed={@editor_seed} user={@current_user} />
+            <.body_editor
+              id={@id}
+              body={@body}
+              post={@post}
+              seed={@editor_seed}
+              user={@current_user}
+              video?={@video_uploads? and @video == nil}
+              files?={@attachment_uploads?}
+            />
           </div>
 
           <%!-- Step 2 (only with photos or a clip): everything that makes a
@@ -2378,19 +2386,18 @@ defmodule VutuvWeb.PostLive.Composer do
             :if={@attachment_budget && @attachments != [] && !@attachment_budget.unlimited?}
             budget={@attachment_budget}
           />
+          </div>
 
-
-          <%!-- The one way in for a photo, a clip or a file. The three
-          uploads stay three (each has its own limits and pipeline); the
-          `ComposerFiles` hook on the form decides which one a file joins,
-          so the member never has to. --%>
+          <%!-- The three uploads stay three (each has its own limits and
+          pipeline); the `ComposerFiles` hook on the form decides which one a
+          picked or dropped file joins, so the member never has to. The
+          buttons that pick live in the editor's footer (`attach_buttons/1`). --%>
           <.media_drop
             id={@id}
             uploads={@uploads}
             video?={@video_uploads? and @video == nil}
             files?={@attachment_uploads?}
           />
-          </div>
 
           <%!-- The attached files as data, in both steps: form recovery
           replays them after a reconnect (`adopt_recovered_attachments/2`). --%>
@@ -2775,6 +2782,8 @@ defmodule VutuvWeb.PostLive.Composer do
   attr(:post, :any, required: true)
   attr(:seed, :integer, required: true)
   attr(:user, :any, required: true)
+  attr(:video?, :boolean, required: true)
+  attr(:files?, :boolean, required: true)
 
   defp body_editor(assigns) do
     ~H"""
@@ -2792,7 +2801,11 @@ defmodule VutuvWeb.PostLive.Composer do
         mention_limit={Mentions.max_post_mentions()}
         images
         help
-      />
+      >
+        <:attach>
+          <.attach_buttons id={@id} video?={@video?} files?={@files?} />
+        </:attach>
+      </.markdown_editor>
 
       <p :if={String.length(@body) > Post.max_body_length() - 2000} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
         {delimited_count(String.length(@body))} / {delimited_count(Post.max_body_length())}
@@ -3252,11 +3265,10 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp percent_left(_window), do: 0
 
-  # The drop area under the text (the demo's variant E): one picker and one
-  # drop target for photos, clips and files, a dashed field that says what it
-  # takes. It keeps that shape once something is attached — the composer does
-  # not change under the member's hands — and turns blue while files hover the
-  # form (`is-dragging`, set by the `ComposerFiles` hook).
+  # The drop target for photos, clips and files: no room of its own, only an
+  # overlay while files hover the form (`is-dragging`, set by the
+  # `ComposerFiles` hook). The buttons that pick sit in the editor's footer
+  # (`attach_buttons/1`).
   #
   # The three live file inputs sit here hidden, one per upload: LiveView
   # drives each upload through its own input and the hook hands every file to
@@ -3268,14 +3280,10 @@ defmodule VutuvWeb.PostLive.Composer do
   attr(:files?, :boolean, required: true)
 
   defp media_drop(assigns) do
-    assigns =
-      assigns
-      |> assign(:pick_id, "#{assigns.id}-pick")
-      |> assign(:hint, media_hint(assigns.video?, assigns.files?))
-      |> assign(:accept, media_accept(assigns.video?, assigns.files?))
+    assigns = assign(assigns, :hint, media_hint(assigns.video?, assigns.files?))
 
     ~H"""
-    <div id={"#{@id}-drop"} data-drop-zone class="mt-3">
+    <div id={"#{@id}-drop"}>
       <div class="hidden">
         <span id={"#{@id}-add-photos"}><.live_file_input upload={@uploads.images} /></span>
         <span :if={@video?} id={"#{@id}-add-video"}>
@@ -3285,37 +3293,77 @@ defmodule VutuvWeb.PostLive.Composer do
           <.live_file_input upload={@uploads.attachments} />
         </span>
       </div>
-      <input
-        type="file"
-        multiple
-        id={@pick_id}
-        accept={@accept}
-        data-composer-pick
-        class="sr-only"
-        tabindex="-1"
-      />
-      <label
-        for={@pick_id}
-        data-drop-full
-        class={[
-          "flex cursor-pointer flex-col items-center gap-1.5 rounded-[14px] border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-slate-700 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-200",
-          "group-[.is-dragging]/drop:border-sky-600 group-[.is-dragging]/drop:bg-sky-50 group-[.is-dragging]/drop:text-sky-700 dark:group-[.is-dragging]/drop:border-sky-400 dark:group-[.is-dragging]/drop:bg-sky-950 dark:group-[.is-dragging]/drop:text-sky-200"
-        ]}
+      <%!-- Says where a file will go only while one hovers the form, so
+      the drop target costs no room the rest of the time. It lets every
+      event through: the drop itself belongs to the form's hook. --%>
+      <div
+        data-drop-overlay
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 z-20 hidden flex-col items-center justify-center gap-1 rounded-[14px] border-2 border-dashed border-sky-600 bg-sky-50/95 text-center text-sky-700 group-[.is-dragging]/drop:flex dark:border-sky-400 dark:bg-sky-950/95 dark:text-sky-200"
       >
         <.upload_icon class="h-6 w-6" />
-        <span class="text-[15px] font-semibold">
-          <span class="group-[.is-dragging]/drop:hidden">
-            <span class="hidden sm:inline">{gettext("Drag files here")}</span>
-            <span class="sm:hidden">{gettext("Photos, videos or files")}</span>
-          </span>
-          <span class="hidden group-[.is-dragging]/drop:inline">{gettext("Drop to attach")}</span>
-        </span>
-        <span class="mt-0.5 inline-flex h-10 items-center rounded-[10px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 group-[.is-dragging]/drop:hidden dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-          {gettext("Choose a file")}
-        </span>
-        <span class="text-xs text-slate-500 dark:text-slate-400">{@hint}</span>
-      </label>
+        <span class="text-[15px] font-semibold">{gettext("Drop to attach")}</span>
+        <span class="text-xs text-slate-600 dark:text-slate-300">{@hint}</span>
+      </div>
     </div>
+    """
+  end
+
+  # The ways in, as buttons on the editor's footer row: one per kind the
+  # member may attach, each a label over its own picker so the system dialog
+  # offers the right files. All pickers feed the same `ComposerFiles`
+  # routing, so the choice of button never decides the upload.
+  attr(:id, :string, required: true)
+  attr(:video?, :boolean, required: true)
+  attr(:files?, :boolean, required: true)
+
+  defp attach_buttons(assigns) do
+    ~H"""
+    <.attach_button
+      id={"#{@id}-pick-photos"}
+      accept={Enum.join(Vutuv.PostImageStore.extension_whitelist(), ",")}
+      label={gettext("Attach photos")}
+      d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+    />
+    <.attach_button
+      :if={@video?}
+      id={"#{@id}-pick-video"}
+      accept={Enum.join(Videos.extension_whitelist(), ",")}
+      label={gettext("Attach a video")}
+      d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
+    />
+    <.attach_button
+      :if={@files?}
+      id={"#{@id}-pick-files"}
+      accept={Enum.join(Attachments.extension_whitelist(), ",")}
+      label={gettext("Attach a file (PDF, text)")}
+      d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"
+    />
+    <span class="mde__attach-hint">{gettext("or drag them in")}</span>
+    """
+  end
+
+  # The input stays focusable (visually hidden), so Tab reaches it and the
+  # label draws the focus ring; Space opens the picker as on any file input.
+  attr(:id, :string, required: true)
+  attr(:accept, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:d, :string, required: true)
+
+  defp attach_button(assigns) do
+    ~H"""
+    <input
+      type="file"
+      multiple
+      id={@id}
+      accept={@accept}
+      data-composer-pick
+      class="mde__attach-input sr-only"
+    />
+    <label for={@id} class="mde__btn mde__attach-btn" title={@label}>
+      <span class="sr-only">{@label}</span>
+      <.mde_icon d={@d} class="h-5 w-5" />
+    </label>
     """
   end
 
@@ -3329,19 +3377,6 @@ defmodule VutuvWeb.PostLive.Composer do
     ]
     |> Enum.filter(& &1)
     |> Enum.join(", ")
-  end
-
-  # The picker offers the union of the three uploads' extensions; each upload
-  # still refuses what is not its own.
-  defp media_accept(video?, files?) do
-    [
-      Vutuv.PostImageStore.extension_whitelist(),
-      if(video?, do: Videos.extension_whitelist(), else: []),
-      if(files?, do: Attachments.extension_whitelist(), else: [])
-    ]
-    |> List.flatten()
-    |> Enum.uniq()
-    |> Enum.join(",")
   end
 
   attr(:class, :string, default: "h-6 w-6")
