@@ -113,3 +113,6 @@ assets/node_modules
 /scripts/pdf_trailer/node_modules
 /scripts/teaser/package-lock.json
 /scripts/teaser/__pycache__
+
+# ExUnit @tag :tmp_dir scratch space (test runs write here).
+/tmp/
