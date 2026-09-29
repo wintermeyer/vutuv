@@ -62,6 +62,7 @@ defmodule VutuvWeb.AccountEventText do
   def event_label("posts_auto_deleted"), do: gettext("Posts deleted automatically")
 
   def event_label("data_exported"), do: gettext("Data downloaded")
+  def event_label("import_uploaded"), do: gettext("Import archive uploaded")
   def event_label("import_applied"), do: gettext("Import applied")
   def event_label("api_token_created"), do: gettext("Access token created")
   def event_label("api_token_revoked"), do: gettext("Access token revoked")
@@ -131,7 +132,8 @@ defmodule VutuvWeb.AccountEventText do
   defp detail("filter_added", %{"filter_kind" => "tag"}), do: gettext("a tag")
   defp detail("filter_added", %{"filter_kind" => _word}), do: gettext("a word or phrase")
 
-  defp detail("import_applied", %{"source" => "linkedin"}), do: "LinkedIn"
+  defp detail(kind, %{"source" => "linkedin"}) when kind in ~w(import_uploaded import_applied),
+    do: "LinkedIn"
 
   defp detail(kind, %{"name" => name})
        when kind in ~w(api_token_created api_token_revoked) and is_binary(name),

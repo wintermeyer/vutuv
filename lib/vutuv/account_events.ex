@@ -146,6 +146,9 @@ defmodule Vutuv.AccountEvents do
 
     # Data in and out
     "data_exported" => [],
+    # An archive read into the preview, applied or not: the member handed over
+    # a file full of their personal data, which is worth a line on its own.
+    "import_uploaded" => ["source"],
     "import_applied" => ["source"],
 
     # Apps and API
@@ -383,6 +386,11 @@ defmodule Vutuv.AccountEvents do
     Repo.all(
       from(e in AccountEvent, where: e.user_id == ^user_id, distinct: true, select: e.kind)
     )
+  end
+
+  @doc "Whether `user`'s log holds at least one event of any of `kinds`."
+  def recorded?(%User{id: user_id}, kinds) when is_list(kinds) do
+    Repo.exists?(from(e in base(user_id, %{}), where: e.kind in ^kinds))
   end
 
   @doc "The kinds present across the whole installation (the admin kind filter)."

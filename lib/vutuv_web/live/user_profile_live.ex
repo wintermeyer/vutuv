@@ -25,6 +25,7 @@ defmodule VutuvWeb.UserProfileLive do
   import Ecto.Query
   import VutuvWeb.UserHelpers
 
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
@@ -1524,12 +1525,15 @@ defmodule VutuvWeb.UserProfileLive do
       # The importer is a step of its own, not a footer link under the card: it
       # is the one entry here that fills several profile sections in a single
       # go, so it belongs where the eye already is. Done once the profile
-      # carries a career entry, which is what the archive brings — typing one in
-      # by hand counts just as much, so nobody without a LinkedIn account is
-      # left with a step they cannot finish.
+      # carries a career entry (typed by hand counts too, so nobody without a
+      # LinkedIn account is stuck on it) or once an archive was uploaded at
+      # all: whoever tried has done the step, even if it brought nothing. An
+      # apply logged before uploads were logged has only `import_applied`.
       %{
         label: gettext("Import from LinkedIn"),
-        done: totals.jobs > 0 or totals.educations > 0,
+        done:
+          totals.jobs > 0 or totals.educations > 0 or
+            AccountEvents.recorded?(user, ~w(import_uploaded import_applied)),
         href: ~p"/settings/import/linkedin"
       }
       # There is deliberately NO "write your first post" step. It asked the one

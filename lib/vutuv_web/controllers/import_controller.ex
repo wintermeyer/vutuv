@@ -52,6 +52,13 @@ defmodule VutuvWeb.ImportController do
 
     case result do
       {:ok, parsed} ->
+        # The profile checklist ticks its import step on this alone: whoever
+        # got this far tried, even if the archive brings nothing to apply.
+        Vutuv.AccountEvents.record(user, "import_uploaded",
+          conn: conn,
+          details: %{source: "linkedin"}
+        )
+
         render_preview(conn, user, parsed)
 
       {:error, :too_large} ->

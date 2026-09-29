@@ -168,15 +168,20 @@ defmodule VutuvWeb.ImportControllerTest do
   end
 
   test "a non-zip upload is rejected with a flash", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
+    {conn, user} = create_and_login_user(conn)
     path = Path.join(System.tmp_dir!(), "notzip_#{System.unique_integer([:positive])}.zip")
     File.write!(path, "this is not a zip")
     upload = %Plug.Upload{path: path, filename: "x.zip", content_type: "application/zip"}
 
-    conn =
+    rejected =
       post(conn, ~p"/settings/import/linkedin", %{"import" => %{"archive" => upload}})
 
-    assert redirected_to(conn) == ~p"/settings/import/linkedin"
+    assert redirected_to(rejected) == ~p"/settings/import/linkedin"
+
+    # A wrong file is no attempt at the import: the checklist step stays open
+    # as the reminder to try again with the real archive.
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+    assert html =~ ~s(href="#{~p"/settings/import/linkedin"}")
   end
 
   test "confirm imports only the checked candidates", %{conn: conn} do
@@ -203,6 +208,43 @@ defmodule VutuvWeb.ImportControllerTest do
                where: ut.user_id == ^user.id and t.name == "Elixir"
              )
            )
+  end
+
+  # Trying counts: a member who uploads an archive and then leaves the preview,
+  # or applies it with nothing ticked, has done what the step asks.
+  describe "the checklist step after an import that brought nothing" do
+    defp assert_step_ticked(conn, user) do
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ "Complete your profile"
+      assert html =~ "1/3"
+      refute html =~ ~s(href="#{~p"/settings/import/linkedin"}")
+    end
+
+    test "an uploaded archive nobody applies", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn
+      |> post(~p"/settings/import/linkedin", %{
+        "import" => %{"archive" => upload_zip(@sample_files)}
+      })
+      |> html_response(200)
+
+      assert_step_ticked(conn, user)
+    end
+
+    test "an import applied with nothing selected", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, parsed} = LinkedIn.parse(zip_binary(@sample_files))
+
+      applied =
+        post(conn, ~p"/settings/import/linkedin/apply", %{
+          "payload" => Jason.encode!(LinkedIn.payload_map(parsed))
+        })
+
+      assert redirected_to(applied) == ~p"/#{user}"
+      assert_step_ticked(conn, user)
+    end
   end
 
   # Issue #1477: "already on your profile" and "another member has claimed it"
