@@ -1,0 +1,10 @@
+{"id": 1, "params": {"behavior": "deny"}, "method": "Browser.setDownloadBehavior"}
+{"id": 2, "params": {"url": "about:blank"}, "method": "Target.createTarget"}
+{"id": 3, "params": {"flatten": true, "targetId": "T1"}, "method": "Target.attachToTarget"}
+{"id": 4, "params": {}, "method": "Runtime.enable", "sessionId": "S1"}
+{"id": 5, "params": {}, "method": "Page.enable", "sessionId": "S1"}
+{"id": 6, "params": {"flatten": true, "autoAttach": true, "waitForDebuggerOnStart": true}, "method": "Target.setAutoAttach", "sessionId": "S1"}
+{"id": 7, "params": {}, "method": "Runtime.runIfWaitingForDebugger", "sessionId": "S1"}
+{"id": 8, "params": {"url": "https://example.com/"}, "method": "Page.navigate", "sessionId": "S1"}
+{"id": 9, "params": {"format": "png"}, "method": "Page.captureScreenshot", "sessionId": "S1"}
+{"id": 0, "params": {}, "method": "Browser.close"}

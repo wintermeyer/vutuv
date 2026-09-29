@@ -1,0 +1,2 @@
+#!/bin/sh
+FAKE_BROWSER_LOG='/Users/stefan/GitHub/vutuv/.claude/worktrees/issues/tmp/Vutuv.PageScreenshot.CdpTest/test-capture-5-against-a-fake-browser-refuses-downloads-before-the-first-page-exists-6dad1983/protocol.log' exec python3 '/Users/stefan/GitHub/vutuv/.claude/worktrees/issues/test/support/fixtures/cdp/fake_browser.py' "$@"

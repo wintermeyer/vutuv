@@ -159,9 +159,6 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   # A federated handle: user@instance.tld (Mastodon, Friendica, Pixelfed, BookWyrm).
   @fediverse_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
-  # A Bluesky handle: a lowercase domain (name.bsky.social, or a custom
-  # domain) — the same shape Vutuv.Bluesky embeds in the AppView query.
-  @bluesky_format ~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/
   # A self-hosted forge address: a Gitea/Forgejo username, then a dotted public
   # hostname. Deliberately strict on the host half — no port, no path, and the
   # required alphabetic TLD rules out every IP literal and bare `localhost`
@@ -370,12 +367,15 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # A Bluesky handle is a domain, lowercase by definition. Accept a bare
   # handle, a leading "@", a pasted bsky.app profile URL, or a plain name
   # without a dot (assume the default .bsky.social namespace), and store the
-  # full domain form Vutuv.Bluesky fetches by.
+  # full domain form Vutuv.Bluesky fetches by. A DID is stored as it is.
   defp parse_bluesky(value) do
     case parse_value(value) do
       handle when is_binary(handle) ->
         handle = String.downcase(handle)
-        if String.contains?(handle, "."), do: handle, else: handle <> ".bsky.social"
+
+        if String.contains?(handle, ".") or String.starts_with?(handle, "did:"),
+          do: handle,
+          else: handle <> ".bsky.social"
 
       # Nothing extractable (e.g. a lone "@"); keep the input for
       # validate_value/1 to reject with the Bluesky-specific message.
@@ -438,7 +438,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   defp valid_value?(provider, value) when provider in @fediverse_providers,
     do: Regex.match?(@fediverse_format, value)
 
-  defp valid_value?("Bluesky", value), do: Regex.match?(@bluesky_format, value)
+  defp valid_value?("Bluesky", value), do: Bluesky.actor?(value)
 
   defp valid_value?(provider, value) when provider in @self_hosted_providers,
     do: Regex.match?(@self_hosted_format, value)

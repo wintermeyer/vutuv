@@ -740,7 +740,11 @@ defmodule Vutuv.Imports.LinkedIn do
       nil
     else
       %{
-        id: cid("position", "#{downcase(org)}|#{downcase(title)}"),
+        id:
+          cid(
+            "position",
+            position_key(%{"organization" => org, "title" => title, "start_year" => sy})
+          ),
         label: [title, org] |> compact() |> Enum.join(" @ "),
         params: %{
           "organization" => org,
@@ -775,7 +779,11 @@ defmodule Vutuv.Imports.LinkedIn do
       nil
     else
       %{
-        id: cid("volunteer", "#{downcase(org)}|#{downcase(title)}"),
+        id:
+          cid(
+            "volunteer",
+            position_key(%{"organization" => org, "title" => title, "start_year" => sy})
+          ),
         label: [title, org] |> compact() |> Enum.join(" @ "),
         params: %{
           "organization" => org,
@@ -1376,7 +1384,11 @@ defmodule Vutuv.Imports.LinkedIn do
       __user_id__: user.id,
       positions:
         keys(WorkExperience, user.id, fn r ->
-          position_key(%{"organization" => r.organization, "title" => r.title})
+          position_key(%{
+            "organization" => r.organization,
+            "title" => r.title,
+            "start_year" => r.start_year
+          })
         end),
       educations:
         keys(Education, user.id, fn r ->
@@ -1417,10 +1429,14 @@ defmodule Vutuv.Imports.LinkedIn do
     |> MapSet.new()
   end
 
-  defp position_key(%{"organization" => org, "title" => title}) do
+  # The start year belongs to the key: somebody who left and came back to the
+  # same role has two rows that differ only in their dates (issue #2318). The
+  # month stays out, since a hand-typed "Jan 2020" and LinkedIn's bare "2020"
+  # are the same job.
+  defp position_key(%{"organization" => org, "title" => title} = params) do
     case {downcase(org), downcase(title)} do
       {nil, nil} -> nil
-      {o, t} -> "#{o}|#{t}"
+      {o, t} -> "#{o}|#{t}|#{params["start_year"]}"
     end
   end
 
