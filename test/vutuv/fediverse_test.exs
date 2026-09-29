@@ -17,6 +17,23 @@ defmodule Vutuv.FediverseTest do
     on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
   end
 
+  defp stub_actor_with_url(url) do
+    stub_remote(fn conn ->
+      body =
+        Jason.encode!(%{
+          "id" => "https://friendica.example/profile/doris",
+          "type" => "Person",
+          "preferredUsername" => "doris",
+          "inbox" => "https://friendica.example/inbox/doris",
+          "url" => url
+        })
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/activity+json")
+      |> Plug.Conn.send_resp(200, body)
+    end)
+  end
+
   defp federated_user(attrs \\ []) do
     insert(:activated_user, Keyword.merge([fediverse_followers?: true], attrs))
   end
@@ -598,6 +615,50 @@ defmodule Vutuv.FediverseTest do
       assert remote.name == "Alice Example"
       assert remote.followers == "https://social.example/users/alice/followers"
       assert remote.public_key_pem =~ "BEGIN PUBLIC KEY"
+    end
+
+    test "keeps the actor's own profile page, which is not always /@user" do
+      # Friendica: the page a reader opens is `/profile/doris`, and
+      # `https://host/@doris` is a 404 there.
+      stub_actor_with_url("https://friendica.example/profile/doris")
+
+      assert {:ok, remote} =
+               Fediverse.fetch_remote_actor("https://friendica.example/profile/doris")
+
+      assert remote.profile_url == "https://friendica.example/profile/doris"
+    end
+
+    test "reads the profile page out of a list of links" do
+      stub_actor_with_url([
+        %{
+          "type" => "Link",
+          "mediaType" => "application/json",
+          "href" => "https://friendica.example/x.json"
+        },
+        %{
+          "type" => "Link",
+          "mediaType" => "text/html",
+          "href" => "https://friendica.example/@doris"
+        }
+      ])
+
+      assert {:ok, remote} =
+               Fediverse.fetch_remote_actor("https://friendica.example/profile/doris")
+
+      assert remote.profile_url == "https://friendica.example/@doris"
+    end
+
+    test "drops a profile page on another host or scheme" do
+      # A remote document vouches for its own server only; a `url` elsewhere
+      # would turn a mention into a link to wherever the actor pleases.
+      for url <- ["https://phish.example/doris", "http://friendica.example/profile/doris", 42] do
+        stub_actor_with_url(url)
+
+        assert {:ok, remote} =
+                 Fediverse.fetch_remote_actor("https://friendica.example/profile/doris")
+
+        assert remote.profile_url == nil
+      end
     end
 
     test "reads a remote account's follower total from its public collection" do

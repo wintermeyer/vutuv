@@ -706,6 +706,23 @@ defmodule Vutuv.FediverseRemotePostsTest do
       refute account.summary =~ "<b>"
     end
 
+    test "keeps the page a reader opens, for the mention and the card to link" do
+      doc = Map.put(actor_doc(), :profile_url, "https://social.example/profile/them")
+      assert :ok = Fediverse.remember_remote_account(doc)
+
+      account = Repo.get_by!(RemoteAccount, actor_uri: @actor)
+      assert account.profile_url == "https://social.example/profile/them"
+      assert RemoteAccount.web_url(account) == "https://social.example/profile/them"
+    end
+
+    test "an account without a profile page is linked by its actor id" do
+      assert :ok = Fediverse.remember_remote_account(actor_doc())
+
+      account = Repo.get_by!(RemoteAccount, actor_uri: @actor)
+      assert account.profile_url == nil
+      assert RemoteAccount.web_url(account) == @actor
+    end
+
     test "a second delivery re-syncs the one row" do
       assert :ok = Fediverse.remember_remote_account(actor_doc())
       assert :ok = Fediverse.remember_remote_account(%{actor_doc() | name: "Renamed"})

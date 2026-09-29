@@ -4,7 +4,8 @@ defmodule VutuvWeb.MarkdownEmailTest do
   breaks across two lines. Before, `sw@wintermeyer-consulting.de` was plain
   text and wrapped at its hyphen, so a reader copied half an address.
   """
-  use ExUnit.Case, async: true
+  # A `DataCase` because a fediverse address asks whether we hold the account.
+  use Vutuv.DataCase, async: true
 
   alias VutuvWeb.Markdown
 

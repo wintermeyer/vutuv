@@ -31,10 +31,12 @@ defmodule VutuvWeb.Markdown.Cache do
 
   ## What the staleness costs
 
-  An entry lives #{div(300_000, 1000)}s. The pipeline asks the database two
+  An entry lives #{div(300_000, 1000)}s. The pipeline asks the database three
   questions about the world — does this `@handle` name a member, does this
-  `#hashtag` name a topic worth linking — so within that window a handle
-  registered a moment ago stays plain text in an already-rendered body. It
+  `#hashtag` name a topic worth linking, which profile page does this
+  `@user@host` have — so within that window a handle registered a moment ago
+  stays plain text in an already-rendered body, and an account stored a moment
+  ago keeps its guessed link. It
   heals on its own, and `Vutuv.Tags.LinkableCache` in front of the hashtag half
   already accepts the same trade at 60s.
 

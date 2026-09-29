@@ -1483,6 +1483,47 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  Every account this installation holds for a list of `{user, host}` pairs
+  (both lowercased), as a map from the pair to the `RemoteAccount` — in one
+  query and without asking anybody. A pair we do not hold is simply absent, and
+  an empty list costs no query at all.
+
+  Matched the way `remote_account_by_address/1` matches, host as stored and
+  handle on `lower(…)`, which the `(host, lower(handle))` index answers. The
+  `IN` on both columns is a cross product, so rows no pair asked for are
+  dropped here.
+  """
+  def remote_accounts_by_pairs([]), do: %{}
+
+  def remote_accounts_by_pairs(pairs) when is_list(pairs) do
+    {names, hosts} = Enum.unzip(pairs)
+    wanted = MapSet.new(pairs)
+
+    from(a in RemoteAccount,
+      where: a.host in ^Enum.uniq(hosts),
+      where: fragment("lower(?)", a.handle) in ^Enum.uniq(names),
+      order_by: [asc: a.id]
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn account, acc ->
+      key = {String.downcase(account.handle), account.host}
+
+      if MapSet.member?(wanted, key), do: Map.put_new(acc, key, account), else: acc
+    end)
+  end
+
+  @doc """
+  `remote_accounts_by_pairs/1` answered with each account's
+  `RemoteAccount.web_url/1`: where a mention in a body links to. An empty list
+  costs no query, which keeps the Markdown renderer's plain bodies DB-free.
+  """
+  def remote_web_urls(pairs) do
+    pairs
+    |> remote_accounts_by_pairs()
+    |> Map.new(fn {key, account} -> {key, RemoteAccount.web_url(account)} end)
+  end
+
+  @doc """
   Accounts on other networks this installation already holds, matching `term`
   by display name, handle or address — the typeahead half of "write to
   somebody out there", beside `remote_account_by_address/1`'s exact answer.
@@ -2770,6 +2811,7 @@ defmodule Vutuv.Fediverse do
       public_key_id: remote.public_key_id,
       public_key_pem: remote.public_key_pem,
       followers_uri: remote[:followers],
+      profile_url: remote[:profile_url],
       refreshed_at: DateTime.utc_now(:second)
     }
   end
@@ -12294,7 +12336,11 @@ defmodule Vutuv.Fediverse do
          # checks our own actor URL is among them. AP allows a bare string or a
          # list; normalize to a list of strings.
          also_known_as: normalize_uri_list(doc["alsoKnownAs"]),
-         followers: web_uri(doc["followers"])
+         followers: web_uri(doc["followers"]),
+         # The page a human opens, which only Mastodon spells `/@user`. Only on
+         # the actor's own host: anything else would let a document send every
+         # mention of it wherever it liked.
+         profile_url: profile_url(id, doc["url"])
        }}
     else
       {:parse, _} -> {:error, :https_only}
@@ -12326,6 +12372,23 @@ defmodule Vutuv.Fediverse do
   end
 
   defp web_uri(_value), do: nil
+
+  # An actor's `url` is a string, a Link object or a list of either (the spec
+  # allows all three; Mastodon and Friendica send a string). From a list the
+  # HTML page wins over any other representation.
+  defp profile_url(id, url) when is_binary(url) do
+    if same_host?(id, url) and byte_size(url) <= RemoteAccount.max_uri(), do: url
+  end
+
+  defp profile_url(id, %{"href" => href}), do: profile_url(id, href)
+
+  defp profile_url(id, links) when is_list(links) do
+    html = Enum.filter(links, &match?(%{"mediaType" => "text/html"}, &1))
+
+    Enum.find_value(html ++ links, &profile_url(id, &1))
+  end
+
+  defp profile_url(_id, _url), do: nil
 
   defp ap_get(url, signer, etag \\ nil) do
     signature_headers =

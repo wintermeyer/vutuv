@@ -38,6 +38,18 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   def call(%{params: %{"slug" => slug}} = conn, opts), do: resolve(conn, slug, opts)
   def call(conn, _opts), do: invalid_slug(conn)
 
+  # `/@handle` is Mastodon's spelling of a profile, and it is what a server
+  # that does not resolve our WebFinger guesses for `@handle@<our host>`. No
+  # handle here can start with `@`, so the segment is never a member: 301 to the
+  # real page when the handle names somebody (a retired handle straight to its
+  # successor, in one hop), and 404 like any other miss when it does not.
+  defp resolve(conn, "@" <> handle = slug, opts) when handle != "" do
+    case current_handle(handle, opts) do
+      nil -> invalid_slug(conn)
+      current -> redirect_to_current(conn, slug, current)
+    end
+  end
+
   defp resolve(conn, slug, opts) do
     case Repo.get_by(User, username: slug) do
       nil ->
@@ -86,6 +98,26 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
         if Organizations.organization_visible_to?(organization, conn.assigns[:current_user]),
           do: organization,
           else: nil
+    end
+  end
+
+  # The live handle `handle` stands for: a member's own (which wins, as in
+  # `resolve/3`), a retired one's successor, or a page's own on the route that
+  # dispatches pages. Whether that page is visible is the target's question.
+  defp current_handle(handle, opts) do
+    cond do
+      Repo.exists?(from(u in User, where: u.username == ^handle)) ->
+        handle
+
+      current = redirect_target(handle) ->
+        current
+
+      Keyword.get(opts, :dispatch_organization, false) and
+          Organizations.get_organization_by_username(handle) != nil ->
+        handle
+
+      true ->
+        nil
     end
   end
 

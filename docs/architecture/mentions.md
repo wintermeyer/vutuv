@@ -224,6 +224,19 @@ they moved. A handle that is not a full `user@host` (the actor document carried
 no username, so `Handle.display/2` fell back to `@name` or a bare `@host`) gets
 no hook and keeps its plain link: the card is addressed by the address.
 
+**Where a remote mention's `href` goes.** Every network spells its profile pages
+its own way: Mastodon `/@ada`, Friendica `/profile/ada`, PeerTube `/accounts/…`,
+Lemmy `/u/…`, vutuv `/ada`. So an account we hold links to
+`RemoteAccount.web_url/1`: the `profile_url` its actor document named (its
+`url`, kept only when it sits on the actor's own host), else the actor id, which
+every server answers. `VutuvWeb.Markdown` reads them for a whole body in one
+query (`Vutuv.Fediverse.remote_web_urls/1`) and never asks the network at render
+time. Only an account nobody here holds gets the Mastodon guess
+`https://host/@user` (`Handle.web_profile_url/2`), and the card's "View the
+original" answers from the same two sources, so it cannot disagree with the
+link. The reverse guess reaches us too: `/@handle` 301s to `/handle`
+(`VutuvWeb.Plug.UserResolveSlug`), sub-pages and agent formats included.
+
 Nothing else about the anchor changes, so the `href` stays its whole truth — a
 middle click, a copied link, a logged-out visitor and a page whose JavaScript
 never arrived all still go to the destination. Those anchors are often

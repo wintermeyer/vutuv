@@ -1195,7 +1195,8 @@ defmodule VutuvWeb.Markdown do
   # that is **not** inside a `code`/`pre`/`a` element — an entity typed in code
   # is sample text and we never nest a link in a link.
   #
-  # Each body resolves its handles and its hashtags in **one** DB query each;
+  # Each body resolves its handles, its hashtags and its foreign addresses in
+  # **one** DB query each;
   # a body with no `@`/`#` at all does no work (so the pure, DB-free unit tests
   # in `markdown_test.exs` keep working without a sandbox).
   defp linkify_entities(html, mode \\ :all, form \\ :local) do
@@ -1212,10 +1213,10 @@ defmodule VutuvWeb.Markdown do
     tokens = tokenize_html(html)
 
     case entity_candidates(tokens) do
-      {[], [], [], false} ->
+      {[], [], [], [], false} ->
         html
 
-      {mentions, local_mentions, hashtags, _external?} ->
+      {mentions, local_mentions, hashtags, remote, _external?} ->
         # `:hashtags_only` drops the **bare** handles — in remote content a
         # `@name` names an account over there, not the vutuv member who happens
         # to share the handle. A fully-qualified address on our own host has no
@@ -1229,9 +1230,11 @@ defmodule VutuvWeb.Markdown do
         targets = if handles == [], do: %{}, else: mention_targets(handles)
         bare_users = if mode == :all, do: targets, else: %{}
         tags = Tags.linkable_slugs(hashtags)
+        remote_urls = Fediverse.remote_web_urls(remote)
+        lookups = %{bare: bare_users, address: targets, tags: tags, remote: remote_urls}
 
         tokens
-        |> map_linkable_text(&link_entities_in_text(&1, bare_users, targets, tags, form))
+        |> map_linkable_text(&link_entities_in_text(&1, lookups, form))
         |> IO.iodata_to_binary()
     end
   end
@@ -1267,21 +1270,24 @@ defmodule VutuvWeb.Markdown do
   # tokens), so a tag-depth walk can tell text apart from markup.
   defp tokenize_html(html), do: Regex.split(~r/<[^>]+>/, html, include_captures: true)
 
-  # The unique, lowercased {handles, own-host handles, hashtags} sitting in
-  # linkable text.
+  # The unique, lowercased {handles, own-host handles, hashtags, foreign
+  # addresses} sitting in linkable text.
   defp entity_candidates(tokens) do
-    {mentions, local_mentions, hashtags, external?} =
-      reduce_linkable_text(tokens, {[], [], [], false}, fn text, acc ->
+    {mentions, local_mentions, hashtags, remote, external?} =
+      reduce_linkable_text(tokens, {[], [], [], [], false}, fn text, acc ->
         text |> Mentions.scan() |> Enum.reduce(acc, &collect_candidate/2)
       end)
 
-    {Enum.uniq(mentions), Enum.uniq(local_mentions), Enum.uniq(hashtags), external?}
+    {Enum.uniq(mentions), Enum.uniq(local_mentions), Enum.uniq(hashtags), Enum.uniq(remote),
+     external?}
   end
 
-  # An address on somebody else's host needs no DB lookup, and neither does a
-  # Bluesky handle, so both only raise the `external?` flag — that keeps the
-  # token walk from being skipped for a body whose only entities point
-  # somewhere else.
+  # An address on somebody else's host is collected as `{user, host}` so the
+  # accounts this installation already holds link to their real profile page
+  # (`Vutuv.Fediverse.remote_web_urls/1`, one query, no network). A Bluesky
+  # handle needs no lookup at all and only raises the `external?` flag, which
+  # keeps the token walk from being skipped for a body whose only entities
+  # point somewhere else.
   #
   # Two of our own hosts wear that same shape and neither leaves the site. Our
   # **tag host** (issue #1330): `@php@tags.<host>` is a topic of this
@@ -1291,22 +1297,24 @@ defmodule VutuvWeb.Markdown do
   # page of ours, so its user part is a handle and gets looked up like a bare
   # `@ada` — kept in its own list because it resolves even in `:hashtags_only`
   # mode, where a bare handle deliberately does not.
-  defp collect_candidate({:fediverse, user, host}, {mentions, local, hashtags, _external?}) do
+  defp collect_candidate({:fediverse, user, host}, {mentions, local, hashtags, remote, _ext?}) do
+    user = String.downcase(user)
+
     cond do
-      Fediverse.tag_host?(host) -> {mentions, local, [String.downcase(user) | hashtags], true}
-      Fediverse.local_host?(host) -> {mentions, [String.downcase(user) | local], hashtags, true}
-      true -> {mentions, local, hashtags, true}
+      Fediverse.tag_host?(host) -> {mentions, local, [user | hashtags], remote, true}
+      Fediverse.local_host?(host) -> {mentions, [user | local], hashtags, remote, true}
+      true -> {mentions, local, hashtags, [remote_key(user, host) | remote], true}
     end
   end
 
-  defp collect_candidate({:bluesky, _handle}, {mentions, local, hashtags, _external?}),
-    do: {mentions, local, hashtags, true}
+  defp collect_candidate({:bluesky, _handle}, {mentions, local, hashtags, remote, _external?}),
+    do: {mentions, local, hashtags, remote, true}
 
-  defp collect_candidate({:local, handle}, {mentions, local, hashtags, external?}),
-    do: {[String.downcase(handle) | mentions], local, hashtags, external?}
+  defp collect_candidate({:local, handle}, {mentions, local, hashtags, remote, external?}),
+    do: {[String.downcase(handle) | mentions], local, hashtags, remote, external?}
 
-  defp collect_candidate({:hashtag, hashtag}, {mentions, local, hashtags, external?}),
-    do: {mentions, local, [String.downcase(hashtag) | hashtags], external?}
+  defp collect_candidate({:hashtag, hashtag}, {mentions, local, hashtags, remote, external?}),
+    do: {mentions, local, [String.downcase(hashtag) | hashtags], remote, external?}
 
   # Walks the token stream, applying `fun` to every text token outside a
   # skip element and leaving tags and skipped text untouched.
@@ -1350,19 +1358,19 @@ defmodule VutuvWeb.Markdown do
 
   defp skip_tag?(name), do: String.downcase(name) in @entity_skip_tags
 
-  defp link_entities_in_text(text, bare_users, address_users, tags, form) do
+  defp link_entities_in_text(text, lookups, form) do
     Mentions.replace(text, fn
       whole, {:fediverse, user, host} ->
-        fediverse_link(whole, user, host, address_users, tags, form)
+        fediverse_link(whole, user, host, lookups, form)
 
       whole, {:bluesky, handle} ->
         bluesky_link(whole, handle)
 
       whole, {:local, handle} ->
-        mention_link(whole, handle, bare_users, form)
+        mention_link(whole, handle, lookups.bare, form)
 
       whole, {:hashtag, hashtag} ->
-        hashtag_link(whole, hashtag, tags)
+        hashtag_link(whole, hashtag, lookups.tags)
     end)
   end
 
@@ -1370,11 +1378,11 @@ defmodule VutuvWeb.Markdown do
   # account — but two of our own hosts wear the same shape, and for both the
   # reader wants a page here rather than a trip to another server: our tag host
   # names a topic, and our main host names a member or a page of ours.
-  defp fediverse_link(whole, user, host, users, tags, form) do
+  defp fediverse_link(whole, user, host, lookups, form) do
     cond do
-      Fediverse.tag_host?(host) -> tag_actor_link(whole, user, tags)
-      Fediverse.local_host?(host) -> local_address_link(whole, user, host, users, form)
-      true -> remote_actor_link(user, host, form)
+      Fediverse.tag_host?(host) -> tag_actor_link(whole, user, lookups.tags)
+      Fediverse.local_host?(host) -> local_address_link(whole, user, host, lookups.address, form)
+      true -> remote_actor_link(user, host, lookups.remote, form)
     end
   end
 
@@ -1424,14 +1432,15 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  # Any other host: link to that remote account's profile at the Mastodon-web
-  # convention `https://host/@user` (geno.social and the vast majority of
-  # servers). This is a pure string mapping — no WebFinger lookup — so it also
-  # works on air-gapped installs and never leaks a reader's request to the
-  # remote host at render time. The host is lowercased (hostnames are
-  # case-insensitive); the typed user case is kept in both the URL and the
-  # label. Opens in a new tab like other external links; both parts are a
-  # validated charset (`[A-Za-z0-9_]` / `[A-Za-z0-9.-]`), so no escaping needed.
+  # Any other host: link to that remote account's profile page. An account this
+  # installation holds names its own (`RemoteAccount.web_url/1`: Friendica's
+  # `/profile/doris`, which `/@doris` 404s on), found in one query and escaped,
+  # since a remote server wrote it. Anybody else gets the Mastodon-web guess
+  # `https://host/@user` (`Handle.web_profile_url/2`), a pure string mapping —
+  # no WebFinger at render time, so it works air-gapped and never leaks a
+  # reader's request to the remote host. Opens in a new tab like other external
+  # links; the label is the typed address, a validated charset
+  # (`[A-Za-z0-9_]` / `[A-Za-z0-9.-]`), so it needs no escaping.
   # `data-remote-actor` is what `assets/js/mention_card.js` binds the mention
   # card to: a click opens a small card with the account and a Follow button
   # instead of leaving the site, because "who is that" and "I want their posts
@@ -1446,10 +1455,16 @@ defmodule VutuvWeb.Markdown do
   # a hook for our own click handler has no business in a copy stored on
   # somebody else's server, which sanitizes it away on arrival anyway. Per
   # mention, per follower inbox.
-  defp remote_actor_link(user, host, form) do
+  defp remote_actor_link(user, host, remote_urls, form) do
     hook = if form == :local, do: ~s( data-remote-actor="#{user}@#{host}"), else: ""
 
-    outbound_mention_anchor(Handle.web_profile_url(user, host), "@#{user}@#{host}", hook)
+    href =
+      case Map.get(remote_urls, remote_key(user, host)) do
+        nil -> Handle.web_profile_url(user, host)
+        url -> escape(url)
+      end
+
+    outbound_mention_anchor(href, "@#{user}@#{host}", hook)
   end
 
   # `@name.bsky.social` is an account on Bluesky, which is not the fediverse and
@@ -1468,6 +1483,10 @@ defmodule VutuvWeb.Markdown do
   # a third place it can drift and quietly stop being marked. Both callers pass
   # a validated charset (`[A-Za-z0-9_]` / `[A-Za-z0-9.-]`), so nothing needs
   # escaping here.
+  # How a foreign address is keyed between the candidate scan, the link and
+  # `Vutuv.Fediverse.remote_web_urls/1`: both halves lowercased.
+  defp remote_key(user, host), do: {String.downcase(user), String.downcase(host)}
+
   defp outbound_mention_anchor(href, label, hook \\ "") do
     ~s(<a href="#{href}" target="_blank" rel="noopener noreferrer" class="mention"#{hook}>) <>
       ~s(#{label}</a>)

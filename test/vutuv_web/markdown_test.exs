@@ -1,5 +1,8 @@
 defmodule VutuvWeb.MarkdownTest do
-  use ExUnit.Case, async: true
+  # A `DataCase` for one reason: a foreign `@user@host` asks
+  # `Vutuv.Fediverse.remote_web_urls/1` whether we hold that account. Every
+  # other case here renders without touching the database.
+  use Vutuv.DataCase, async: true
 
   import Vutuv.WorkCounter
 
@@ -452,8 +455,9 @@ defmodule VutuvWeb.MarkdownTest do
   describe "fediverse handles" do
     # `render/1` is the messages/chat renderer, `render_post/2` the posts
     # renderer; both funnel through the same `linkify_entities` pass, so a
-    # single implementation links `@user@host` in DMs and posts alike. These
-    # cases stay DB-free: a fediverse handle needs no member lookup.
+    # single implementation links `@user@host` in DMs and posts alike. No
+    # account is stored here, so each one gets the `/@user` guess; the stored
+    # ones are in `markdown_mentions_test.exs`.
     defp post_html(text), do: text |> Markdown.render_post([]) |> Phoenix.HTML.safe_to_string()
 
     test "links a @user@host handle to the remote profile (messages)" do

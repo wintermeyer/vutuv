@@ -235,6 +235,23 @@ defmodule VutuvWeb.RemoteActorCardTest do
     assert html =~ @actor
   end
 
+  # The actor id is where a server answers ActivityPub, and a reader is better
+  # served by the page the account itself names for humans (Friendica's
+  # `/profile/doris`, Mastodon's `/@them`).
+  test "the way out prefers the account's own profile page", %{conn: conn} do
+    {conn, _user} = federating(conn)
+
+    account()
+    |> Ecto.Changeset.change(profile_url: "https://social.example/@them")
+    |> Repo.update!()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ ~s(href="https://social.example/@them")
+    assert html =~ ~s(<span class="actor-card__link-address">social.example/@them</span>)
+    refute html =~ ~s(href="#{@actor}")
+  end
+
   # A scheme and a `www.` are noise every reader already knows, and dropping
   # them leaves the two parts a reader actually checks: which server, and whose
   # account on it.
