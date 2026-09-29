@@ -92,11 +92,4 @@ defmodule Vutuv.Tags.TrendingTag do
       add_error(changeset, :hosts, "are not server names")
     end
   end
-
-  @doc """
-  The six days before today, oldest last — what the pill's little chart draws
-  beside the bar for today.
-  """
-  def previous(%__MODULE__{history: [_today | rest]}), do: rest
-  def previous(%__MODULE__{}), do: []
 end
