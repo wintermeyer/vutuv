@@ -1831,6 +1831,11 @@ defmodule Vutuv.Posts do
   """
   def repost_post(%User{} = user, %Post{} = post) do
     cond do
+      # Like a like: sharing your own post counts itself and heads your own
+      # profile with "Reposted by" yourself.
+      self_vote?(post, user) ->
+        {:error, :self}
+
       restricted?(post) ->
         {:error, :restricted}
 
@@ -1843,6 +1848,7 @@ defmodule Vutuv.Posts do
         case engage(PostRepost, :repost, user, post) do
           {:ok, %PostRepost{} = repost} ->
             Vutuv.Fediverse.federate_repost(post, user)
+            Vutuv.Activity.notify_repost(post.user_id, user, post.id, repost.id)
             broadcast_new_repost(repost, post)
 
           {:ok, :noop} ->
@@ -1865,6 +1871,7 @@ defmodule Vutuv.Posts do
   def repost_post(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
     cond do
       not Organizations.publisher?(page, acting_user) -> {:error, :not_allowed}
+      self_vote?(post, page) -> {:error, :self}
       restricted?(post) -> {:error, :restricted}
       true -> do_page_repost(page, acting_user, post)
     end
@@ -1874,6 +1881,7 @@ defmodule Vutuv.Posts do
     case engage(PostRepost, :repost, page, post, acting_user) do
       {:ok, %PostRepost{} = repost} ->
         Vutuv.Fediverse.federate_repost(post, page)
+        Vutuv.Activity.notify_repost(post.user_id, page, post.id, repost.id)
         broadcast_new_repost(repost, post)
 
       {:ok, :noop} ->

@@ -30,7 +30,7 @@ whole process:
 
 1. [Log in to vutuv](/login). No account yet? [Create a free one](/) first.
    vutuv is passwordless: you enter your email and type in the PIN we mail you.
-2. Open [Access tokens](/access_tokens) and click **Create an access token**.
+2. Open [Access tokens](/login?return_to=/access_tokens) and click **Create an access token**.
 3. The form arrives with a name already filled in and the **`profile:read`**
    permission ticked, which is all you need to read your own profile. Press
    **Submit**.
@@ -130,7 +130,7 @@ messages (the request model included) and the notification feed. See the
 [reference](/developers/reference) for every endpoint.
 
 For real third-party apps there is **OAuth 2** (authorization code + PKCE):
-register your app at [/developers/apps](/developers/apps), send members through
+register your app at [/developers/apps](/login?return_to=/developers/apps), send members through
 a consent screen instead of pasting tokens — see
 [Authentication & tokens](/developers/authentication#oauth-2-for-third-party-apps).
 Registered apps can also receive **[webhooks](/developers/webhooks)**: signed

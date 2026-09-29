@@ -144,6 +144,19 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert %{likes: 0} = Posts.engagement_counts(post.id)
     end
 
+    # The same rule for a repost: it counted the author's own share and put
+    # "Reposted by <author>" above their own post on the profile.
+    test "your own post cannot be reposted", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "no self repost"})
+      %{view: actions} = feed_actions(conn, post)
+
+      assert has_element?(actions, "#post-actions-post-#{post.id}-repost[disabled]")
+
+      assert {:error, :self} = Posts.repost_post(user, post)
+      assert %{reposts: 0} = Posts.engagement_counts(post.id)
+    end
+
     test "bookmark toggles", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = create_post!(user, %{body: "keep"})

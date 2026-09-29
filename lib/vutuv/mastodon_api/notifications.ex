@@ -34,6 +34,7 @@ defmodule Vutuv.MastodonApi.Notifications do
     "thread" => "mention",
     "fediverse_reply" => "mention",
     "like" => "favourite",
+    "repost" => "reblog",
     "fediverse_reaction" => "favourite",
     "follower" => "follow",
     "connection" => "follow"

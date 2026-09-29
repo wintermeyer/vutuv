@@ -92,6 +92,7 @@ defmodule VutuvWeb.NotificationLine do
       do: gettext("Your post now has %{formatted} likes.", formatted: delimited_count(count))
 
   def notification_text(%{kind: "like"}), do: gettext("liked your post.")
+  def notification_text(%{kind: "repost"}), do: gettext("reposted your post.")
 
   def notification_text(%{kind: "follower"}), do: gettext("started following you.")
 
@@ -282,7 +283,7 @@ defmodule VutuvWeb.NotificationLine do
   # Event kinds that share the brand badge colour, so the class string lives
   # in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
-  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction share)
+  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction share repost)
   @moderation_kinds ~w(moderation image_rejected report_outcome)
 
   @doc """
@@ -324,7 +325,7 @@ defmodule VutuvWeb.NotificationLine do
   def kind_glyph("like"), do: "♥"
   # A re-share from another network (issue #1068): the arrows, since the line
   # beside it names the verb and the globe already sits on the sharer's name.
-  def kind_glyph("share"), do: "↻"
+  def kind_glyph(kind) when kind in ~w(share repost), do: "↻"
   # A reply written on another network (issue #1069) — the same globe the
   # post card's "from other networks" line uses, so one glyph means one thing.
   def kind_glyph("fediverse_reply"), do: "🌐"
@@ -358,6 +359,7 @@ defmodule VutuvWeb.NotificationLine do
   def kind_label("thread"), do: gettext("Thread reply")
   def kind_label("mention"), do: gettext("Mention")
   def kind_label("like"), do: gettext("Like")
+  def kind_label("repost"), do: pgettext("notification kind", "Repost")
   def kind_label("fediverse_reply"), do: gettext("Reply from another network")
   def kind_label("share"), do: gettext("Reaction from another network")
   def kind_label("fediverse_reaction"), do: gettext("Reaction from another network")
@@ -407,6 +409,7 @@ defmodule VutuvWeb.NotificationLine do
   """
   def short_text(%{milestone: _}), do: nil
   def short_text(%{kind: "like"}), do: pgettext("bell preview", "liked")
+  def short_text(%{kind: "repost"}), do: pgettext("bell preview", "reposted")
 
   def short_text(%{kind: "fediverse_reaction", reaction_kind: "like"}),
     do: pgettext("bell preview", "liked")
@@ -621,7 +624,7 @@ defmodule VutuvWeb.NotificationLine do
   # vutuv unless they choose otherwise, and a private reply (issue #1071) has no
   # public page to open anyway.
   def primary_target(%{kind: kind} = n, viewer)
-      when kind in ["reply", "like", "fediverse_reply", "fediverse_reaction"] do
+      when kind in ["reply", "like", "repost", "fediverse_reply", "fediverse_reaction"] do
     if is_binary(n[:post_id]) and viewer != nil, do: ~p"/#{viewer}/posts/#{n.post_id}"
   end
 

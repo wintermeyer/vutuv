@@ -29,7 +29,7 @@ defmodule VutuvWeb.NotificationLive.Timeline do
   alias Vutuv.ViewerClock
 
   @words_kinds ~w(reply thread mention fediverse_reply)
-  @reaction_kinds ~w(like fediverse_reaction)
+  @reaction_kinds ~w(like repost fediverse_reaction)
   @people_kinds ~w(follower connection)
 
   @doc """
@@ -177,6 +177,7 @@ defmodule VutuvWeb.NotificationLive.Timeline do
   defp like?(_item), do: false
 
   defp share?(%{kind: "fediverse_reaction", reaction_kind: "announce"}), do: true
+  defp share?(%{kind: "repost"}), do: true
   defp share?(_item), do: false
 
   defp count_actors(items, fun),

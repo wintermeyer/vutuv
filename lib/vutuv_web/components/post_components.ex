@@ -7290,8 +7290,12 @@ defmodule VutuvWeb.PostComponents do
         off_label={gettext("Repost")}
         active_class="text-brand-600 dark:text-brand-300"
         tinted?
-        disabled={@engagement.restricted?}
-        disabled_title={gettext("Only public posts can be reposted.")}
+        disabled={@own? or @engagement.restricted?}
+        disabled_title={
+          if @own?,
+            do: gettext("You can't repost your own post."),
+            else: gettext("Only public posts can be reposted.")
+        }
       >
         <:icon><.icon_repost /></:icon>
       </.action_button>

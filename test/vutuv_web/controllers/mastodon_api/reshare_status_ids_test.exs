@@ -282,8 +282,13 @@ defmodule VutuvWeb.MastodonApi.ReshareStatusIdsTest do
 
   # `user` passes `post` on, and the row that records it — the thing a reshare's
   # id names.
+  # A reshare of one's own post can no longer be made (`{:error, :self}`), but
+  # rows from before that rule still exist, so the author's case is inserted
+  # the way they were stored.
   defp repost_row(user, post) do
-    Posts.repost_post(user, post)
-    Repo.get_by!(PostRepost, post_id: post.id, user_id: user.id)
+    case Posts.repost_post(user, post) do
+      {:error, :self} -> Repo.insert!(%PostRepost{user_id: user.id, post_id: post.id})
+      :ok -> Repo.get_by!(PostRepost, post_id: post.id, user_id: user.id)
+    end
   end
 end

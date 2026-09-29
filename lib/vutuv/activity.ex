@@ -61,6 +61,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Posts.PostMention
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReply
+  alias Vutuv.Posts.PostRepost
   alias Vutuv.Prefs
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.References.Check
@@ -450,6 +451,25 @@ defmodule Vutuv.Activity do
       where: p.user_id == ^user_id,
       select: %{ts: max(l.inserted_at)}
     )
+  end
+
+  # Reposts of the member's own posts by somebody they have not blocked (or
+  # been blocked by). Self-reposts are refused now (`Posts.repost_post/2`), but
+  # rows from before that exist. A page's repost has no member id, and NULL
+  # NOT IN (...) is never true, so it gets its own arm. Shared by the max, the
+  # items and the count, so the three cannot disagree about who counts.
+  defp repost_events(user_id) do
+    from(r in PostRepost,
+      join: p in assoc(r, :post),
+      where: p.user_id == ^user_id,
+      where:
+        is_nil(r.user_id) or
+          (r.user_id != ^user_id and r.user_id not in subquery(blocked_either_way(user_id)))
+    )
+  end
+
+  defp repost_max(user_id) do
+    user_id |> repost_events() |> select([r], %{ts: max(r.inserted_at)})
   end
 
   defp moderation_max(user_id) do
@@ -1088,6 +1108,25 @@ defmodule Vutuv.Activity do
     )
   end
 
+  @doc """
+  A "reposted your post" notification for the post's author. Not throttled
+  like a like: a repost is rarer and each one names somebody passing the
+  post on. On a post the author muted it arrives quietly, as a like does.
+  """
+  def notify_repost(author_id, reposter, post_id, repost_id) do
+    notify(
+      author_id,
+      Map.merge(actor_fields(reposter), %{
+        kind: "repost",
+        text: "reposted your post.",
+        post_id: post_id,
+        source_id: repost_id,
+        quiet: muted_post?(author_id, post_id),
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
   # How loudly a like is announced (`Vutuv.Activity.LikeThrottle`): one by one,
   # as a milestone, as the final notice, or quietly. A throttled like has its
   # row stamped `quiet` before the broadcast, so the recount already leaves it
@@ -1486,6 +1525,14 @@ defmodule Vutuv.Activity do
         dismiss: [{"like", :id}]
       },
       %{
+        kind: "repost",
+        email_pref: nil,
+        max_arms: [repost_max(user_id)],
+        items: &repost_items(user_id, &1, &2),
+        counts: [count_reposts(user_id, read_at, unread?)],
+        dismiss: [{"repost", :id}]
+      },
+      %{
         kind: "organization_role",
         email_pref: nil,
         max_arms: [organization_role_max(user_id)],
@@ -1842,6 +1889,7 @@ defmodule Vutuv.Activity do
       join: replier in assoc(reply, :user),
       # Self-replies (threading your own post) are not news.
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
+      where: reply.user_id not in subquery(blocked_either_way(user_id)),
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^limit,
       select:
@@ -2186,6 +2234,9 @@ defmodule Vutuv.Activity do
       left_join: liker in assoc(l, :user),
       left_join: page in assoc(l, :organization),
       where: p.user_id == ^user_id,
+      # A page's like has no member behind it, and NULL NOT IN (...) is never
+      # true, so it gets its own arm.
+      where: is_nil(l.user_id) or l.user_id not in subquery(blocked_either_way(user_id)),
       order_by: [desc: l.inserted_at, desc: l.id],
       limit: ^limit,
       select: {l.id, l.inserted_at, struct(liker, ^User.listing_fields()), page, p.id, l.quiet}
@@ -2197,6 +2248,26 @@ defmodule Vutuv.Activity do
       event_id("like", id)
       |> actor_item("like", at, liker || page)
       |> Map.merge(%{post_id: post_id, quiet: quiet})
+    end)
+  end
+
+  # Reposts of this user's posts by somebody else, shaped like a like: the
+  # notifications page folds both into one reactions row per post.
+  defp repost_items(user_id, limit, cursor) do
+    from([r, p] in repost_events(user_id),
+      left_join: reposter in assoc(r, :user),
+      left_join: page in assoc(r, :organization),
+      order_by: [desc: r.inserted_at, desc: r.id],
+      limit: ^limit,
+      select: {r.id, r.inserted_at, struct(reposter, ^User.listing_fields()), page, p.id}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> preload_actor_avatars(2)
+    |> Enum.map(fn {id, at, reposter, page, post_id} ->
+      event_id("repost", id)
+      |> actor_item("repost", at, reposter || page)
+      |> Map.put(:post_id, post_id)
     end)
   end
 
@@ -2727,6 +2798,7 @@ defmodule Vutuv.Activity do
     from(r in PostReply,
       join: reply in assoc(r, :post),
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
+      where: reply.user_id not in subquery(blocked_either_way(user_id)),
       select: %{count: count()}
     )
     |> answered_scope(user_id, answer, :post)
@@ -2863,11 +2935,22 @@ defmodule Vutuv.Activity do
     from(l in PostLike,
       join: p in assoc(l, :post),
       where: p.user_id == ^user_id,
+      where: is_nil(l.user_id) or l.user_id not in subquery(blocked_either_way(user_id)),
       select: %{count: count()}
     )
     |> since(read_at)
     |> unless_muted(user_id, unread?, fn query, muted ->
       where(query, [l, p], not l.quiet and p.id not in subquery(muted))
+    end)
+  end
+
+  defp count_reposts(user_id, read_at, unread?) do
+    user_id
+    |> repost_events()
+    |> select([r], %{count: count()})
+    |> since(read_at)
+    |> unless_muted(user_id, unread?, fn query, muted ->
+      where(query, [r, p], p.id not in subquery(muted))
     end)
   end
 

@@ -6,7 +6,7 @@ a message.
 
 Webhooks belong to a registered [OAuth application](/developers/authentication#oauth-2-for-third-party-apps).
 Add one on your app's page under
-[/developers/apps](/developers/apps): endpoint URL (https; `http://localhost`
+[/developers/apps](/login?return_to=/developers/apps): endpoint URL (https; `http://localhost`
 for development), the events you care about, and you receive a signing
 secret (`vutuv_whsec_…`, shown once).
 

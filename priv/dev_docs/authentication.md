@@ -16,7 +16,7 @@ by the extension URLs instead — see the
 A personal access token (PAT) acts as the member who created it, limited to
 the permissions ("scopes") they picked.
 
-* Create one at [vutuv.de/access_tokens](/access_tokens) (you need a vutuv
+* Create one at [vutuv.de/access_tokens](/login?return_to=/access_tokens) (you need a vutuv
   account, logged in).
 * The token starts with `vutuv_pat_` and is shown **exactly once**. vutuv
   stores only a hash; a lost token cannot be recovered, only replaced.
@@ -138,11 +138,11 @@ Personal access tokens are for your own scripts — the member has to create
 and paste the token. A real third-party app uses **OAuth 2 (authorization
 code + PKCE)** instead: your users click "Connect with vutuv", approve the
 permissions on a consent screen, and your app receives tokens. Members see
-and revoke the connection at [vutuv.de/connected_apps](/connected_apps).
+and revoke the connection at [vutuv.de/connected_apps](/login?return_to=/connected_apps).
 
 ### 1. Register your application
 
-At [vutuv.de/developers/apps](/developers/apps) (you need a vutuv account —
+At [vutuv.de/developers/apps](/login?return_to=/developers/apps) (you need a vutuv account —
 that account is the accountability anchor; misbehaving apps get suspended,
 which cuts off all of their tokens at once). You receive a `client_id` and
 a `client_secret` (shown once). Register your exact redirect URLs —

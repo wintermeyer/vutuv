@@ -281,9 +281,10 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
       assert %{likes: 0} = Posts.engagement_counts(post.id)
     end
 
-    test "reposting a restricted post is a 409", %{conn: conn, me: me, token: token} do
+    # Somebody else's post: one's own is refused earlier, as a self-repost.
+    test "reposting a restricted post is a 409", %{conn: conn, other: other, token: token} do
       {:ok, post} =
-        Posts.create_post(me, %{
+        Posts.create_post(other, %{
           "body" => "restricted",
           "denials" => [%{"wildcard" => "logged_out"}]
         })
