@@ -1987,15 +1987,26 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  defp maybe_refresh_remote_follower_count_async(account_id) do
-    if Application.get_env(:vutuv, :fediverse_counts, false),
-      do: claim_remote_follower_count_refresh(account_id)
+  @doc """
+  Asks the account's server for its follower total in the background, at most
+  once a week per account: the claim on `follower_count_attempted_at` is what
+  keeps a card opened ten times in a minute at one request. A row loaded with a
+  fresh attempt stamp is answered in memory, so opening a card costs no write.
+  A no-op while the `:fediverse_counts` flag is off, so an air-gapped
+  installation never calls out.
+  """
+  def refresh_remote_follower_count_async(%RemoteAccount{} = account) do
+    stale_before = DateTime.add(DateTime.utc_now(:second), -7, :day)
+    attempted_at = account.follower_count_attempted_at
+
+    if Application.get_env(:vutuv, :fediverse_counts, false) and
+         (is_nil(attempted_at) or DateTime.before?(attempted_at, stale_before)),
+       do: claim_remote_follower_count_refresh(account.id, stale_before)
 
     :ok
   end
 
-  defp claim_remote_follower_count_refresh(account_id) do
-    stale_before = DateTime.add(DateTime.utc_now(:second), -7, :day)
+  defp claim_remote_follower_count_refresh(account_id, stale_before) do
     now = DateTime.utc_now(:second)
 
     {claimed, _} =
@@ -3066,7 +3077,7 @@ defmodule Vutuv.Fediverse do
 
     with {:ok, account} <- result do
       Media.fetch_avatar_async(account, remote[:icon])
-      maybe_refresh_remote_follower_count_async(account.id)
+      refresh_remote_follower_count_async(account)
       {:ok, account}
     end
   end

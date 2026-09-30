@@ -483,6 +483,67 @@ defmodule VutuvWeb.RemoteActorCardTest do
     refute html =~ ~s(data-actor-card-latest)
   end
 
+  # How many people follow the account is the first thing a reader weighs a
+  # follow by, and a server that withholds it shows nothing.
+  test "the account's follower total shows when its server publishes one", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+    refute html =~ "followers"
+
+    acc |> Ecto.Changeset.change(follower_count: 12_345) |> Repo.update!()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+    assert html =~ "12K followers"
+
+    html =
+      conn
+      |> recycle()
+      |> put_req_header("accept-language", "de-DE,de")
+      |> post(~p"/system/fediverse/actor_card", address: @address)
+      |> html_response(200)
+
+    assert html =~ "12K Follower"
+  end
+
+  # The background batch only counts accounts that reposted something here, so
+  # most cards would never show a total. Opening one asks its server, at most
+  # once a week per account (the claim on `follower_count_attempted_at`), and
+  # the next card shows what came back.
+  test "opening the card fetches a total nobody has asked for yet", %{conn: conn} do
+    {conn, _user} = federating(conn)
+
+    acc =
+      account()
+      |> Ecto.Changeset.change(followers_uri: @actor <> "/followers")
+      |> Repo.update!()
+
+    stub_remote(fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("application/activity+json")
+      |> Plug.Conn.send_resp(200, Jason.encode!(%{"totalItems" => 321}))
+    end)
+
+    Application.put_env(:vutuv, :fediverse_counts, true)
+    on_exit(fn -> Application.put_env(:vutuv, :fediverse_counts, false) end)
+
+    post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+    await_background_tasks()
+
+    assert Repo.reload!(acc).follower_count == 321
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+    assert html =~ "321 followers"
+  end
+
+  defp await_background_tasks do
+    for pid <- Task.Supervisor.children(Vutuv.TaskSupervisor) do
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 2_000
+    end
+  end
+
   # The preview is a second surface showing a post, so it obeys the reader's
   # filters like the first one. Without the `ContentFilters` call in
   # `RemoteActorCardController.preview/2` this quotes the muted word straight at

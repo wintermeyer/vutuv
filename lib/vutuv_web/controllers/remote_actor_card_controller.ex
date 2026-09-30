@@ -65,6 +65,8 @@ defmodule VutuvWeb.RemoteActorCardController do
   def show(conn, %{"address" => address}) when is_binary(address) do
     case Fediverse.remote_account_by_address(address) do
       %RemoteAccount{} = account ->
+        # A resolve already asks through the upsert; a stored row is asked here.
+        Fediverse.refresh_remote_follower_count_async(account)
         card(conn, address, account)
 
       nil ->
