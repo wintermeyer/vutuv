@@ -1123,18 +1123,33 @@ defmodule VutuvWeb.ShellLiveTest do
     # count (reported 2026-08-01), so the word has to be on screen — but only
     # where the bar has room, and that depends on what else the bar is carrying
     # rather than on the breakpoint alone.
-    test "spells out the word for a logged-out visitor at every width", %{conn: conn} do
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{"locale" => "de"})
+    # A visitor's bar holds a wordmark, this pill and a Log in button, and on
+    # a narrow phone the three do not fit with the word and full margins, so
+    # there it waits (Stefan's call, 2026-09-30). How narrow depends on the
+    # language, so each locale gets its own threshold. Asserted on the word's
+    # own span: the pill's `md:hidden lg:inline-flex` contains "hidden", so
+    # matching the pill would pass for the wrong reason.
+    for {locale, word, from} <- [
+          {"de", "Personen", "400px"},
+          {"fr", "personnes", "440px"},
+          {"it", "persone", "380px"},
+          {"en", "people", "370px"}
+        ] do
+      test "spells out the word for a logged-out visitor from #{from} up (#{locale})", %{
+        conn: conn
+      } do
+        {:ok, view, _html} =
+          live_isolated(conn, VutuvWeb.ShellLive, session: %{"locale" => unquote(locale)})
 
-      broadcast_total(60_123)
+        broadcast_total(60_123)
 
-      assert has_element?(view, @total, "Personen")
-      # No breakpoint gate for a visitor: their bar holds a wordmark, this pill
-      # and a Log in button, with room to spare even on a phone. Asserted on the
-      # word's own span — the pill's `md:hidden lg:inline-flex` contains the
-      # substring "hidden lg:inline", so a plain text match passes for the wrong
-      # reason.
-      refute has_element?(view, "#{@total} span.hidden")
+        assert has_element?(view, @total, unquote(word))
+
+        assert has_element?(
+                 view,
+                 ~s|#{@total} span.hidden[class*="min-[#{unquote(from)}]:inline"]|
+               )
+      end
     end
 
     test "holds the word back until lg once a member's controls are in the bar", %{conn: conn} do
