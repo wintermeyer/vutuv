@@ -90,9 +90,8 @@ defmodule Vutuv.Tags.TrendingTest do
       assert row.servers == 2
       assert row.uses == 2 * 1084
       assert row.baseline == 2 * 3
-      # The week decides the offer but is not kept: nothing draws it any more,
-      # so the column falls back to its default until a later deploy drops it.
-      assert Repo.all(from(t in "tag_trends", select: t.history)) == [[]]
+      # The week decides the offer but is not kept: nothing draws it any more.
+      refute "history" in Repo.query!("SELECT * FROM tag_trends LIMIT 0").columns
       assert @big in row.hosts
     end
 
