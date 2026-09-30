@@ -186,7 +186,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
       # The Cancel link points back to the @backlink the controller passes.
       assert html =~ ~s(class="button button--cancel" href="#{~p"/settings/phone_numbers"}")
-      assert html =~ ~s(<button class="button" type="submit">)
+      assert html =~ ~s(<button class="button" type="submit")
     end
 
     test "a failed submit re-renders the form with the error banner", %{conn: conn, user: _user} do
@@ -203,7 +203,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
       # The actions row still renders on the failed re-render.
       assert html =~ ~s(class="button button--cancel")
-      assert html =~ ~s(<button class="button" type="submit">)
+      assert html =~ ~s(<button class="button" type="submit")
     end
   end
 
@@ -261,7 +261,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       assert html =~ ~s(class="card-list card-list--form")
       assert html =~ ~s(<section class="card">)
       # The form_content is rendered inside the shell (its submit button is present).
-      assert html =~ ~s(<button class="button" type="submit">)
+      assert html =~ ~s(<button class="button" type="submit")
     end
   end
 

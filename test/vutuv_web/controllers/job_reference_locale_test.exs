@@ -36,6 +36,13 @@ defmodule VutuvWeb.JobReferenceLocaleTest do
     refute body =~ "Employment references"
   end
 
+  test "the busy label and hint are German", %{conn: conn} do
+    body = conn |> get(~p"/settings/job_references/new") |> html_response(200)
+
+    assert body =~ ~s(phx-disable-with="Wird gespeichert…")
+    assert body =~ "Mit einem Dokument kann das einige Sekunden dauern, bitte warten Sie."
+  end
+
   test "the form's own words are German", %{conn: conn} do
     body = conn |> get(~p"/settings/job_references/new") |> html_response(200)
 

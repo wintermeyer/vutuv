@@ -959,6 +959,37 @@ body.stretch main {
   order: 3;
   margin-left: auto;
 }
+/* While the form is sending (app.js, `phx-disable-with`): a turning ring in
+   the button and the busy hint on a line of its own below the buttons. */
+.editform__actions button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.8;
+  gap: 0.5rem;
+}
+.editform__actions button[aria-busy="true"]::before {
+  content: "";
+  /* The button's own ::before is an absolutely placed press layer; the ring
+     sits in the flow, ahead of the label. */
+  position: static;
+  flex: none;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: editform-busy 0.8s linear infinite;
+}
+@keyframes editform-busy {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editform__actions button[aria-busy="true"]::before { animation: none; }
+}
+.editform__hint--busy {
+  order: 4;
+  flex: 1 1 100%;
+  margin: 0;
+}
 @media (max-width: 30rem) {
   .editform__actions > * {
     flex: 1 1 100%;

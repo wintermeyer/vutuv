@@ -35,6 +35,15 @@ defmodule VutuvWeb.ImportControllerTest do
     assert html =~ ~s(name="import[archive]")
   end
 
+  # A multi-megabyte archive takes a while to send, so the button says so and
+  # cannot be pressed twice (app.js applies `phx-disable-with` on dead pages).
+  test "the upload button carries a German busy label", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+    conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+    html = conn |> get(~p"/settings/import/linkedin") |> html_response(200)
+    assert html =~ ~s(phx-disable-with="Wird hochgeladen…")
+  end
+
   test "the page links to LinkedIn's data export page and shows the screenshot", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/import/linkedin") |> html_response(200)

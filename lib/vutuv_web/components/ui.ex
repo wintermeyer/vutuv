@@ -5234,6 +5234,12 @@ defmodule VutuvWeb.UI do
     doc: ~S(the primary button's label; defaults to "Save". Never "Submit")
   )
 
+  attr(:busy_hint, :string,
+    default: nil,
+    doc:
+      "a line shown beside the buttons while the form is sending, for forms whose save takes noticeably long (a file upload)"
+  )
+
   def form_actions(assigns) do
     ~H"""
     <div class="editform__actions">
@@ -5241,7 +5247,12 @@ defmodule VutuvWeb.UI do
       keyboard order and (via .editform__actions' `order`) the visual one:
       the button you came to press leads, and the destructive one sits at the
       far end of the row. --%>
-      <button class="button" type="submit">{@submit || gettext("Save")}</button>
+      <%!-- phx-disable-with is LiveView's own busy state; on a dead page
+      app.js applies the same attribute, so a slow upload cannot be sent twice
+      by a second click (a member filed one Zeugnis three times that way). --%>
+      <button class="button" type="submit" phx-disable-with={gettext("Saving…")}>
+        {@submit || gettext("Save")}
+      </button>
       <a class="button button--cancel" href={@backlink}>{gettext("Cancel")}</a>
       <.link
         :if={@delete_to}
@@ -5253,6 +5264,9 @@ defmodule VutuvWeb.UI do
       >
         {gettext("Delete entry")}
       </.link>
+      <p :if={@busy_hint} class="editform__hint editform__hint--busy" data-busy-hint hidden role="status">
+        {@busy_hint}
+      </p>
     </div>
     """
   end

@@ -361,6 +361,66 @@ defmodule Vutuv.ReferencesTest do
 
       assert reference.user_id == user.id
     end
+
+    # A member who clicks Save again while a large upload is still on its way
+    # sends the same form twice. That must stay one entry.
+    test "the same submission twice is one entry", %{user: user} do
+      attrs = %{
+        "title" => "Zeugnis Muster GmbH",
+        "employer" => "Muster GmbH",
+        "body" => "Wir waren mit seinen Leistungen zufrieden.",
+        "owner_confirmation" => "true"
+      }
+
+      assert {:ok, first} = References.create_job_reference(user, attrs)
+      assert {:duplicate, again} = References.create_job_reference(user, attrs)
+
+      assert again.id == first.id
+      assert [_one] = References.list_job_references(user)
+    end
+
+    test "the same file twice is one entry", %{user: user} do
+      upload = %Plug.Upload{
+        filename: "Zeugnis.pdf",
+        path: Path.expand("../support/fixtures/certificate.pdf", __DIR__),
+        content_type: "application/pdf"
+      }
+
+      attrs = %{"title" => "Lagermeister", "document" => upload, "owner_confirmation" => "true"}
+
+      assert {:ok, first} = References.create_job_reference(user, attrs)
+      assert {:duplicate, again} = References.create_job_reference(user, attrs)
+      assert again.id == first.id
+    end
+
+    # Only the identical form counts; two entries that share a text but not a
+    # title are two entries.
+    test "a different title is a new entry", %{user: user} do
+      attrs = %{
+        "body" => "Wir waren mit seinen Leistungen zufrieden.",
+        "owner_confirmation" => "true"
+      }
+
+      assert {:ok, _first} =
+               References.create_job_reference(user, Map.put(attrs, "title", "Erstes"))
+
+      assert {:ok, _second} =
+               References.create_job_reference(user, Map.put(attrs, "title", "Zweites"))
+
+      assert length(References.list_job_references(user)) == 2
+    end
+
+    # The same form from another member is that member's own entry.
+    test "another member's identical submission is not a duplicate", %{user: user} do
+      attrs = %{
+        "title" => "Zeugnis",
+        "body" => "Wir waren zufrieden.",
+        "owner_confirmation" => "true"
+      }
+
+      assert {:ok, _mine} = References.create_job_reference(user, attrs)
+      assert {:ok, _theirs} = References.create_job_reference(insert(:user), attrs)
+    end
   end
 
   describe "list_job_references/1 and public_job_references/1" do

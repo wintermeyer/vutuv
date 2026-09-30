@@ -141,5 +141,9 @@
         form passes :followers, so an edit never re-announces an old entry. --%>
   <.announce_to_followers_field :if={assigns[:followers]} form={f} followers={@followers} />
 
-  <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
+  <.form_actions
+    backlink={@backlink}
+    delete_to={assigns[:delete_to]}
+    busy_hint={gettext("Saving. With a document this can take a few seconds, please wait.")}
+  />
 </.form>

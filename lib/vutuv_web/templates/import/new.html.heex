@@ -143,6 +143,7 @@
       </label>
       <.button
         type="submit"
+        phx-disable-with={gettext("Uploading…")}
         class="w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
       >
         {gettext("Upload and preview")}

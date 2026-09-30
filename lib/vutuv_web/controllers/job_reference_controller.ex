@@ -134,6 +134,12 @@ defmodule VutuvWeb.JobReferenceController do
         |> put_flash(:info, gettext("Employment reference saved."))
         |> redirect(to: ~p"/settings/job_references")
 
+      # A second click on Save while the first upload was still travelling.
+      {:duplicate, _existing} ->
+        conn
+        |> put_flash(:info, gettext("This employment reference is already saved."))
+        |> redirect(to: ~p"/settings/job_references")
+
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
