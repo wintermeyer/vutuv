@@ -9,7 +9,7 @@ Writes <out_dir>/vutuv-zeugnis-trailer-de.mp4 (H.264, 1920x1080, silent) and a
 
 The look is the PDF trailer's (scripts/pdf_trailer/render.py): the app plays
 in a browser window on the vutuv blue, the logo top right, and the camera
-pushes in on the drop area and on the Zeugnis card while the model reads it.
+pushes in on the Zeugnis card while the model reads it.
 That wait is minutes of real inference and runs by in WAIT seconds, however
 long this take needed. It is cut on record.mjs's marks, so a new take needs no
 new numbers. The end is the logo on the same blue.
@@ -312,7 +312,6 @@ class Outro:
 take = Src()
 m, pos = take.marks, take.pos
 URL = "vutuv.de/settings/job_references"
-zx, zy = pos["zone"]
 kx, ky = pos["card"]
 wait0, wait1 = m["checking"] + 1.5, m["done"] - 0.5
 
@@ -325,10 +324,9 @@ FILM = Film(Part(take, URL,
      (m["attached"] + 1.0, m["saved"], 1.8), (m["saved"], wait0, 1.2),
      (wait0, wait1, (wait1 - wait0) / WAIT * PACE), (wait1, m["result"], 1.4),
      (m["result"], m["end"], 1.1)],
-    # pushed in on the drop area while the PDF comes in, and on the card while
-    # the model reads; the result page stays whole
-    [(m["drag"] + 0.2, m["attached"] + 0.8, zx + 160, zy, 1.3),
-     (m["saved"] + 0.8, m["done"] + 1.2, kx + 230, ky - 40, 1.3)]))
+    # pushed in on the card while the model reads; the form stays whole (a
+    # push-in on the drop area read as a jolt), and so does the result page
+    [(m["saved"] + 0.8, m["done"] + 1.2, kx + 230, ky - 40, 1.3)]))
 outro = Outro(2.0)
 fade = Fade(0.5, lambda: FILM.final, lambda: outro(0.0))
 SHOTS = [(FILM.T, FILM), (fade.T, fade), (outro.T, outro)]

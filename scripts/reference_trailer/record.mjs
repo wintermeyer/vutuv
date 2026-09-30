@@ -129,7 +129,6 @@ const zone = page.locator(".upload-drop").first();
 await zone.scrollIntoViewIfNeeded();
 await page.waitForTimeout(300);
 const [zx, zy] = await centre(zone);
-await spot("zone", zone);
 mark("drag");
 await page.evaluate(([x, y]) => {
   const f = document.createElement("div");
