@@ -67,6 +67,9 @@ defmodule VutuvWeb.FediverseAccountLive do
       %RemoteAccount{} = account ->
         viewer = socket.assigns.current_user
 
+        # Once, on the connected mount: the dead render is thrown away anyway.
+        if connected?(socket), do: Fediverse.refresh_remote_follower_count_async(account)
+
         {:ok,
          socket
          |> assign(:address, "")
@@ -336,6 +339,16 @@ defmodule VutuvWeb.FediverseAccountLive do
                 {RemoteAccount.display_handle(@account)}
               </a>
               · {gettext("From another network")}
+            </p>
+            <%!-- nil = the server withheld it; the mention card shows the same line. --%>
+            <p
+              :if={@account.follower_count}
+              id="remote-followers"
+              class="mb-0 mt-0.5 text-sm text-slate-600 dark:text-slate-400"
+            >
+              {ngettext("%{formatted} follower", "%{formatted} followers", @account.follower_count,
+                formatted: compact_count(@account.follower_count)
+              )}
             </p>
             <%!-- The follow state reads beside the name, not among the buttons.
             A status is not an act: standing a 20px pill in a row of 40px
