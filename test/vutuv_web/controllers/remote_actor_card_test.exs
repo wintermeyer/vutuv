@@ -519,14 +519,7 @@ defmodule VutuvWeb.RemoteActorCardTest do
       |> Ecto.Changeset.change(followers_uri: @actor <> "/followers")
       |> Repo.update!()
 
-    stub_remote(fn conn ->
-      conn
-      |> Plug.Conn.put_resp_content_type("application/activity+json")
-      |> Plug.Conn.send_resp(200, Jason.encode!(%{"totalItems" => 321}))
-    end)
-
-    Application.put_env(:vutuv, :fediverse_counts, true)
-    on_exit(fn -> Application.put_env(:vutuv, :fediverse_counts, false) end)
+    serve_follower_total(321)
 
     post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
     await_background_tasks()
@@ -535,13 +528,6 @@ defmodule VutuvWeb.RemoteActorCardTest do
 
     html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
     assert html =~ "321 followers"
-  end
-
-  defp await_background_tasks do
-    for pid <- Task.Supervisor.children(Vutuv.TaskSupervisor) do
-      ref = Process.monitor(pid)
-      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 2_000
-    end
   end
 
   # The preview is a second surface showing a post, so it obeys the reader's

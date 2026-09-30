@@ -8,6 +8,7 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
 
   import Phoenix.LiveViewTest
   import Vutuv.EndpointHostHelper
+  import Vutuv.FediverseHelpers, only: [serve_follower_total: 1, await_background_tasks: 0]
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
@@ -96,6 +97,41 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
     # The real thing stays one click away.
     assert has_element?(view, "[data-remote-origin][href='#{@actor}']")
     assert has_element?(view, "#follow")
+  end
+
+  test "the follower total shows when its server publishes one", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+    acc = account()
+
+    {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+    refute has_element?(view, "#remote-followers")
+
+    acc |> Ecto.Changeset.change(follower_count: 12_345) |> Repo.update!()
+
+    {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+    assert has_element?(view, "#remote-followers", "12K followers")
+
+    {:ok, view, _html} =
+      conn
+      |> recycle()
+      |> put_req_header("accept-language", "de-DE,de")
+      |> live(~p"/system/fediverse/account/#{acc.id}")
+
+    assert has_element?(view, "#remote-followers", "12K Follower")
+  end
+
+  test "opening the page fetches a total nobody has asked for yet", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    acc =
+      account() |> Ecto.Changeset.change(followers_uri: @actor <> "/followers") |> Repo.update!()
+
+    serve_follower_total(321)
+
+    {:ok, _view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+    await_background_tasks()
+
+    assert Repo.reload!(acc).follower_count == 321
   end
 
   test "an account nobody follows says why it has no posts", %{conn: conn} do
