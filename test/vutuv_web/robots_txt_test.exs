@@ -37,6 +37,7 @@ defmodule VutuvWeb.RobotsTxtTest do
 
       # Each group carries its own copy of the sensitive-path rules.
       assert count(body, "Disallow: /admin/") == 2, "expected the path rules in both groups"
+      assert count(body, "Disallow: /system/status\n") == 2
       assert count(body, "Allow: /\n") == 2
     end
 
@@ -44,7 +45,7 @@ defmodule VutuvWeb.RobotsTxtTest do
     # ride along in the same string, so the whole 29-line essay about why
     # nothing else is disallowed was printed once per group and the file was
     # 3.4 KB of mostly the same paragraphs. The prose now lives in the preamble
-    # and is written once; a group is its User-agent lines plus two rules.
+    # and is written once; a group is its User-agent lines plus three rules.
     test "explains itself once, not once per group" do
       for policy <- [:permissive, :block_training] do
         body = RobotsTxt.render(policy)
@@ -76,7 +77,7 @@ defmodule VutuvWeb.RobotsTxtTest do
       refute RobotsTxt.render(:permissive) =~ "Disallow: /users/"
     end
 
-    test "fences off only the admin area; everything else resolves itself" do
+    test "fences off only the admin area and the status page; everything else resolves itself" do
       body = RobotsTxt.render(:permissive)
 
       assert body =~ "Disallow: /admin/"
@@ -88,8 +89,6 @@ defmodule VutuvWeb.RobotsTxtTest do
       # Search Console validation failing.
       refute body =~ "Disallow: /login"
       refute body =~ "Disallow: /search"
-      refute body =~ "Disallow: /system/status"
-      assert body =~ "/system/status"
 
       # GET /logout does not exist (signing out is a DELETE), /sessions/new is
       # a 301 that must be crawlable to consolidate, and /api/ answers 401/404

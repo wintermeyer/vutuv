@@ -42,9 +42,11 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "User-agent: *"
       assert body =~ "Allow: /"
 
-      # The one true backstage path; everything else resolves itself (redirects
+      # The backstage path and the status page, whose numbers are stale the
+      # moment a crawler stores them; everything else resolves itself (redirects
       # consolidate, login-only pages 302 to the crawlable, noindex'd /login).
       assert body =~ "Disallow: /admin/"
+      assert body =~ "Disallow: /system/status"
       refute body =~ "Disallow: /login"
       refute body =~ "Disallow: /sessions"
       refute body =~ "Disallow: /api/"

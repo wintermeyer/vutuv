@@ -125,7 +125,7 @@ defmodule VutuvWeb.UrlStructureTest do
     } do
       body = conn |> get("/robots.txt") |> response(200)
 
-      # Only the admin area stays robots-blocked. /login and /search are
+      # Only the admin area and /system/status stay robots-blocked. /login and /search are
       # crawlable and carry X-Robots-Tag: noindex instead, so the login
       # redirects behind signed-in-only pages resolve for crawlers rather
       # than stranding as "blocked by robots.txt".

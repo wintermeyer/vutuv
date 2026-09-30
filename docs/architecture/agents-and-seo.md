@@ -52,7 +52,10 @@ never be crawled to learn it should drop out — which is exactly how these URLs
 piled up under Google's "indexed, though blocked by robots.txt" report. For the
 same reason the legacy `/users/…` URLs (which 301 to the canonical `/:slug`)
 stay crawlable: blocking a redirect strands the old URL instead of letting the
-301 consolidate it. So `robots.txt` blocks only `/admin/`.
+301 consolidate it. So `robots.txt` blocks only `/admin/` and, by choice,
+the server status page `/system/status`: its numbers are stale the moment a
+crawler stores them. Its footer link is `rel="nofollow"` and the page keeps its
+`noindex` header, which limits the bare-link risk described above.
 
 The **tag host** (`tags.<our host>`, issue #1330) is the same reasoning applied
 to a whole hostname. It carries topic actors and nothing anybody reads, so none
@@ -66,7 +69,7 @@ redirected to the same page on the apex, which is the stronger signal of the
 two: a 301 consolidates the URL rather than merely dropping it.
 
 Everything else resolves itself and is deliberately crawlable too, because any
-`Disallow` beyond `/admin/` kept re-filling that Search Console bucket (and a
+`Disallow` beyond `/admin/` and `/system/status` kept re-filling that Search Console bucket (and a
 failed "validate fix" pass there emails the operator):
 
 - `/login` and `/search` serve `X-Robots-Tag: noindex` via the `:noindex_pipe`
