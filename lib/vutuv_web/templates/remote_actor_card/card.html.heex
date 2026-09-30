@@ -16,6 +16,7 @@ lands on a `<body>`-level node outside every LiveView root, where a live
 navigation link does nothing, and it can be open over a page that already
 renders the same element. --%>
 <% origin = origin_url(@account, @address) %>
+<% followers = @account && @account.follower_count %>
 <div class="actor-card__content" data-actor-card-content>
   <%!-- The way out lives in the fragment, not in the shell mention_card.js
   builds, so its label is a translated string like every other word on the card.
@@ -95,12 +96,25 @@ renders the same element. --%>
       account, and the gates below drop quotes for reasons that have nothing to
       do with when the account last wrote. An account that posted a minute ago
       behind a content warning must not read as silent. It needs no `:if` of its
-      own — `published_at` is NOT NULL, so a count above zero is a stamp. --%>
-      <p :if={@post_count > 0} class="actor-card__stats">
-        {ngettext("%{formatted} post here", "%{formatted} posts here", @post_count,
-          formatted: compact_count(@post_count)
-        )}
-        · {relative_time(@last_at)}
+      own — `published_at` is NOT NULL, so a count above zero is a stamp.
+
+      The follower total is the account's own server speaking, and only when
+      it chose to publish one: nil means it withheld the number (or nobody has
+      asked yet), so nothing shows rather than a zero it never said. Its own
+      line, because beside the post count and the clock it wraps mid-phrase on a
+      card this narrow. --%>
+      <p :if={followers || @post_count > 0} class="actor-card__stats">
+        <span :if={followers} class="block">
+          {ngettext("%{formatted} follower", "%{formatted} followers", followers,
+            formatted: compact_count(followers)
+          )}
+        </span>
+        <span :if={@post_count > 0} class="block">
+          {ngettext("%{formatted} post here", "%{formatted} posts here", @post_count,
+            formatted: compact_count(@post_count)
+          )}
+          · {relative_time(@last_at)}
+        </span>
       </p>
     </div>
   </div>
