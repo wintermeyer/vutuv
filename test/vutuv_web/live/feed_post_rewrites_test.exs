@@ -115,7 +115,7 @@ defmodule VutuvWeb.FeedPostRewritesTest do
     # page is the live arrival behind the pill.
     {:ok, live, _html} = live(conn, ~p"/feed")
     post = remote_post(account)
-    send(live.pid, {:remote_feed_arrival, %{at: ~N[2000-01-01 00:00:00]}})
+    send(live.pid, {:feed_arrival, %{at: ~N[2000-01-01 00:00:00]}})
     render(live)
 
     card = live |> element(~s([data-remote-post="#{post.id}"])) |> render()

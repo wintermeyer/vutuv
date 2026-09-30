@@ -2206,7 +2206,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # "not read yet" card and the pill above the timeline count it like any other
   # arrival — otherwise a fediverse-heavy feed would go completely quiet while
   # the page is open, which is the opposite of what the band is for.
-  def handle_info({:remote_feed_arrival, %{at: at}}, socket) do
+  def handle_info({:feed_arrival, %{at: at}}, socket) do
     {:noreply, queue_remote_arrival(socket, at)}
   end
 
@@ -2335,7 +2335,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  # The queue half of `{:remote_feed_arrival, …}` above: ask this reader's own
+  # The queue half of `{:feed_arrival, …}` above: ask this reader's own
   # sources what actually arrived and put it behind the pill.
   #
   # It asks the sources of the band **the reader is standing on**, which is the

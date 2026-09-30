@@ -2466,26 +2466,6 @@ defmodule Vutuv.Fediverse do
 
   ## Telling open feeds that something landed on the other tab (issue #1503)
 
-  # A bare "go and look", never a payload: an open /feed sitting on the tab this
-  # did NOT land on asks its own sources whether the arrival reaches this
-  # particular reader (`Vutuv.Posts.feed_source_since?/3`) and dots the other
-  # tab if it does. It has to ask, because mute, a follow still merely
-  # requested, a narrowed audience, the reader's language filter and the
-  # resharer's standing all decide per member — none of which is knowable from
-  # the write. `at` is the stamp the entry will carry in the merged feed
-  # (naive UTC, like every `Vutuv.FeedPage` entry), so the reader's own newest
-  # row can be compared against it.
-  #
-  # Every other subscriber of the member topic ignores this through its
-  # catch-all `handle_info/2`, exactly like `:remote_follows_changed` above.
-  defp nudge_feeds(user_ids, %NaiveDateTime{} = at) do
-    event = {:remote_feed_arrival, %{at: at}}
-
-    user_ids
-    |> Enum.uniq()
-    |> Enum.each(&Activity.broadcast(&1, event))
-  end
-
   # Who to nudge when an account out there posts: the members following it here
   # with the follow unmuted. Mute is the one per-member gate this can answer
   # itself — it hangs off the very row being joined — and answering it here
@@ -3439,7 +3419,7 @@ defmodule Vutuv.Fediverse do
       # local follower until every server speaks to our shared inbox, and each
       # redelivery leaves the `with` as a `:skip` above, so open feeds are
       # nudged exactly once rather than once per follower squared.
-      nudge_feeds(followers_of_account(account), DateTime.to_naive(post.published_at))
+      Activity.nudge_feeds(followers_of_account(account), DateTime.to_naive(post.published_at))
       :ok
     else
       _ -> :skip
@@ -9815,7 +9795,7 @@ defmodule Vutuv.Fediverse do
 
     case act.() do
       {:ok, :reposted} = written ->
-        nudge_feeds(resharer_audience(user), at)
+        Activity.nudge_feeds(resharer_audience(user), at)
         written
 
       other ->
@@ -11127,7 +11107,7 @@ defmodule Vutuv.Fediverse do
   # lands.
   defp nudge_boost_feeds({:ok, %PostBoost{id: minted}}, account, target, announced_at) do
     if stored_boost_id(account, target) == minted do
-      nudge_feeds(
+      Activity.nudge_feeds(
         followers_of_account(account, accepted: true),
         DateTime.to_naive(announced_at)
       )

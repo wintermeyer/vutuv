@@ -475,6 +475,26 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       assert %{stored: 1} = ExternalPosts.fetch_due()
       assert Repo.aggregate(ExternalPost, :count) == 2
     end
+
+    # Nothing else announces these rows, so without it the follower's Feed
+    # badge would only move on the next unrelated recount.
+    test "a new row tells the tag's followers to look, a re-read one does not" do
+      user = insert(:activated_user)
+      tag = insert(:tag)
+      {:ok, follow} = Tags.follow_tag(user, tag)
+      {:ok, _source} = Tags.add_tag_follow_source(follow, @source)
+      :ok = Vutuv.Activity.subscribe(user.id)
+
+      first = status(%{"id" => "s1"})
+      stub_tag_timeline([first])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+      assert_receive {:feed_arrival, %{at: %NaiveDateTime{}}}
+
+      stub_tag_timeline([first])
+      overdue!(tag, DateTime.utc_now(:second))
+      assert %{stored: 0} = ExternalPosts.fetch_due()
+      refute_receive {:feed_arrival, _}
+    end
   end
 
   # What a member means by Report is "this post, off this site", and what

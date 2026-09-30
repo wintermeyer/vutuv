@@ -604,20 +604,22 @@ defmodule VutuvWeb.ShellLive do
   # so this socket cannot resurrect what the other tab just read.
   def handle_info(:feed_read, socket), do: {:noreply, assign(socket, :feed_count, 0)}
 
-  # Something landed through the fediverse (issue #1503): a followed account
-  # posted or boosted, or somebody here passed a remote post on. The nudge
-  # carries no entry, because whether that write reaches THIS reader depends on
-  # their mutes, their follow states, the audience and their language filter —
-  # so only their own sources can answer, and that is the lookup the teaser
-  # makes anyway. The dot therefore rides on that answer instead of being
+  # Something may have reached the feed without a `{:new_post, …}`
+  # (`Vutuv.Activity.nudge_feeds/2`): a followed account out there posted or
+  # boosted, somebody here passed a remote post on, or a followed tag or page
+  # published. The nudge carries no entry, because whether that write reaches
+  # THIS reader depends on their mutes, their follow states, the audience and
+  # their language filter — so only their own sources can answer, and that is
+  # the lookup the teaser makes anyway, across all of them since the write may
+  # land on either half. The dot therefore rides on that answer instead of being
   # pushed blind. Every other subscriber of the member topic ignores this event.
   #
   # The badge asks those same sources itself (through the marker rather than
   # through this stamp), so it is recounted whatever the teaser decided: a
   # quieted teaser window is about how often the tab title may shout, and says
   # nothing about whether a post arrived.
-  def handle_info({:remote_feed_arrival, %{at: at}}, socket) do
-    case tab_teaser(socket, :fediverse, at) do
+  def handle_info({:feed_arrival, %{at: at}}, socket) do
+    case tab_teaser(socket, :all, at) do
       {:opened, socket} -> {:noreply, socket |> push_event("tab:new_post", %{}) |> recount_feed()}
       {_other, socket} -> {:noreply, recount_feed(socket)}
     end
