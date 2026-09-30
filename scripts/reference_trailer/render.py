@@ -321,11 +321,11 @@ FILM = Film(Part(take, URL,
     # saved, the click on "Zeugnis entschlüsseln", the wait in WAIT seconds,
     # the result page scrolled through a little faster than real time; the
     # speeds keep the film between 30 and 35 seconds
-    [(m["start"] - 0.3, m["form"], 1.6), (m["form"], m["typed"], 2.6),
-     (m["typed"], m["drag"], 1.6), (m["drag"], m["attached"] + 0.6, 1.3),
+    [(m["start"] - 0.3, m["form"], 1.6), (m["form"], m["typed"], 3.0),
+     (m["typed"], m["drag"], 2.2), (m["drag"], m["attached"] + 0.6, 1.3),
      (m["attached"] + 0.6, m["saved"], 2.6), (m["saved"], wait0, 1.6),
      (wait0, wait1, (wait1 - wait0) / WAIT * PACE), (wait1, m["result"], 2.6),
-     (m["result"], m["end"], 1.5)],
+     (m["result"], m["end"], 1.25)],
     # pushed in on the card while the model reads; the form stays whole (a
     # push-in on the drop area read as a jolt), and so does the result page
     [(m["saved"] + 0.8, m["done"] + 1.2, kx + 230, ky - 40, 1.3)]))

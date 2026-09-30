@@ -96,7 +96,10 @@ defmodule Vutuv.References.Check do
   # Two spellings, and the **order matters**: "Gesamtnotenspanne" contains
   # "Gesamtnote", so splitting on the short one first would cut the long one
   # mid-word and leave "nspanne:** Note 4 bis 5" as the value. Longest first.
-  @grade_keys ["Gesamtnotenspanne", "Gesamtnote"]
+  # Skill 3.3.0 writes "Gesamteinschätzung", a word prose uses too, so its
+  # value only counts when it names a grade digit.
+  @grade_keys ["Gesamtnotenspanne", "Gesamtnote", "Gesamteinschätzung"]
+  @digit_keys ["Gesamteinschätzung"]
 
   # A row label, not a paragraph. The reasoning is one click away on the result
   # page, so anything past a sentence is cut.
@@ -172,7 +175,13 @@ defmodule Vutuv.References.Check do
       String.starts_with?(trimmed, "|") -> grade_from_table_row(trimmed)
       true -> grade_from_fact_line(trimmed)
     end
+    |> require_digit(key_in(trimmed))
   end
+
+  defp require_digit(grade, key) when is_binary(grade) and key in @digit_keys,
+    do: if(grade =~ ~r/[1-6]/, do: grade)
+
+  defp require_digit(grade, _key), do: grade
 
   defp key_in(line), do: Enum.find(@grade_keys, &String.contains?(line, &1))
 

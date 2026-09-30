@@ -113,16 +113,16 @@ mark("start");
 // 1. add a Zeugnis
 await Promise.all([page.waitForURL(/\/new$/), clickOn(page.locator('main a[href$="/job_references/new"]').first(), 900)]);
 await page.waitForLoadState("networkidle");
-await page.waitForTimeout(600);
+await page.waitForTimeout(300);
 mark("form");
-await clickOn(page.locator("#job_reference_title"), 600);
-await page.keyboard.type("Lagermeister", { delay: 45 });
-await clickOn(page.locator("#job_reference_employer"), 500);
-await page.keyboard.type("Eisenwarenhandlung Großkopf Söhne KG", { delay: 30 });
+await clickOn(page.locator("#job_reference_title"), 400);
+await page.keyboard.type("Lagermeister", { delay: 25 });
+await clickOn(page.locator("#job_reference_employer"), 350);
+await page.keyboard.type("Eisenwarenhandlung Großkopf Söhne KG", { delay: 15 });
 mark("typed");
-await page.waitForTimeout(400);
-await clickOn(page.locator('input[name="job_reference[owner_confirmation]"]'), 700);
-await page.waitForTimeout(500);
+await page.waitForTimeout(200);
+await clickOn(page.locator('input[name="job_reference[owner_confirmation]"]'), 450);
+await page.waitForTimeout(250);
 
 // 2. the PDF comes in from the right and is let go over the drop area
 const zone = page.locator(".upload-drop").first();
