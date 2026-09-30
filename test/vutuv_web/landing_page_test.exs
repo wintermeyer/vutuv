@@ -122,21 +122,23 @@ defmodule VutuvWeb.LandingPageTest do
       assert at(html, "Ein berufliches Netzwerk") < at(html, "data-hero-points")
     end
 
-    # Ten questions somebody has BEFORE signing up, each answered in a
+    # The questions somebody has BEFORE signing up, each answered in a
     # sentence or two, all open on the page: a collapsed block reads as
     # something to hide, and a FAQ that grows past what a visitor asks before
-    # joining is the feature catalogue this replaced. Asserted by key, so an
-    # eleventh question or a renamed one is a decision and not a drift, and as
+    # joining is the feature catalogue this replaced. Asserted by key, so a
+    # new question or a renamed one is a decision and not a drift, and as
     # German literals for the reason the hero test gives.
-    test "answers ten questions anybody asks before signing up", %{conn: conn} do
+    test "answers the questions anybody asks before signing up", %{conn: conn} do
       html = landing_de(conn)
 
       assert html =~ "Häufige Fragen"
 
       assert faq_keys(html) ==
-               ~w(price public data tracking linkedin organizations fediverse open_source api delete)
+               ~w(price public data tracking linkedin organizations fediverse open_source api delete alternatives)
 
       assert html =~ "Was kostet vutuv?"
+      assert html =~ "Gibt es Alternativen zu vutuv?"
+      assert html =~ ~s(href="https://bizzfed.de")
       assert html =~ "Nichts. Es gibt keine bezahlten Premium-Accounts"
       assert html =~ "Kann ich mir Profile und Beiträge auf vutuv ansehen, ohne mich anzumelden?"
       assert html =~ "Wo liegen meine Daten?"

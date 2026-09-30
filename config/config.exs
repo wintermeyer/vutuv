@@ -394,6 +394,13 @@ config :vutuv, :ads_vat_percent, 19
 # Runtime override: DATA_LOCATION (config/runtime.exs).
 config :vutuv, :data_location, "Deutschland"
 
+# Whether the start page's questions end with "Are there alternatives to
+# vutuv?", answered by pointing at BizzFed. That is vutuv.de's recommendation,
+# not something the software says about itself, so an installation that does
+# not want to send its visitors elsewhere switches it off.
+# Runtime override: LANDING_ALTERNATIVES=false (config/runtime.exs).
+config :vutuv, :landing_alternatives, true
+
 # The one profile the logged-out start page's questions point at as the
 # example (and whose JSON sibling the API answer links). A full URL, because
 # the point is a page somebody can open and read without an account, and because

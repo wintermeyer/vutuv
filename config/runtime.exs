@@ -275,6 +275,12 @@ if config_env() == :prod do
     config :vutuv, :data_location, location
   end
 
+  # The start page's "Are there alternatives?" question, which recommends
+  # BizzFed. Only the exact value `false` drops it.
+  if System.get_env("LANDING_ALTERNATIVES") == "false" do
+    config :vutuv, :landing_alternatives, false
+  end
+
   if url = System.get_env("LANDING_EXAMPLE_PROFILE_URL") do
     config :vutuv, :landing_example_profile_url, url
   end

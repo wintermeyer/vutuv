@@ -2,11 +2,13 @@ defmodule VutuvWeb.LandingConfigurationTest do
   @moduledoc """
   The landing page's per-installation switches: which profile its questions
   point at as the example, where it says the data lives, whether it asks the
-  Fediverse question at all, and whether it shows the teaser video.
+  Fediverse question at all, whether it recommends an alternative, and whether
+  it shows the teaser video.
 
   Keys flipped here, and who else reads them (the rule below wants this named,
-  so a widened blast radius is visible at a glance): `:landing_example_profile_url`
-  and `:data_location` are read only by `VutuvWeb.PageHTML`; `:landing_teaser_video` by
+  so a widened blast radius is visible at a glance): `:landing_example_profile_url`,
+  `:data_location` and `:landing_alternatives` are read only by
+  `VutuvWeb.PageHTML`; `:landing_teaser_video` by
   `VutuvWeb.Teaser` (the start page and the investor page); `:ads_enabled` by
   `VutuvWeb.AdServing` and the `/system/ads` routes; `:fediverse_enabled` by
   `Vutuv.Fediverse.enabled?/0`, which the tag timeline, the feed source tabs and
@@ -220,6 +222,18 @@ defmodule VutuvWeb.LandingConfigurationTest do
       refute html =~ ~s(data-landing-faq-entry="data")
       assert html =~ ~s(data-landing-faq-entry="tracking")
       assert html =~ "ein einziges Cookie"
+    end
+
+    # Pointing visitors at BizzFed is vutuv.de's recommendation, not the
+    # software's, so another installation can drop the question.
+    test "drops the alternatives question where the operator switched it off", %{conn: conn} do
+      put_config(:landing_alternatives, false)
+
+      html = landing_de(conn)
+
+      refute html =~ ~s(data-landing-faq-entry="alternatives")
+      refute html =~ "bizzfed.de"
+      assert html =~ ~s(data-landing-faq-entry="delete")
     end
 
     test "names the place the operator configured", %{conn: conn} do
