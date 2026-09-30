@@ -65,6 +65,66 @@ defmodule VutuvWeb.JobReferenceControllerTest do
       assert is_nil(reference.public_consented_at)
     end
 
+    # A second click on Save while the first request is still on its way used
+    # to file the Zeugnis twice. The repeat lands on the list with a word of
+    # explanation and adds nothing.
+    test "saving the same form twice keeps one entry", %{conn: conn, user: user} do
+      params = %{
+        "job_reference" => %{
+          "title" => "Zeugnis Muster GmbH",
+          "body" => "Wir waren mit seinen Leistungen zufrieden.",
+          "owner_confirmation" => "true"
+        }
+      }
+
+      post(conn, ~p"/settings/job_references", params)
+      again = post(conn, ~p"/settings/job_references", params)
+
+      assert redirected_to(again) == ~p"/settings/job_references"
+      assert Phoenix.Flash.get(again.assigns.flash, :info) =~ "already saved"
+      assert [_one] = References.list_job_references(user)
+    end
+
+    # With a file the first request fills the text from the document after
+    # the insert, so a repeat that still carries no text must match on the
+    # file, not on the text.
+    test "uploading the same file twice keeps one entry", %{conn: conn, user: user} do
+      upload = %Plug.Upload{
+        filename: "Zeugnis.pdf",
+        path: Path.expand("../../support/fixtures/certificate.pdf", __DIR__),
+        content_type: "application/pdf"
+      }
+
+      params = %{
+        "job_reference" => %{
+          "title" => "Lagermeister",
+          "document" => upload,
+          "owner_confirmation" => "true"
+        }
+      }
+
+      post(conn, ~p"/settings/job_references", params)
+      [first] = References.list_job_references(user)
+      # What extraction does to the first entry once its file is read.
+      first |> Ecto.Changeset.change(body: "Aus dem PDF gelesen.") |> Vutuv.Repo.update!()
+
+      again = post(conn, ~p"/settings/job_references", params)
+
+      assert Phoenix.Flash.get(again.assigns.flash, :info) =~ "already saved"
+      assert [_one] = References.list_job_references(user)
+    end
+
+    # The feedback itself: the Save button says it is working and cannot be
+    # pressed again (`phx-disable-with`, applied on this dead page by app.js),
+    # and a hidden line beside it explains the wait once it shows.
+    test "the Save button carries its busy label and hint", %{conn: conn} do
+      body = conn |> get(~p"/settings/job_references/new") |> html_response(200)
+      assert body =~ ~s(phx-disable-with="Saving…")
+
+      assert body =~
+               ~r/<p[^>]*data-busy-hint[^>]*hidden[^>]*>\s*Saving. With a document this can take a few seconds/
+    end
+
     # Ticking "show publicly" without the confirmation must not publish.
     test "ticking public without the confirmation is refused", %{conn: conn, user: user} do
       conn =

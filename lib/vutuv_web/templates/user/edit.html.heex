@@ -489,7 +489,7 @@ lands here). --%>
     </.card>
 
     <div class="flex items-center gap-4">
-      <.button type="submit">{gettext("Save")}</.button>
+      <.button type="submit" phx-disable-with={gettext("Saving…")}>{gettext("Save")}</.button>
       <.link
         navigate={~p"/#{@user}"}
         class="text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"

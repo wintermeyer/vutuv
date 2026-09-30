@@ -14,6 +14,7 @@ defmodule Vutuv.References do
 
   import Ecto.Query, warn: false
 
+  alias Vutuv.Accounts.User
   alias Vutuv.References.JobReference
   alias Vutuv.References.Link
   alias Vutuv.Repo
@@ -93,13 +94,66 @@ defmodule Vutuv.References do
 
   `user_id` is written from the struct, never from `attrs`, so a crafted
   request cannot file a Zeugnis onto another member's profile.
+
+  Returns `{:duplicate, existing}` instead of inserting when the member
+  already has an entry from the identical form: same title, employer, kind,
+  text and file. That is what a second click on Save sends while a large
+  upload is still on its way. The member's row is locked for the check and
+  the insert, so two requests arriving together cannot both pass the check.
+  A unique index would say the same more strongly, but it cannot be built
+  over the duplicates this already left in production.
   """
   def create_job_reference(%{id: user_id}, attrs \\ %{}) do
-    %JobReference{user_id: user_id}
-    |> JobReference.changeset(attrs)
-    |> JobReference.cast_document(attrs)
-    |> JobReference.validate_content()
-    |> Repo.insert()
+    changeset =
+      %JobReference{user_id: user_id}
+      |> JobReference.changeset(attrs)
+      |> JobReference.cast_document(attrs)
+      |> JobReference.validate_content()
+
+    if changeset.valid?,
+      do: insert_unless_repeated(changeset, user_id),
+      else: Repo.insert(changeset)
+  end
+
+  # NO KEY UPDATE is enough to queue a second create behind the first without
+  # blocking unrelated reads of the member's row.
+  defp insert_unless_repeated(changeset, user_id) do
+    Repo.transact(fn ->
+      Repo.one!(from(u in User, where: u.id == ^user_id, select: u.id, lock: "FOR NO KEY UPDATE"))
+
+      case same_submission(changeset, user_id) do
+        nil -> Repo.insert(changeset)
+        existing -> {:error, {:duplicate, existing}}
+      end
+    end)
+    |> case do
+      {:error, {:duplicate, existing}} -> {:duplicate, existing}
+      result -> result
+    end
+  end
+
+  # The member's entry that the changeset would repeat, or nil. With a file,
+  # the file is the content: the stored entry's text was read out of it after
+  # the insert, so the repeat, which has none yet, would never match on text.
+  # Every field is compared nil-aware: `x == ^nil` raises in Ecto.
+  defp same_submission(changeset, user_id) do
+    content =
+      if Ecto.Changeset.get_field(changeset, :document_fingerprint),
+        do: :document_fingerprint,
+        else: :body
+
+    [:title, :employer, :kind, content]
+    |> Enum.reduce(
+      from(r in JobReference, where: r.user_id == ^user_id),
+      fn field, query ->
+        case Ecto.Changeset.get_field(changeset, field) do
+          nil -> where(query, [r], is_nil(field(r, ^field)))
+          value -> where(query, [r], field(r, ^field) == ^value)
+        end
+      end
+    )
+    |> limit(1)
+    |> Repo.one()
   end
 
   @doc "Updates a reference the caller has already scoped to its owner."

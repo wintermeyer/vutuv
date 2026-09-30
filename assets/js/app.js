@@ -3414,6 +3414,40 @@ function multipartEnctypeFallback(e) {
 
 document.addEventListener("submit", multipartEnctypeFallback, true)
 
+// Busy state for classic forms. LiveView gives a submit button with
+// `phx-disable-with` its label and disables it while the event is in flight;
+// a dead page has nobody to do that, so a slow submit (a multi-megabyte
+// Zeugnis upload) showed no sign of life and a member clicked Save three
+// times, filing the same entry three times. The same attribute now does the
+// same job here, and a `[data-busy-hint]` line in the form (`form_actions`'
+// `busy_hint`) says why it takes a moment. Bubble phase, so a submit another
+// handler cancelled is left alone; the disable waits a tick, because the
+// entry list is built right after dispatch and must still see the button.
+document.addEventListener("submit", (e) => {
+  const form = e.target
+  const button = e.submitter
+  if (e.defaultPrevented || form.hasAttribute("phx-submit")) return
+  if (!button || !button.hasAttribute("phx-disable-with")) return
+
+  button.dataset.idleLabel = button.textContent
+  button.textContent = button.getAttribute("phx-disable-with")
+  button.setAttribute("aria-busy", "true")
+  setTimeout(() => (button.disabled = true), 0)
+  form.querySelectorAll("[data-busy-hint]").forEach((hint) => hint.removeAttribute("hidden"))
+})
+
+// Back from the bfcache the page comes back mid-submit: button disabled, hint
+// showing. Put it back the way it was before the click.
+window.addEventListener("pageshow", (e) => {
+  if (!e.persisted) return
+  document.querySelectorAll("button[data-idle-label]").forEach((button) => {
+    button.textContent = button.dataset.idleLabel
+    button.disabled = false
+    button.removeAttribute("aria-busy")
+    button.closest("form")?.querySelectorAll("[data-busy-hint]").forEach((hint) => hint.setAttribute("hidden", ""))
+  })
+})
+
 // Avatar fallback. A user's stored avatar file can be missing — a legacy row
 // whose image was never imported, a failed upload, a derived version not yet
 // regenerated — so the <img> 404s and the browser draws a broken-image icon.
