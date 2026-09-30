@@ -3,7 +3,7 @@
 //   node scripts/reference_trailer/record.mjs <state.json> <zeugnis.pdf> <out_dir>
 //
 // Friedhelm adds his Zeugnis (title, employer, the PDF flies into the drop
-// area), saves, presses "Zeugnis entschlüsseln", waits while the model reads
+// area), saves, presses "Zeugnis analysieren", waits while the model reads
 // it, and opens the result. The wait is minutes of real inference; render.py
 // runs it by in seconds. Writes <out_dir>/rec/take/: the screencast frames,
 // frames.json, marks.json (the moments render.py cuts on) and pos.json (where,
@@ -156,7 +156,7 @@ await page.waitForTimeout(1400);
 mark("saved");
 
 // 4. the check: minutes of inference, run by quickly in the film
-const button = page.locator('main button:has-text("Zeugnis entschlüsseln")');
+const button = page.locator('main button:has-text("Zeugnis analysieren")');
 await spot("card", button);
 await clickOn(button, 900);
 mark("checking");

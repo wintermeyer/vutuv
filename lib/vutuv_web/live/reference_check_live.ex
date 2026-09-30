@@ -236,7 +236,7 @@ defmodule VutuvWeb.ReferenceCheckLive do
     </p>
 
     <div class="flex flex-wrap items-center gap-3">
-      <.button phx-click="check">{gettext("Decode this reference")}</.button>
+      <.button phx-click="check">{gettext("Analyze this reference")}</.button>
       <%!-- No duration here, deliberately. This line used to open with
             "Usually about 4 minutes", worked out from the median of past runs
             and what is queued — a promise made before there is anything to

@@ -49,9 +49,20 @@ defmodule VutuvWeb.ReferenceCheckLiveTest do
       {:ok, view, _html} = mount_panel(conn, user, reference)
       html = render(view)
 
-      assert html =~ "Decode this reference"
+      assert html =~ "Analyze this reference"
       refute html =~ "Usually about"
       refute html =~ "Takes a few minutes"
+    end
+
+    # "Zeugnis entschlüsseln" read like cracking a code; the button says what
+    # the check does.
+    test "the button reads Zeugnis analysieren for a German member", %{conn: conn} do
+      user = insert_activated_user(locale: "de")
+      reference = insert(:job_reference, user: user)
+
+      {:ok, view, _html} = mount_panel(conn, user, reference)
+
+      assert render(view) =~ "Zeugnis analysieren"
     end
 
     # The one thing that line still says, and the reason it exists: a Zeugnis
