@@ -172,7 +172,7 @@ defmodule VutuvWeb.PageHTML do
   @doc """
   The questions under the sign-up form, in the order the page asks them.
 
-  Ten questions somebody has *before* signing up, each answered in a
+  The questions somebody has *before* signing up, each answered in a
   sentence or two (Stefan, 2026-09-25). A list rather than markup, because
   the FAQPage block (`VutuvWeb.JsonLd.faq_page/1`) is built from the same
   entries the page renders and so cannot say something the page does not.
@@ -190,7 +190,9 @@ defmodule VutuvWeb.PageHTML do
   promise only they can make; and the Fediverse question exists only where
   the installation federates — with FEDIVERSE_ENABLED=false (the intranet
   case) every endpoint behind it 404s, so promising it there would be a lie.
-  The cookie question holds everywhere: it describes the software.
+  The alternatives question recommends BizzFed, which is vutuv.de's choice
+  and not the software's, so an operator switches it off
+  (`:landing_alternatives`). The cookie question holds everywhere: it describes the software.
 
   The deletion answer names the settings row by its own label (bound from the
   catalog, so the two cannot drift apart) and deliberately does not link it,
@@ -265,7 +267,8 @@ defmodule VutuvWeb.PageHTML do
           "Any time, and it takes a minute: look for “%{label}” in the settings, the red entry.",
           label: gettext("Delete account")
         )
-      ])
+      ]),
+      alternatives_entry()
     ]
     |> Enum.reject(&is_nil/1)
   end
@@ -290,6 +293,23 @@ defmodule VutuvWeb.PageHTML do
     entry("data", gettext("Where does my data live?"), [
       gettext("On our own servers in %{place}, in no foreign cloud.", place: place)
     ])
+  end
+
+  # A recommendation is the operator's to make, so it is a switch rather than
+  # something every installation says (see `:landing_alternatives`).
+  defp alternatives_entry do
+    if Application.get_env(:vutuv, :landing_alternatives, true) do
+      entry(
+        "alternatives",
+        gettext("Are there alternatives to vutuv?"),
+        [
+          gettext(
+            "Yes. BizzFed, for example, is a federated professional network built on ActivityPub."
+          )
+        ],
+        [check_link("BizzFed", "https://bizzfed.de", external: true)]
+      )
+    end
   end
 
   # Both directions, said twice (at sign-up, and later in the settings), and
