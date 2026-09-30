@@ -55,6 +55,33 @@ defmodule Vutuv.References.GradeSpanTest do
       assert Check.grade_span(check(md)) == "1 (Sehr Gut / Hervorragend)"
     end
 
+    # Skill 3.3.0 names the verdict "Gesamteinschätzung" (two real runs on
+    # 2026-09-30); without it the card showed no grade at all.
+    test "the 3.3.0 spelling" do
+      md = """
+      ### 2. Gesamtnotenspanne mit Begründung
+
+      **Gesamteinschätzung: Note 4 (Unterdurchschnittlich) bis Note 5 (Mangelhaft)**
+
+      **Begründung:**
+      """
+
+      assert Check.grade_span(check(md)) ==
+               "Note 4 (Unterdurchschnittlich) bis Note 5 (Mangelhaft)"
+    end
+
+    # A looser word than the other keys, so prose can contain it too. Without
+    # a grade digit it is not a verdict.
+    test "prose that mentions a Gesamteinschätzung without a grade" do
+      md = """
+      Die Gesamteinschätzung ergibt sich aus dem Zusammenspiel aller Sätze.
+
+      **Gesamtnotenspanne:** Note 3 bis 4
+      """
+
+      assert Check.grade_span(check(md)) == "Note 3 bis 4"
+    end
+
     # "Gesamtnotenspanne" contains "Gesamtnote". Splitting on the short key
     # first would cut the long word mid-way and leave "nspanne:** Note 4 …".
     test "the longer spelling is not cut in half by the shorter one" do

@@ -1,0 +1,9 @@
+{
+  "name": "vutuv-reference-trailer",
+  "private": true,
+  "type": "module",
+  "description": "Records the vutuv Arbeitszeugnis check trailer from a local dev server. See run.sh.",
+  "dependencies": {
+    "playwright": "1.55.1"
+  }
+}
