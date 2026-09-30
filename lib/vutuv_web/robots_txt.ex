@@ -10,7 +10,7 @@ defmodule VutuvWeb.RobotsTxt do
   the reasoning behind them used to sit in the same string and was
   therefore printed once per group, which is what made the file 3.4 KB of
   the same paragraphs over and over. The prose lives in `preamble/0` now
-  and is written once, so a group is its User-agent lines plus two rules.
+  and is written once, so a group is its User-agent lines plus three rules.
   `Content-Signal` is the (draft) IETF/Cloudflare vocabulary (`search`,
   `ai-input`, `ai-train`), declared per group.
   """
@@ -29,8 +29,10 @@ defmodule VutuvWeb.RobotsTxt do
     #
     # The rules are short on purpose: help yourself to the public stuff
     # (profiles, tags, listings), but the admin area is backstage, no
-    # autographs, no peeking. Every welcome group below repeats those two
-    # lines, because robots.txt groups do not inherit from `User-agent: *`.
+    # autographs, no peeking. The server status page /system/status is off
+    # limits too: its numbers are stale the moment you store them. Every
+    # welcome group below repeats those lines, because robots.txt groups do
+    # not inherit from `User-agent: *`.
     #
     # Everything else that must stay out of search is DELIBERATELY not
     # disallowed, though several paths look like candidates. A Disallow only
@@ -47,19 +49,17 @@ defmodule VutuvWeb.RobotsTxt do
     #    `X-Robots-Tag: noindex` and stay crawlable precisely so that header
     #    is seen: the personal profile detail sub-pages (/<slug>/emails,
     #    /tags, /work_experiences, /followers, ...; VutuvWeb.Plug.NoIndex),
-    #    the RSS feeds, /login, /search and the server status page
-    #    /system/status (which also says `noai` for AI corpora, and is linked
-    #    from every footer, so a Disallow would strand it). Keeping /login
-    #    fetchable also lets the sign-in redirect behind every login-only URL
-    #    a crawler stumbles into (/posts/<id>/reply, /messages, ...) resolve
-    #    cleanly instead of stranding those URLs as "blocked by robots.txt".
+    #    the RSS feeds, /login and /search. Keeping /login fetchable also
+    #    lets the sign-in redirect behind every login-only URL a crawler
+    #    stumbles into (/posts/<id>/reply, /messages, ...) resolve cleanly
+    #    instead of stranding those URLs as "blocked by robots.txt".
     #
     # 3. /api/ is linked nowhere and answers every crawler itself: 404/301
     #    for the legacy 1.0 paths, 401 for the token-only 2.0 endpoints.
     """
   end
 
-  @path_rules "Allow: /\nDisallow: /admin/\n"
+  @path_rules "Allow: /\nDisallow: /admin/\nDisallow: /system/status\n"
   @blocked_rules "Disallow: /\n"
 
   # The AI crawlers named explicitly (the spec's list): training collects

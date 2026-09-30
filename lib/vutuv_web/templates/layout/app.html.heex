@@ -75,7 +75,7 @@ finger-sized target instead of a word in a paragraph. --%>
         <ul class="mt-2">
           <li><.link href={~p"/developers"} class={footer_link_class}>{gettext("API documentation")}</.link></li>
           <li :if={Vutuv.ServerStatus.enabled?()}>
-            <.link href={~p"/system/status"} class={footer_link_class}>{gettext("Server status")}</.link>
+            <.link href={~p"/system/status"} rel="nofollow" class={footer_link_class}>{gettext("Server status")}</.link>
           </li>
           <li><a href={SourceRepo.url()} class={footer_link_class}>{gettext("Source")}</a></li>
           <li>

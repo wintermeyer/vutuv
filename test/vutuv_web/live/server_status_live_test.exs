@@ -69,10 +69,12 @@ defmodule VutuvWeb.ServerStatusLiveTest do
     assert has_element?(view, "#server-1 [data-state=ok]")
   end
 
-  test "the footer of every page links the status page", %{conn: conn} do
+  # robots.txt disallows the page, so the link must not invite a crawler to
+  # follow it either.
+  test "the footer of every page links the status page, nofollow", %{conn: conn} do
     html = conn |> get(~p"/") |> html_response(200)
 
-    assert html =~ ~s(href="/system/status")
+    assert [_] = elements(html, ~s(a[href="/system/status"][rel~="nofollow"]))
   end
 
   describe "switched off" do
