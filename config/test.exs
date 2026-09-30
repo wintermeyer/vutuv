@@ -110,6 +110,9 @@ config :vutuv, :fediverse_note_refresh, false
 # outside the sandbox; tests call Vutuv.Fediverse.refresh_counts/1 and
 # refresh_due_counts/0 directly with a stubbed HTTP layer.
 config :vutuv, :fediverse_counts, false
+# The server status sampler reads /proc and df on a timer and would answer
+# every test with this machine; the tests start it themselves on a fixture.
+config :vutuv, :server_status_sampler, false
 # The investor page's 12-month reach runs its aggregate in a Task, outside the
 # sandbox; without the runner the page computes in its own process instead.
 config :vutuv, :reach_runner, false

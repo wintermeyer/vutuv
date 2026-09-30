@@ -1,0 +1,28 @@
+# HELP nvidia_smi_gpu_info A metric with a constant '1' value labeled by gpu uuid, name, driver_model_current, driver_model_pending, vbios_version, driver_version.
+# TYPE nvidia_smi_gpu_info gauge
+nvidia_smi_gpu_info{driver_model_current="N/A",driver_model_pending="N/A",driver_version="550.120",name="NVIDIA RTX A6000",uuid="GPU-aaaa",vbios_version="94.02.5C.00.02"} 1
+nvidia_smi_gpu_info{driver_model_current="N/A",driver_model_pending="N/A",driver_version="550.120",name="NVIDIA RTX A6000",uuid="GPU-bbbb",vbios_version="94.02.5C.00.02"} 1
+# HELP nvidia_smi_utilization_gpu_ratio utilization.gpu [%]
+# TYPE nvidia_smi_utilization_gpu_ratio gauge
+nvidia_smi_utilization_gpu_ratio{uuid="GPU-aaaa"} 0.63
+nvidia_smi_utilization_gpu_ratio{uuid="GPU-bbbb"} 0
+# HELP nvidia_smi_memory_total_bytes memory.total [MiB]
+# TYPE nvidia_smi_memory_total_bytes gauge
+nvidia_smi_memory_total_bytes{uuid="GPU-aaaa"} 5.1527024640e+10
+nvidia_smi_memory_total_bytes{uuid="GPU-bbbb"} 5.1527024640e+10
+# HELP nvidia_smi_memory_used_bytes memory.used [MiB]
+# TYPE nvidia_smi_memory_used_bytes gauge
+nvidia_smi_memory_used_bytes{uuid="GPU-aaaa"} 1.2884901888e+10
+nvidia_smi_memory_used_bytes{uuid="GPU-bbbb"} 5.36870912e+08
+# HELP nvidia_smi_temperature_gpu temperature.gpu
+# TYPE nvidia_smi_temperature_gpu gauge
+nvidia_smi_temperature_gpu{uuid="GPU-aaaa"} 61
+nvidia_smi_temperature_gpu{uuid="GPU-bbbb"} 34
+# HELP nvidia_smi_power_draw_watts power.draw [W]
+# TYPE nvidia_smi_power_draw_watts gauge
+nvidia_smi_power_draw_watts{uuid="GPU-aaaa"} 187.5
+nvidia_smi_power_draw_watts{uuid="GPU-bbbb"} 22.1
+# HELP nvidia_smi_enforced_power_limit_watts enforced.power.limit [W]
+# TYPE nvidia_smi_enforced_power_limit_watts gauge
+nvidia_smi_enforced_power_limit_watts{uuid="GPU-aaaa"} 300
+nvidia_smi_enforced_power_limit_watts{uuid="GPU-bbbb"} 300

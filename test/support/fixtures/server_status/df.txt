@@ -1,0 +1,7 @@
+Filesystem     1024-blocks      Used Available Capacity Mounted on
+udev              16000000         0  16000000       0% /dev
+tmpfs              3000000      1000   2999000       1% /run
+/dev/nvme0n1p2   900000000 300000000 600000000      34% /
+/dev/nvme0n1p2   900000000 300000000 600000000      34% /var/lib/docker
+/dev/nvme1n1    3600000000 2200000000 1400000000    62% /srv
+/dev/nvme0n1p1      524288      6000    518288       2% /boot/efi

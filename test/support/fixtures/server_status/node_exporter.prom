@@ -1,0 +1,50 @@
+# HELP node_boot_time_seconds Node boot time, in unixtime.
+# TYPE node_boot_time_seconds gauge
+node_boot_time_seconds 1.7e+09
+# HELP node_cpu_info CPU information from /proc/cpuinfo.
+# TYPE node_cpu_info gauge
+node_cpu_info{cachesize="512 KB",core="0",cpu="0",family="25",microcode="0xa601209",model="97",model_name="AMD Ryzen 9 7950X 16-Core Processor",package="0",stepping="2",vendor="AuthenticAMD"} 1
+node_cpu_info{cachesize="512 KB",core="1",cpu="1",family="25",microcode="0xa601209",model="97",model_name="AMD Ryzen 9 7950X 16-Core Processor",package="0",stepping="2",vendor="AuthenticAMD"} 1
+# HELP node_cpu_seconds_total Seconds the CPUs spent in each mode.
+# TYPE node_cpu_seconds_total counter
+node_cpu_seconds_total{cpu="0",mode="idle"} 800
+node_cpu_seconds_total{cpu="0",mode="iowait"} 0
+node_cpu_seconds_total{cpu="0",mode="system"} 50
+node_cpu_seconds_total{cpu="0",mode="user"} 150
+node_cpu_seconds_total{cpu="1",mode="idle"} 900
+node_cpu_seconds_total{cpu="1",mode="iowait"} 0
+node_cpu_seconds_total{cpu="1",mode="system"} 25
+node_cpu_seconds_total{cpu="1",mode="user"} 75
+# HELP node_filesystem_avail_bytes Filesystem space available to non-root users in bytes.
+# TYPE node_filesystem_avail_bytes gauge
+node_filesystem_avail_bytes{device="/dev/nvme0n1p2",fstype="ext4",mountpoint="/"} 7.0e+11
+node_filesystem_avail_bytes{device="/dev/nvme0n1p2",fstype="ext4",mountpoint="/var/lib/docker"} 7.0e+11
+node_filesystem_avail_bytes{device="tmpfs",fstype="tmpfs",mountpoint="/run"} 3.0e+09
+node_filesystem_avail_bytes{device="/dev/nvme0n1p1",fstype="vfat",mountpoint="/boot/efi"} 5.0e+08
+# HELP node_filesystem_free_bytes Filesystem free space in bytes.
+# TYPE node_filesystem_free_bytes gauge
+node_filesystem_free_bytes{device="/dev/nvme0n1p2",fstype="ext4",mountpoint="/"} 8.0e+11
+node_filesystem_free_bytes{device="/dev/nvme0n1p2",fstype="ext4",mountpoint="/var/lib/docker"} 8.0e+11
+node_filesystem_free_bytes{device="tmpfs",fstype="tmpfs",mountpoint="/run"} 3.0e+09
+node_filesystem_free_bytes{device="/dev/nvme0n1p1",fstype="vfat",mountpoint="/boot/efi"} 5.0e+08
+# HELP node_filesystem_size_bytes Filesystem size in bytes.
+# TYPE node_filesystem_size_bytes gauge
+node_filesystem_size_bytes{device="/dev/nvme0n1p2",fstype="ext4",mountpoint="/"} 1.9e+12
+node_filesystem_size_bytes{device="/dev/nvme0n1p2",fstype="ext4",mountpoint="/var/lib/docker"} 1.9e+12
+node_filesystem_size_bytes{device="tmpfs",fstype="tmpfs",mountpoint="/run"} 3.2e+09
+node_filesystem_size_bytes{device="/dev/nvme0n1p1",fstype="vfat",mountpoint="/boot/efi"} 5.3e+08
+# HELP node_load1 1m load average.
+# TYPE node_load1 gauge
+node_load1 2.5
+node_load15 1.75
+node_load5 2
+# HELP node_memory_MemAvailable_bytes Memory information field MemAvailable_bytes.
+# TYPE node_memory_MemAvailable_bytes gauge
+node_memory_MemAvailable_bytes 4.8e+10
+node_memory_MemTotal_bytes 6.4e+10
+# HELP node_os_info A metric with a constant '1' value labeled by build_id, id, id_like, image_id, image_version, name, pretty_name, variant_id, version, version_codename, version_id.
+# TYPE node_os_info gauge
+node_os_info{build_id="",id="ubuntu",id_like="debian",image_id="",image_version="",name="Ubuntu",pretty_name="Ubuntu 24.04.1 LTS",variant="",variant_id="",version="24.04.1 LTS (Noble Numbat)",version_codename="noble",version_id="24.04"} 1
+# HELP node_uname_info Labeled system information as provided by the uname system call.
+# TYPE node_uname_info gauge
+node_uname_info{domainname="(none)",machine="x86_64",nodename="gpu-box",release="6.8.0-45-generic",sysname="Linux",version="#45-Ubuntu SMP"} 1

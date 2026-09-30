@@ -67,6 +67,11 @@ defmodule VutuvWeb.Router do
     plug(Plugs.RequireAdsEnabled)
   end
 
+  # The server status page, which 404s where an installation switched it off.
+  pipeline :server_status_enabled do
+    plug(Plugs.RequireServerStatus)
+  end
+
   # Routed LiveViews (the two `live_session` blocks below). A LiveView has one
   # representation, so the `activity+json` the pipeline above admits for the
   # ActivityPub URLs is refused here rather than 500ing on a page that never
@@ -1242,6 +1247,14 @@ defmodule VutuvWeb.Router do
         # (`Vutuv.PersonalNotes`): every one of them, searchable, or those about
         # one account when a profile's panel or a handle's card links here.
         live("/notes", PersonalNotesLive, :index)
+      end
+
+      # How the servers are doing (Vutuv.ServerStatus), open to visitors and
+      # linked from every page's footer. Noindex: the numbers are stale the
+      # moment a crawler stores them.
+      scope "/system" do
+        pipe_through([:noindex_pipe, :server_status_enabled])
+        live("/status", ServerStatusLive, :index)
       end
 
       # The ads a member was shown, the page the card's "Ad" label leads to.

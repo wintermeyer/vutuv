@@ -379,6 +379,35 @@ if config_env() == :prod do
     config :vutuv, :fediverse_image_hold_seconds, String.to_integer(String.trim(seconds))
   end
 
+  # The public server status page (Vutuv.ServerStatus). SERVER_STATUS=false
+  # removes it, its footer link and the sampler. SERVER_STATUS_HOSTS lists the
+  # servers in page order ("Server 1", "Server 2", ...): `local` for this
+  # machine, otherwise a node_exporter host, host:port or URL.
+  # SERVER_STATUS_GPU_HOSTS names the hosts that also run an
+  # nvidia_gpu_exporter. The page never shows a host, only its number.
+  if System.get_env("SERVER_STATUS") == "false" do
+    config :vutuv, :server_status_enabled, false
+  end
+
+  server_status_list = fn name ->
+    case System.get_env(name) do
+      nil -> nil
+      value -> value |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+    end
+  end
+
+  server_status =
+    [
+      hosts: server_status_list.("SERVER_STATUS_HOSTS"),
+      gpu_hosts: server_status_list.("SERVER_STATUS_GPU_HOSTS")
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+
+  # `config/2` deep-merges keyword lists, so the shipped :interval stays.
+  if server_status != [] do
+    config :vutuv, :server_status, server_status
+  end
+
   # The like/repost figures of cached remote objects (issue #1283).
   # FEDIVERSE_COUNTS=false stops asking other servers about them altogether;
   # what is already stored stays and keeps rendering.

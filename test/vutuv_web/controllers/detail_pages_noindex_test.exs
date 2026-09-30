@@ -81,5 +81,15 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
       assert conn.status == 200
       assert get_resp_header(conn, "x-robots-tag") == @page_level_robots
     end
+
+    # Linked from every page's footer, so a robots block would strand it in
+    # the index as a bare link; the header keeps it out of search and, with
+    # `noai`, out of AI corpora.
+    test "GET /system/status serves with the page-level opt-out", %{conn: conn} do
+      conn = get(conn, "/system/status")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == @page_level_robots
+    end
   end
 end

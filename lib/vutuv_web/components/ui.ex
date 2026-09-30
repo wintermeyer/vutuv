@@ -3808,10 +3808,21 @@ defmodule VutuvWeb.UI do
   def file_size(bytes) when is_integer(bytes) and bytes >= 0,
     do: ngettext("%{count} byte", "%{count} bytes", bytes)
 
-  defp one_decimal(float) do
+  @doc """
+  A number with a fixed count of decimals and the reader's decimal mark:
+  `decimal(2.456, 2)` is `"2,46"` under German, `"2.46"` under English.
+
+  The one copy of "format, then swap the separator": a file size, a click
+  rate and the server status page's gigabytes and load averages all go
+  through it, so a locale fix is made once. No thousands grouping, so it is
+  for figures that stay under a thousand; a count uses `delimited_count/1`.
+  """
+  def decimal(number, places) when is_number(number) and is_integer(places) do
     {_group, decimal} = number_separators()
-    String.replace(:erlang.float_to_binary(float, decimals: 1), ".", decimal)
+    String.replace(:erlang.float_to_binary(number * 1.0, decimals: places), ".", decimal)
   end
+
+  defp one_decimal(number), do: decimal(number, 1)
 
   @doc """
   A picture's pixel size, `"2400 × 1600"` — the multiplication sign U+00D7 with

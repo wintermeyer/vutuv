@@ -47,10 +47,12 @@ defmodule VutuvWeb.RobotsTxt do
     #    `X-Robots-Tag: noindex` and stay crawlable precisely so that header
     #    is seen: the personal profile detail sub-pages (/<slug>/emails,
     #    /tags, /work_experiences, /followers, ...; VutuvWeb.Plug.NoIndex),
-    #    the RSS feeds, /login and /search. Keeping /login fetchable also
-    #    lets the sign-in redirect behind every login-only URL a crawler
-    #    stumbles into (/posts/<id>/reply, /messages, ...) resolve cleanly
-    #    instead of stranding those URLs as "blocked by robots.txt".
+    #    the RSS feeds, /login, /search and the server status page
+    #    /system/status (which also says `noai` for AI corpora, and is linked
+    #    from every footer, so a Disallow would strand it). Keeping /login
+    #    fetchable also lets the sign-in redirect behind every login-only URL
+    #    a crawler stumbles into (/posts/<id>/reply, /messages, ...) resolve
+    #    cleanly instead of stranding those URLs as "blocked by robots.txt".
     #
     # 3. /api/ is linked nowhere and answers every crawler itself: 404/301
     #    for the legacy 1.0 paths, 401 for the token-only 2.0 endpoints.

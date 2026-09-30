@@ -88,6 +88,8 @@ defmodule VutuvWeb.RobotsTxtTest do
       # Search Console validation failing.
       refute body =~ "Disallow: /login"
       refute body =~ "Disallow: /search"
+      refute body =~ "Disallow: /system/status"
+      assert body =~ "/system/status"
 
       # GET /logout does not exist (signing out is a DELETE), /sessions/new is
       # a 301 that must be crawlable to consolidate, and /api/ answers 401/404

@@ -33,17 +33,7 @@ defmodule VutuvWeb.Admin.NewsletterHTML do
   def clicks_per_page, do: Newsletters.clicks_per_page()
 
   @doc "A click rate as a one-decimal percentage string, with the reader's decimal mark."
-  def percent(rate) when is_number(rate) do
-    decimal = decimal_separator()
-
-    string =
-      rate
-      |> Float.round(1)
-      |> :erlang.float_to_binary(decimals: 1)
-      |> String.replace(".", decimal)
-
-    "#{string} %"
-  end
+  def percent(rate) when is_number(rate), do: "#{decimal(rate, 1)} %"
 
   @doc "The active filters as a string-keyed query map (for the pager and links)."
   def delivery_query(filters) do

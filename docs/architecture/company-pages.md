@@ -16,7 +16,7 @@ words: nothing said where a new link belonged, so each one went on the end.
 | Group | Holds |
 |---|---|
 | Network | member directory, organizations, jobs |
-| Developers | API documentation, source, bug/feature reports |
+| Developers | API documentation, server status (unless `SERVER_STATUS=false`), source, bug/feature reports |
 | Company | Investors, Media Kit, advertising, Impressum |
 | Legal | privacy policy, terms, community guidelines |
 
