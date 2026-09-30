@@ -6649,9 +6649,10 @@ defmodule Vutuv.Posts do
 
   defp post_preloads do
     # denials with group/denied_user: the author-facing audience display
-    # names them (never shown to other viewers). The parent carries :images +
-    # :tags too: the feed/profile thread nests it as a full post card (its own
-    # action bar, images, tags), not just a one-line excerpt — which is also why
+    # names them (never shown to other viewers). The parent is drawn as a full
+    # post card too (the feed/profile thread nests it with its own action bar,
+    # pictures, clip and files, and a thread's opening post often comes from
+    # here), so it takes the same `card_preloads/0` — which is also why
     # reply_ref goes two levels deep rather than one. A thread block's topmost
     # card is always a parent pulled in as context, and when that parent is
     # itself a reply the block opens mid-conversation; with nothing loaded for
@@ -6660,6 +6661,48 @@ defmodule Vutuv.Posts do
     # line. Level two carries only what that banner needs (the grandparent's
     # author, to name and link) — never the grandparent's own refs, which is
     # where an unbounded walk up the chain would start.
+    card_preloads() ++
+      [
+        denials: [:denied_user],
+        # Both kinds of parent author, at both levels (issue #1336): a member may
+        # answer a post published in a page's name, so the parent card names and
+        # links a page as readily as a member — and `author/1` would otherwise pay
+        # a query per card to find out which.
+        reply_ref: [
+          :parent_author,
+          :parent_organization,
+          parent_post:
+            [
+              # Whether it is restricted: `restricted?/1` takes this list when it
+              # is there and runs an EXISTS query when it is not, so without it
+              # every nested parent card asked on its own — 93 queries on one
+              # archive page (measured 2026-09-03). The rows are never rendered (a
+              # card shows the lock, never the audience), so unlike the top-level
+              # preload this needs no `:denied_user`.
+              :denials
+              | card_preloads()
+            ] ++
+              [
+                # The nested parent's own "Replying to …" line, local and remote:
+                # the two states it can be in when it is a reply rather than a
+                # thread starter. `parent_post: [:user, :organization]` is
+                # deliberately the author alone — the grandparent is named and
+                # linked, never rendered.
+                reply_ref: [
+                  :parent_author,
+                  :parent_organization,
+                  parent_post: [:user, :organization]
+                ]
+              ]
+        ]
+      ]
+  end
+
+  # What one post card draws, at the top level and for the parent nested above
+  # it alike. One list, so a new kind of media cannot reach the one and miss the
+  # other: the parent lacked the clip and the files, and a thread whose opening
+  # post only made sense with its video showed it as bare text.
+  defp card_preloads do
     [
       :images,
       # The clip (issue #1906), nil for every post without one. The card, the
@@ -6691,39 +6734,7 @@ defmodule Vutuv.Posts do
       # account behind the post. Two extra batched queries per page, and only
       # for the handful of posts that carry the sidecar at all.
       remote_reply_ref: [remote_post: :remote_account],
-      denials: [:denied_user],
-      tags: from(t in Tag, order_by: t.name),
-      # Both kinds of parent author, at both levels (issue #1336): a member may
-      # answer a post published in a page's name, so the parent card names and
-      # links a page as readily as a member — and `author/1` would otherwise pay
-      # a query per card to find out which.
-      reply_ref: [
-        :parent_author,
-        :parent_organization,
-        parent_post: [
-          :images,
-          :screenshot,
-          :review,
-          :organization,
-          # Whether it is restricted: `restricted?/1` takes this list when it
-          # is there and runs an EXISTS query when it is not, so without it
-          # every nested parent card asked on its own — 93 queries on one
-          # archive page (measured 2026-09-03). The rows are never rendered (a
-          # card shows the lock, never the audience), so unlike the top-level
-          # preload this needs no `:denied_user`.
-          :denials,
-          # Rendered as a full card, so its author's proven links come along
-          # too (issue #1246) — same reason as the top-level `user` above.
-          user: verified_links_preload(),
-          tags: from(t in Tag, order_by: t.name),
-          # The nested parent's own "Replying to …" line, local and remote: the
-          # two states it can be in when it is a reply rather than a thread
-          # starter. `parent_post: [:user, :organization]` is deliberately the
-          # author alone — the grandparent is named and linked, never rendered.
-          remote_reply_ref: [remote_post: :remote_account],
-          reply_ref: [:parent_author, :parent_organization, parent_post: [:user, :organization]]
-        ]
-      ]
+      tags: from(t in Tag, order_by: t.name)
     ]
   end
 

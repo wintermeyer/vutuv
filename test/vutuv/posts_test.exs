@@ -1030,6 +1030,47 @@ defmodule Vutuv.PostsTest do
       assert Enum.map(entry.ancestors, & &1.id) == [root.id, mid.id]
     end
 
+    test "an opening post reached only through its answer keeps its clip and files" do
+      # The opening post came along as the answer's nested parent, whose
+      # preload carried the photos but not the clip or the files, so a post
+      # that only made sense with its video showed as bare text above the
+      # conversation.
+      viewer = user()
+      author = user()
+      answerer = user()
+      follow!(viewer, answerer)
+
+      root = create_post!(author, %{body: "watch this"})
+      backdate_post!(root, 900)
+
+      video =
+        Repo.insert!(%Vutuv.Posts.PostVideo{
+          post_id: root.id,
+          user_id: author.id,
+          token: "clip-token"
+        })
+
+      file =
+        Repo.insert!(%Vutuv.Attachments.Attachment{
+          post_id: root.id,
+          user_id: author.id,
+          token: "file-token",
+          file_name: "notes.pdf",
+          content_type: "application/pdf",
+          size_bytes: 1_000
+        })
+
+      {:ok, reply} = Posts.create_reply(answerer, root, %{body: "nice"})
+      backdate_post!(reply, 300)
+
+      assert [entry] = Posts.feed_page(viewer).entries
+      assert entry.post.id == reply.id
+      assert [shown_root] = entry.ancestors
+      assert shown_root.id == root.id
+      assert shown_root.video.id == video.id
+      assert Enum.map(shown_root.attachments, & &1.id) == [file.id]
+    end
+
     test "an opening post the viewer may not see is left out" do
       viewer = user()
       author = user()
