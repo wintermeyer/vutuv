@@ -779,6 +779,20 @@ defmodule VutuvWeb.ShellLive do
   # what both halves have in common and the label below spells the mixture out.
   defp people_total_word(count), do: ngettext("person", "people", count)
 
+  # The narrowest viewport at which a visitor's bar (wordmark, the pill WITH
+  # its word, Log in) still keeps its 16px margins, per locale. Measured in
+  # WebKit with a five-digit total, so the next digit does not undo it: de
+  # 397px, fr 427px ("personnes", "Se connecter"), it 377px, en 362px, each
+  # rounded up. Whole literals, so Tailwind finds every class in the source.
+  defp visitor_word_class do
+    case Gettext.get_locale(VutuvWeb.Gettext) do
+      "de" -> "min-[400px]:inline"
+      "fr" -> "min-[440px]:inline"
+      "it" -> "min-[380px]:inline"
+      _ -> "min-[370px]:inline"
+    end
+  end
+
   # The pill's **accessible name**, which carries the word at every width —
   # including the phone, where it does not fit on screen. It stays the plain
   # total on purpose: an `aria-label` replaces the element's own text for a
@@ -1466,15 +1480,16 @@ defmodule VutuvWeb.ShellLive do
                     and an avatar; a logged-out phone bar holds a wordmark, this
                     pill and a Log in button, and measures ~330px free at 606px.
                     On a phone it is tight: the bar's gap and this pill's
-                    padding shrink below sm to fit 375px (see
-                    mobile_overflow_test.exs).
-                    So the word shows unconditionally for a visitor — the one who
-                    needs it, since they are the one meeting the number for the
-                    first time — and waits for `lg` once the bar is carrying a
-                    member's controls. Either branch sets at most one display
-                    utility, so the #880 two-competing-utilities trap cannot
-                    form. --%>
-              <span class={@user_id && "hidden lg:inline"}>
+                    padding shrink below sm, and below a width that depends on
+                    the language the bar cannot hold the word with its full
+                    margins, so there it shows the bare number (Stefan's call,
+                    2026-09-30; thresholds in visitor_word_class/0).
+                    So the word shows for a visitor — the one who needs it,
+                    since they are the one meeting the number for the first
+                    time — from that width, and waits for `lg` once the bar is
+                    carrying a member's controls. `hidden` plus one responsive
+                    display utility, so the #880 trap cannot form. --%>
+              <span class={["hidden", if(@user_id, do: "lg:inline", else: visitor_word_class())]}>
                 {people_total_word(@people_count.total)}
               </span>
             </.link>
