@@ -146,7 +146,7 @@ await page.waitForTimeout(300);
 await page.evaluate(() => { const f = document.querySelector("#tz-file"); f.style.opacity = 0; setTimeout(() => f.remove(), 350); });
 await page.setInputFiles("#job_reference_document", pdf);
 mark("attached");
-await page.waitForTimeout(1500);
+await page.waitForTimeout(750);
 
 // 3. save
 await Promise.all([page.waitForURL(/\/job_references$/), clickOn(page.locator('main button:has-text("Speichern")'), 900)]);
@@ -162,7 +162,7 @@ await clickOn(button, 900);
 mark("checking");
 await page.waitForSelector('main a[href$="/check"]', { timeout: 15 * 60_000 });
 mark("done");
-await page.waitForTimeout(2000);
+await page.waitForTimeout(1000);
 
 // 5. the result
 // LiveView navigates this one, so wait for the document, not the load event
@@ -171,10 +171,10 @@ await Promise.all([
   clickOn(page.locator('main a[href$="/check"]').first(), 900),
 ]);
 await page.waitForLoadState("networkidle");
-await page.waitForTimeout(1800);
+await page.waitForTimeout(900);
 mark("result");
 await smoothScroll(700, 3000);
-await page.waitForTimeout(2600);
+await page.waitForTimeout(1300);
 await smoothScroll(1700, 6500);
 await page.waitForTimeout(1600);
 mark("end");
