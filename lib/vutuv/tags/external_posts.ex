@@ -1119,17 +1119,32 @@ defmodule Vutuv.Tags.ExternalPosts do
     # field types and hands Postgrex a readable UUID string it cannot encode.
     # `on_conflict: :nothing` makes the count the number of rows that were
     # really new, which is what the cadence reads.
-    {stored, nil} =
+    {stored, new} =
       Repo.insert_all(ExternalPost, rows,
         on_conflict: :nothing,
-        conflict_target: [:tag_id, :source, :remote_id]
+        conflict_target: [:tag_id, :source, :remote_id],
+        returning: [:published_at]
       )
 
     # A tag polled at the floor mostly re-reads what it already holds, and
     # trimming what nothing was added to is two queries that can delete nothing.
-    if stored > 0, do: trim(from(p in ExternalPost, where: p.tag_id == ^tag_id), caps()[:per_tag])
+    if stored > 0 do
+      trim(from(p in ExternalPost, where: p.tag_id == ^tag_id), caps()[:per_tag])
+      nudge_followers(tag_id, new)
+    end
 
     stored
+  end
+
+  # These rows reach the tag's followers with no signal of their own, so their
+  # Feed badge would only move on the next unrelated recount. Stamped with the
+  # oldest new row, because the feed stamps these entries by publication.
+  defp nudge_followers(tag_id, new) do
+    at = new |> Enum.map(& &1.published_at) |> Enum.min(DateTime) |> DateTime.to_naive()
+
+    from(f in TagFollow, where: f.tag_id == ^tag_id and not is_nil(f.user_id), select: f.user_id)
+    |> Repo.all()
+    |> Vutuv.Activity.nudge_feeds(at)
   end
 
   # A reported original never comes back, whatever tag or server carries it in

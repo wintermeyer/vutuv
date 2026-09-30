@@ -16,8 +16,11 @@ defmodule VutuvWeb.ShellFeedBadgeTest do
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Fediverse
+  alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Posts
   alias Vutuv.Social
+  alias Vutuv.Tags
 
   # Only the Feed nav link carries `data-feed-count`, so this cannot pick up the
   # bell's or the envelope's badge.
@@ -154,5 +157,93 @@ defmodule VutuvWeb.ShellFeedBadgeTest do
     send(view.pid, {:new_post, %{post_id: nil, author_id: author.id, at: nil}})
 
     refute has_element?(view, @feed_badge)
+  end
+
+  # Two sources reach the feed without anybody the reader follows writing
+  # anything: a followed tag and a followed page. Both used to arrive in
+  # silence, so the badge sat still until some unrelated event made the shell
+  # recount, and then jumped. The reader's own reshare of a remote post is such
+  # an event, which read as their own act counting itself.
+  test "a post under a followed tag raises the badge", %{conn: conn} do
+    reader = reader()
+    tag = insert(:tag)
+    {:ok, _follow} = Tags.follow_tag(reader, tag.id)
+
+    {:ok, view, _html} = shell(conn, reader, "/#{reader.username}")
+
+    create_post!(insert(:activated_user), %{body: "found by its tag", tags: tag.name})
+
+    assert has_element?(view, @feed_badge, "1")
+  end
+
+  test "a followed page's post raises the badge", %{conn: conn} do
+    reader = reader()
+    page = insert(:organization)
+    publisher = insert(:activated_user)
+
+    Repo.insert!(%OrganizationRole{
+      organization_id: page.id,
+      user_id: publisher.id,
+      role: "publisher"
+    })
+
+    {:ok, _follow} = Social.follow_organization(reader, page)
+
+    {:ok, view, _html} = shell(conn, reader, "/#{reader.username}")
+
+    {:ok, _post} = Posts.create_organization_post(page, publisher, %{body: "from the page"})
+
+    assert has_element?(view, @feed_badge, "1")
+  end
+
+  test "the member's own reshare of a remote post leaves the badge as it was", %{conn: conn} do
+    reader = reader() |> Ecto.Changeset.change(fediverse_followers?: true) |> Repo.update!()
+    {:ok, _actor} = Fediverse.ensure_actor(reader)
+    remote = remote_post_followed_by(reader)
+    tag = insert(:tag)
+    {:ok, _follow} = Tags.follow_tag(reader, tag.id)
+
+    {:ok, view, _html} = shell(conn, reader, "/#{reader.username}")
+
+    create_post!(insert(:activated_user), %{body: "found by its tag", tags: tag.name})
+    assert has_element?(view, @feed_badge, "1")
+
+    {:ok, :reposted} = Fediverse.repost_remote_post(reader, remote)
+
+    assert has_element?(view, @feed_badge, "1")
+  end
+
+  # Cached ten minutes ago, so it is already behind the reader's marker and the
+  # only thing that could move the badge afterwards is the reshare.
+  defp remote_post_followed_by(reader) do
+    actor = "https://social.example/users/them"
+    at = DateTime.add(DateTime.utc_now(:second), -600)
+
+    account =
+      Repo.insert!(%Fediverse.RemoteAccount{
+        actor_uri: actor,
+        host: "social.example",
+        handle: "them",
+        inbox_uri: actor <> "/inbox"
+      })
+
+    Repo.insert!(%Fediverse.Follow{
+      user_id: reader.id,
+      remote_account_id: account.id,
+      state: "accepted",
+      follow_activity_id: "https://vutuv.test/#{reader.id}/actor#follows/1"
+    })
+
+    Repo.insert!(%Fediverse.RemotePost{
+      remote_account_id: account.id,
+      object_uri: "https://social.example/posts/1",
+      origin_url: "https://social.example/@them/1",
+      content_text: "A thought from over there.",
+      audience: "public",
+      kind: "note",
+      published_at: at,
+      received_at: at,
+      expires_at: DateTime.add(at, 86_400)
+    })
   end
 end

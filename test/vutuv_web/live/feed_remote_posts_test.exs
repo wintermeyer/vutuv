@@ -513,7 +513,7 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     # Open before the post exists, so it can only reach this page behind the pill.
     {:ok, view, _html} = live(conn, ~p"/feed")
     post = cached_post(user)
-    send(view.pid, {:remote_feed_arrival, %{at: ~N[2000-01-01 00:00:00]}})
+    send(view.pid, {:feed_arrival, %{at: ~N[2000-01-01 00:00:00]}})
     render(view)
 
     assert has_element?(view, "[data-filtered-post]")

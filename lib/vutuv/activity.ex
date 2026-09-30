@@ -96,6 +96,24 @@ defmodule Vutuv.Activity do
   def broadcast(party, event), do: Phoenix.PubSub.broadcast(@pubsub, topic(party), event)
 
   @doc """
+  Tell these members' open feeds and shells that something may have reached
+  their feed, stamped `at` (naive UTC, like every `Vutuv.FeedPage` entry).
+
+  A bare "go and look", never a payload: whether the write reaches a given
+  reader depends on their mutes, follows, audience and language filter, so
+  each one asks its own feed sources. It is for the writes that do not travel
+  as `{:new_post, …}` — anything from another network, and a local post that
+  reaches readers by a followed tag or page rather than by its author.
+  """
+  def nudge_feeds(user_ids, %NaiveDateTime{} = at) do
+    event = {:feed_arrival, %{at: at}}
+
+    user_ids
+    |> Enum.uniq()
+    |> Enum.each(&broadcast(&1, event))
+  end
+
+  @doc """
   Persist the read marker (`users.notifications_read_at`) and tell the user's
   shell their notifications were just read (clears the badge).
   """

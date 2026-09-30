@@ -56,7 +56,7 @@ defmodule VutuvWeb.FeedRemoteArrivalSourcesTest do
   defp announce(view, %DateTime{} = at), do: announce(view, DateTime.to_naive(at))
 
   defp announce(view, %NaiveDateTime{} = at) do
-    send(view.pid, {:remote_feed_arrival, %{at: at}})
+    send(view.pid, {:feed_arrival, %{at: at}})
     render(view)
   end
 

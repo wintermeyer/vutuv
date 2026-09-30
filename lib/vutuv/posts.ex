@@ -3660,6 +3660,9 @@ defmodule Vutuv.Posts do
     |> feed_sources(source)
     |> Vutuv.FeedPage.fetch_sources(1, nil)
     |> Enum.flat_map(&newest_row(&1, since))
+    # What the reader did themselves is not news to them, here as in
+    # `unread_feed_count/1`: a reshare of theirs nudges their own feeds too.
+    |> Enum.reject(&own_feed_act?(&1, viewer.id))
     |> case do
       [] ->
         nil
@@ -7378,17 +7381,47 @@ defmodule Vutuv.Posts do
   # held back until the scan settled and the fan-out split in two because of it
   # (author now, followers on release), which is the shape issue #1104 shipped
   # and `moderation_hidden?/1` explains the retirement of.
-  # An organization post has nobody to push to yet: the live fan-out rides the
-  # member follower graph, and an organization cannot be followed until issue
-  # #1336 gives it a reading side. It is not merely a no-op either — with a nil
-  # author `follower_ids/1` would build `where: c.followee_id == ^nil`, which
-  # Ecto **raises** on rather than silently matching nothing.
-  # `[]`, not `:ok`: the return value is the recipient list a second fan-out
-  # about the same event subtracts (`broadcast_about_post/3`).
-  defp broadcast_new_post(%Post{user_id: nil}), do: []
+  #
+  # The return value is the recipient list of `{:new_post, …}`, which a second
+  # fan-out about the same event subtracts (`broadcast_about_post/3`). A page's
+  # post sends none, so it returns `[]`.
+  #
+  # A page's followers and the followers of the post's tags find it in their
+  # feed without following an author, so they get `Activity.nudge_feeds/2`
+  # and their own sources decide. Without it their Feed badge only moved on the
+  # next unrelated recount.
+  defp broadcast_new_post(%Post{user_id: nil, organization_id: page_id} = post) do
+    told = organization_follower_ids(page_id)
+    Vutuv.Activity.nudge_feeds(told, post.inserted_at)
+    nudge_tag_followers(post, told)
+    []
+  end
 
   defp broadcast_new_post(%Post{} = post) do
-    broadcast_to_followers(post.user_id, new_post_event(post))
+    told = broadcast_to_followers(post.user_id, new_post_event(post))
+    nudge_tag_followers(post, told)
+    told
+  end
+
+  # The tag source shows public posts only (`scope_visible(nil)`), so a
+  # restricted post reaches no tag follower. `told` holds the author, if any.
+  defp nudge_tag_followers(%Post{tags: []}, _told), do: :ok
+
+  defp nudge_tag_followers(%Post{id: post_id} = post, told) do
+    unless restricted?(post) do
+      told = MapSet.new(told)
+
+      from(tf in Vutuv.Tags.TagFollow,
+        join: pt in PostTag,
+        on: pt.tag_id == tf.tag_id,
+        where: pt.post_id == ^post_id and not is_nil(tf.user_id),
+        distinct: true,
+        select: tf.user_id
+      )
+      |> Repo.all()
+      |> Enum.reject(&MapSet.member?(told, &1))
+      |> Vutuv.Activity.nudge_feeds(post.inserted_at)
+    end
   end
 
   # The push half of `feed_reply_to_me_items/3` and `feed_repost_of_mine_items/3`:

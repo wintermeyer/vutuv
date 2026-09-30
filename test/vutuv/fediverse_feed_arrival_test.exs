@@ -136,7 +136,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       assert :ok = Fediverse.record_remote_post(create_activity(), @actor)
 
-      assert_receive {:remote_feed_arrival, %{at: %NaiveDateTime{}}}
+      assert_receive {:feed_arrival, %{at: %NaiveDateTime{}}}
     end
 
     test "the stamp is the post's own publication time, not the delivery's" do
@@ -152,7 +152,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
       assert :ok =
                Fediverse.record_remote_post(create_activity(%{"published" => published}), @actor)
 
-      assert_receive {:remote_feed_arrival, %{at: at}}
+      assert_receive {:feed_arrival, %{at: at}}
       assert at == ~N[2026-07-20 09:00:00]
     end
 
@@ -164,10 +164,10 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       activity = create_activity()
       assert :ok = Fediverse.record_remote_post(activity, @actor)
-      assert_receive {:remote_feed_arrival, _}
+      assert_receive {:feed_arrival, _}
 
       assert :skip = Fediverse.record_remote_post(activity, @actor)
-      refute_receive {:remote_feed_arrival, _}
+      refute_receive {:feed_arrival, _}
     end
 
     test "a muted follow is left alone" do
@@ -181,7 +181,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       assert :ok = Fediverse.record_remote_post(create_activity(), @actor)
 
-      refute_receive {:remote_feed_arrival, _}
+      refute_receive {:feed_arrival, _}
     end
 
     test "a boost reaches them too, and only once" do
@@ -194,13 +194,13 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       Activity.subscribe(reader.id)
       assert :ok = Fediverse.record_remote_boost(announce(url), @actor)
-      assert_receive {:remote_feed_arrival, %{at: %NaiveDateTime{}}}
+      assert_receive {:feed_arrival, %{at: %NaiveDateTime{}}}
 
       # A second `Announce` of the same post collides with the row already
       # there. `DO NOTHING` cannot report that, which is why the boost path
       # reads the row back before it says anything.
       assert :ok = Fediverse.record_remote_boost(announce(url), @actor)
-      refute_receive {:remote_feed_arrival, _}
+      refute_receive {:feed_arrival, _}
     end
 
     test "a follow still merely requested hears nothing about a boost" do
@@ -222,7 +222,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
                  @actor
                )
 
-      refute_receive {:remote_feed_arrival, _}
+      refute_receive {:feed_arrival, _}
     end
   end
 
@@ -237,8 +237,8 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       assert {:ok, :reposted} = Fediverse.repost_remote_post(sharer, cached_post())
 
-      assert_receive {:remote_feed_arrival, %{at: %NaiveDateTime{}}}
-      assert_receive {:remote_feed_arrival, %{at: %NaiveDateTime{}}}
+      assert_receive {:feed_arrival, %{at: %NaiveDateTime{}}}
+      assert_receive {:feed_arrival, %{at: %NaiveDateTime{}}}
     end
 
     test "resharing a reply does the same" do
@@ -249,7 +249,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       assert {:ok, :reposted} = Fediverse.repost_note(sharer, note())
 
-      assert_receive {:remote_feed_arrival, %{at: %NaiveDateTime{}}}
+      assert_receive {:feed_arrival, %{at: %NaiveDateTime{}}}
     end
 
     test "the stamp never lands after the row it points at" do
@@ -261,7 +261,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       assert {:ok, :reposted} = Fediverse.repost_remote_post(sharer, cached_post())
 
-      assert_receive {:remote_feed_arrival, %{at: at}}
+      assert_receive {:feed_arrival, %{at: at}}
       [entry] = Fediverse.feed_remote_reposts(sharer, 1, nil)
       assert NaiveDateTime.compare(entry.at, at) != :lt
     end
@@ -274,7 +274,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
       Activity.subscribe(sharer.id)
       assert {:ok, :already} = Fediverse.repost_remote_post(sharer, post)
 
-      refute_receive {:remote_feed_arrival, _}
+      refute_receive {:feed_arrival, _}
     end
 
     test "a muted follower is left alone" do
@@ -287,7 +287,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
       Activity.subscribe(reader.id)
       assert {:ok, :reposted} = Fediverse.repost_remote_post(sharer, cached_post())
 
-      refute_receive {:remote_feed_arrival, _}
+      refute_receive {:feed_arrival, _}
     end
 
     test "a heart is not a feed row and sends nothing" do
@@ -296,7 +296,7 @@ defmodule Vutuv.FediverseFeedArrivalTest do
 
       assert {:ok, :liked} = Fediverse.like_remote_post(sharer, cached_post())
 
-      refute_receive {:remote_feed_arrival, _}
+      refute_receive {:feed_arrival, _}
     end
   end
 end

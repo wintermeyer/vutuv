@@ -153,7 +153,7 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   end
 
   # An account out there passing a cached post on, stamped now — the arrival
-  # that reaches an open feed over `{:remote_feed_arrival, …}`. The row comes
+  # that reaches an open feed over `{:feed_arrival, …}`. The row comes
   # back because the announcement has to carry *its* stamp: `newest_row/2` keeps
   # the boost only while it is at least as new as the `at` the message names, so
   # a fresh `utc_now` there would find nothing on any run where the second rolls
@@ -368,7 +368,7 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     follow_remote!(user, booster.id)
     boost = boost!(booster, remote)
 
-    send(view.pid, {:remote_feed_arrival, %{at: DateTime.to_naive(boost.announced_at)}})
+    send(view.pid, {:feed_arrival, %{at: DateTime.to_naive(boost.announced_at)}})
 
     assert cards_for(render(view), remote) == 1,
            "a boost must not draw a second card for a post already on screen"

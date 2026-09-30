@@ -740,7 +740,7 @@ Measured in headless Chrome 151 against a real socket, a backgrounded tab reads:
 ```
 
 **Both sources.** `ShellLive` already receives `{:new_post, …}` on every page,
-and now also takes the `{:remote_feed_arrival, …}` nudge it used to drop
+and now also takes the `{:feed_arrival, …}` nudge it used to drop
 through its catch-all. That nudge carries no entry, because whether the write
 reaches *this* reader depends on their mutes, follow states, the audience and
 their language filter — so the teaser asks their own sources
@@ -750,6 +750,16 @@ pushed blind. A vutuv post's dot is unchanged: its fan-out is already scoped to
 the author's followers. `{:new_post, …}` gained an `at` stamp for the lookup,
 the way the fediverse nudge always carried one; a payload from the release
 before this one has none and simply skips the teaser for that deploy window.
+
+**Every silent source nudges.** `Vutuv.Activity.nudge_feeds/2` is the one
+sender of `{:feed_arrival, …}`. Besides the fediverse writes it covers the three
+ways a post reaches a reader without their following its author: a followed
+page's post, a post under a followed tag, and a tag-server row
+(`Vutuv.Tags.ExternalPosts`). Without it the Feed badge sat still until an
+unrelated recount and then jumped; the reader's own reshare was such a recount,
+so it looked as if the reshare counted itself. `newest_source_entry/3` leaves
+out the reader's own acts, like `unread_feed_count/1`, so their own reshare
+neither draws a pill nor a teaser.
 
 **The lookup is the cost, so the window is the budget.** This shell is mounted
 on every page of every logged-in member, so a quote built per arrival would

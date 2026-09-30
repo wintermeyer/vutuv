@@ -742,6 +742,19 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#composer-trigger #show-new-posts")
     end
 
+    # A followed tag's post reaches the reader without anybody they follow
+    # writing it, so it arrives by the "go and look" nudge, not `{:new_post}`.
+    test "a post under a followed tag waits behind the pill", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      tag = insert(:tag)
+      {:ok, _follow} = Vutuv.Tags.follow_tag(user, tag.id)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, _fresh} = Posts.create_post(other_user(), %{body: "found by its tag", tags: tag.name})
+
+      assert has_element?(live, "#composer-trigger #show-new-posts")
+    end
+
     test "pressing the pill gives the line back to the button", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       author = other_user()

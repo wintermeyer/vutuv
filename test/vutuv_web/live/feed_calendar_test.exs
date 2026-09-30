@@ -650,7 +650,7 @@ defmodule VutuvWeb.FeedCalendarTest do
       render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
 
       # Naive UTC, the shape `Vutuv.Fediverse.nudge_feeds/2` really broadcasts.
-      send(view.pid, {:remote_feed_arrival, %{at: DateTime.to_naive(post.published_at)}})
+      send(view.pid, {:feed_arrival, %{at: DateTime.to_naive(post.published_at)}})
 
       refute timeline(view) =~ "Von woanders, gerade eben."
       assert render(view) =~ "Nothing reached your feed on"
