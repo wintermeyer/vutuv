@@ -301,7 +301,7 @@ class Outro:
         if sa > 0:
             layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
             d = ImageDraw.Draw(layer)
-            text = "Neu auf vutuv: Arbeitszeugnisse entschlüsseln."
+            text = "Neu auf vutuv: Arbeitszeugnisse analysieren."
             fnt = font(46)
             d.text(((W - d.textlength(text, font=fnt)) / 2, 640 + 20 * (1 - sa)), text, font=fnt, fill=(255, 255, 255, int(220 * sa)))
             f.alpha_composite(layer)
@@ -318,7 +318,7 @@ wait0, wait1 = m["checking"] + 1.5, m["done"] - 0.5
 
 FILM = Film(Part(take, URL,
     # the list, the form fills itself quickly, the PDF flies in at real speed;
-    # saved, the click on "Zeugnis entschlüsseln", the wait in WAIT seconds,
+    # saved, the click on "Zeugnis analysieren", the wait in WAIT seconds,
     # the result page scrolled through a little faster than real time; the
     # speeds keep the film between 30 and 35 seconds
     [(m["start"] - 0.3, m["form"], 1.6), (m["form"], m["typed"], 3.0),
