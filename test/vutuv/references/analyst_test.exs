@@ -8,18 +8,24 @@ defmodule Vutuv.References.AnalystTest do
   whose completeness cannot be proven.
 
   Flips `:reference_check_*` application env, all of which only this module and
-  `Vutuv.References.Analyst` read, so it is `async: false`.
+  `Vutuv.References.Analyst` read, and `:fetch_reference_skill`, which
+  `Vutuv.References.Skill.current/0` reads for every check, so it is
+  `async: false`.
   """
   use Vutuv.DataCase, async: false
 
   alias Vutuv.References.Analyst
+  alias Vutuv.References.JobReference
   alias Vutuv.References.Skill
 
   @zeugnis "Wir waren mit seinen Leistungen zufrieden."
 
   setup do
     # Store a small but valid skill, so the prompt size in these tests is
-    # predictable rather than the real 131 KB.
+    # predictable rather than the real 216 KB. It is in force only as a
+    # fetched body: with fetching off the vendored file wins by digest.
+    put_config(:fetch_reference_skill, true)
+
     body =
       """
       ---
@@ -156,6 +162,19 @@ defmodule Vutuv.References.AnalystTest do
       end
     end
 
+    # Since skill 3.2 even a single pasted prompt opens a dialog, and only an
+    # explicitly non-interactive order skips the questions. Nobody can answer
+    # one here, so without this the result is a question, not an analysis.
+    test "declares the run non-interactive" do
+      {:ok, _result} = Analyst.analyze(@zeugnis)
+
+      assert_received {:payload, payload}
+      [_system, user] = payload["messages"]
+
+      assert user["content"] =~ "ausdrücklich nicht-interaktiver Auftrag"
+      assert user["content"] =~ "keine Fragen"
+    end
+
     test "fences the Zeugnis and tells the model to treat it as content" do
       {:ok, _result} = Analyst.analyze(@zeugnis)
 
@@ -226,6 +245,21 @@ defmodule Vutuv.References.AnalystTest do
       )
 
       assert {:error, {:analysis, :context_too_small}} = Analyst.analyze(@zeugnis)
+    end
+
+    # The guard above uses a deliberately loose floor, so it would let a
+    # window through that silently truncates a long Zeugnis. This ties the
+    # configured default to the vendored skill at the rate actually measured
+    # (skill 3.3.0: ~4 bytes per token), so the next skill update that
+    # outgrows the window fails here rather than in production. 65_536 fails
+    # it against skill 3.3.0 (~75_000 needed).
+    test "the default window holds the vendored skill, the longest Zeugnis and the answer" do
+      skill_tokens = div(byte_size(Skill.vendored_body()), 4)
+      zeugnis_tokens = div(JobReference.max_body(), 4)
+      needed = skill_tokens + zeugnis_tokens + 6_000
+
+      assert Analyst.num_ctx() >= needed,
+             "num_ctx #{Analyst.num_ctx()} is below the ~#{needed} tokens a full check needs"
     end
 
     test "runs when the window is large enough" do

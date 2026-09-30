@@ -748,7 +748,7 @@ if config_env() == :prod do
   # Arbeitszeugnis analysis (Vutuv.References.Checks). Shares OLLAMA_URL with
   # the image moderation above.
   #
-  # REFERENCE_CHECK_NUM_CTX is NOT a tuning knob: the prompt is ~35_200 tokens
+  # REFERENCE_CHECK_NUM_CTX is NOT a tuning knob: the prompt is ~55_000 tokens
   # and Ollama silently truncates anything larger than the window instead of
   # refusing. Measured at 32_768 the model saw 16_386 of 35_559 tokens and
   # still produced a confident report, minus half its legal basis. See

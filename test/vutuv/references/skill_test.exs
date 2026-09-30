@@ -7,7 +7,8 @@ defmodule Vutuv.References.SkillTest do
   still confident, and without a single legal anchor.
 
   This module flips `:fetch_reference_skill` and the Req stub, both global
-  application env, so it is `async: false`. No other module reads those keys.
+  application env, so it is `async: false`. `Skill.current/0` reads the switch
+  for every check, so every other module that reaches it is sync too.
   """
   use Vutuv.DataCase, async: false
 
@@ -139,11 +140,28 @@ defmodule Vutuv.References.SkillTest do
       assert version.version
     end
 
-    test "prefers the newest stored body" do
+    test "prefers the newest stored body when fetching is on" do
+      put_config(:fetch_reference_skill, true)
       {:ok, _vendored} = Skill.store(Skill.vendored_body(), "vendored")
       {:ok, fetched} = Skill.store(valid_body("9.9.9"), "remote")
 
       assert Skill.current().id == fetched.id
+    end
+
+    # With fetching off the shipped file is the source of record, chosen by
+    # its digest rather than by date: a release that ships a new SKILL.md puts
+    # it in force at once, and so does a rollback to one stored before.
+    test "puts a newly shipped vendored copy in force over an older stored row" do
+      {:ok, _old} = Skill.store(valid_body("3.0.24"), "vendored")
+
+      assert Skill.current().sha256 == Skill.digest(Skill.vendored_body())
+    end
+
+    test "keeps the vendored copy in force when a newer row is stored" do
+      {:ok, vendored} = Skill.store(Skill.vendored_body(), "vendored")
+      {:ok, _newer} = Skill.store(valid_body("9.9.9"), "remote")
+
+      assert Skill.current().id == vendored.id
     end
   end
 

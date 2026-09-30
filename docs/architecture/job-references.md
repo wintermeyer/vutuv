@@ -90,7 +90,10 @@ readings, a change to it is a reviewable commit, and no installation depends on
 GitHub being up to answer a member. `SkillRefresher` can re-fetch it daily, but
 that is **off by default** (`FETCH_REFERENCE_SKILL`): for a text that generates
 legal analysis, an unreviewed overnight change upstream is worse than waiting
-for a deploy. Rows accumulate in `reference_skill_versions`,
+for a deploy. With it off, `Skill.current/0` picks the vendored copy's row by
+its digest rather than the newest row by date, so a release or a rollback puts
+its own `SKILL.md` in force at once. Before that, the row an earlier release
+had stored won for ever and a new file was dead weight. Rows accumulate in `reference_skill_versions`,
 and every check records the `skill_version` + `skill_sha256` that produced it,
 so two results months apart can be explained rather than merely compared.
 
@@ -103,12 +106,19 @@ anchors at all.
 
 ## The context window is a correctness problem
 
-The prompt measures ~35,200 tokens. Ollama's common default context is 32,768,
-which is smaller, and it does not refuse — it truncates and answers anyway:
+The prompt measures ~55,000 tokens (skill 3.3.0; 3.0.24 had ~35,200). Ollama's
+common default context is 32,768, which is smaller, and it does not refuse — it
+truncates and answers anyway. Measured with 3.0.24:
 
     num_ctx=32768  ->  prompt_eval_count = 16,386 of 35,559
                        no § 109 GewO, no Beweislast, still a polished report
     num_ctx=65536  ->  prompt_eval_count = 35,559
+
+and with 3.3.0 at the default `num_ctx=98304`, `prompt_eval_count = 55,128` on a
+two-page Zeugnis. The longest Zeugnis `JobReference` accepts brings a check to
+~75,000 tokens, which 65,536 no longer holds; `analyst_test.exs` ties the
+default to the vendored file, so the next skill that outgrows it fails the
+build.
 
 So `Vutuv.References.Analyst` sends `num_ctx` explicitly on every request,
 refuses to start when the configured window cannot hold what it is about to
@@ -116,7 +126,7 @@ send, and compares `prompt_eval_count` in the reply against a conservative
 lower bound derived from what it sent. Both are the same rule: an answer whose
 completeness cannot be proven is not an answer.
 
-The skill is the system message and the Zeugnis a user message, so the ~35,200
+The skill is the system message and the Zeugnis a user message, so the ~55,000
 token prefix is byte-identical across checks and the server reuses its KV
 cache — measured, that drops the prefill from 75 s to 5 s from the second check
 on. Nothing that varies may join the system message.
@@ -375,8 +385,12 @@ moderation and usable as a comma-separated priority list (`Vutuv.Ollama`).
 ## Why the review stops at the analysis
 
 The skill can produce a ready-to-send Berichtigungsverlangen, a Klagestrategie
-and a Vollstreckungsmodul for the individual case. vutuv asks it not to, and the
-cut is made in the **instruction** rather than by hiding sections afterwards: an
+and a Vollstreckungsmodul for the individual case. Since 3.2 it also opens a
+dialog by default and asks questions first; only an explicitly non-interactive
+order skips them, and nobody could answer one here. vutuv's instruction
+declares the run non-interactive and limited to the analysis. It asks for no
+letters, and the cut is made in the **instruction** rather than by hiding
+sections afterwards: an
 unwanted letter that is never generated cannot be stored, cannot reappear
 through a later formatting change, and costs the member no inference time.
 `analyst_test.exs` pins the forbidden list so a tidy-up cannot quietly reopen it.

@@ -5,14 +5,18 @@ defmodule Vutuv.References.Analyst do
 
   ## The context window is a correctness problem, not a tuning knob
 
-  The prompt is ~35_200 tokens. Ollama's own default context is commonly
-  32_768, which is **smaller**, and it does not refuse: it silently truncates
-  and answers anyway. Measured against this exact prompt:
+  The prompt is ~55_000 tokens (skill 3.3.0). Ollama's own default context
+  is commonly 32_768, which is **smaller**, and it does not refuse: it
+  silently truncates and answers anyway. Measured against skill 3.0.24, then
+  ~35_200 tokens:
 
       num_ctx=32768  ->  prompt_eval_count = 16_386 of 35_559
                          no § 109 GewO, no Beweislast, still a polished answer
       num_ctx=65536  ->  prompt_eval_count = 35_559
                          both present
+
+  Skill 3.3.0 on a two-page Zeugnis at num_ctx=98304: prompt_eval_count =
+  55_128, the whole prompt.
 
   A halved prompt does not produce a visibly worse answer. It produces the
   same shape of answer — Ampel, grade, ready-to-send letter — with half the
@@ -43,9 +47,10 @@ defmodule Vutuv.References.Analyst do
 
   @req_options_key :reference_check_req_options
 
-  # Measured on this prompt: 131_302 characters produced 35_205 tokens, i.e.
-  # 3.73 characters per token for German legal prose. Dividing by 6 is a
-  # deliberately loose lower bound — a real run clears it with 60 % to spare,
+  # Measured: skill 3.0.24 (131_302 characters) produced 35_205 tokens, 3.73
+  # characters per token for German legal prose; skill 3.3.0 plus a Zeugnis
+  # (~221_000 bytes) produced 55_128, 4.0 bytes per token. Dividing by 6 is a
+  # deliberately loose lower bound — a real run clears it with 50 % to spare,
   # while the halving Ollama performs on an oversized prompt fails it outright
   # (16_386 against a bound of ~22_000). It errs towards accepting, because a
   # false alarm here costs a member their check.
@@ -196,7 +201,7 @@ defmodule Vutuv.References.Analyst do
   defp min_prompt_tokens(prompt_chars), do: div(prompt_chars, @chars_per_token_floor)
 
   # The skill is the system message and the Zeugnis is a user message, so the
-  # ~35_200-token prefix is byte-identical across every check. That is what
+  # ~55_000-token prefix is byte-identical across every check. That is what
   # lets the server reuse its KV cache: measured, it drops the prefill from
   # 75 s to 5 s on the second and every later check. Anything that varies must
   # therefore stay out of the system message.
@@ -223,6 +228,13 @@ defmodule Vutuv.References.Analyst do
     """
     Ordne das folgende Arbeitszeugnis nach diesem Skill ein. Antworte auf Deutsch.
 
+    Dies ist ein ausdrücklich nicht-interaktiver Auftrag über eine
+    antwortlose Schnittstelle: Niemand kann eine Rückfrage beantworten. Stelle
+    daher keine Fragen, sondern arbeite in einem Durchgang fertig und
+    kennzeichne offene Tatsachen als Annahme oder Unsicherheit am betroffenen
+    Befund.
+
+    Der Auftrag ist auf die Einordnung des Zeugnisses begrenzt.
     Liefere ausschließlich die Analyse:
 
     * die Einordnung der einzelnen Formulierungen samt Ampel,
@@ -251,11 +263,12 @@ defmodule Vutuv.References.Analyst do
   @doc """
   The context window used for a check.
 
-  Defaults to 65_536: the measured working value for the ~35_200-token prompt
-  plus a Zeugnis plus the answer. The next step down that Ollama commonly
-  defaults to, 32_768, does not fit the prompt at all.
+  Defaults to 98_304: the ~55_000-token prompt (skill 3.3.0), the longest
+  Zeugnis `JobReference` accepts (~13_500 tokens) and the answer budget add
+  up to ~75_000, which no longer fits the 65_536 that carried skill 3.0.24.
+  Measured on the GPU instance: qwen3.6:27b at 98_304 stays fully in VRAM.
   """
-  def num_ctx, do: Application.get_env(:vutuv, :reference_check_num_ctx, 65_536)
+  def num_ctx, do: Application.get_env(:vutuv, :reference_check_num_ctx, 98_304)
 
   @doc "The model that performs the analysis."
   def model, do: Application.get_env(:vutuv, :reference_check_model, "qwen3.6:27b")

@@ -3,7 +3,7 @@ defmodule Vutuv.References.Skill do
   The analysis prompt: where it comes from, how it is checked, and which
   version produced a given result.
 
-  The Arbeitszeugnis check runs on an open skill — a ~131 KB Markdown document
+  The Arbeitszeugnis check runs on an open skill — a ~216 KB Markdown document
   maintained at
 
       https://github.com/Klotzkette/arbeitszeugnispruefer-skill
@@ -17,6 +17,8 @@ defmodule Vutuv.References.Skill do
   default** (`:fetch_reference_skill`). For a prompt that produces legal
   readings, an unreviewed overnight change upstream is worse than waiting for a
   deploy. An operator who wants upstream corrections sooner can switch it on.
+  With it off, the shipped file is in force by its digest, whatever else is
+  stored, so a release (or a rollback) puts its own `SKILL.md` in force.
 
   ## Adopting a fetched body is a decision, not a copy
 
@@ -50,8 +52,8 @@ defmodule Vutuv.References.Skill do
   # thing we asked for, whatever else it may be.
   @required_name "arbeitszeugnis-pruefer"
 
-  # Measured: the real document is ~131 KB / ~35_200 tokens. Half of that is
-  # far below anything legitimate and far above any error page.
+  # Measured: the real document was ~131 KB in 3.0.24 and is ~216 KB in
+  # 3.3.0. 50 KB is far below anything legitimate and far above any error page.
   @min_body_bytes 50_000
 
   @doc "Where the skill is fetched from."
@@ -72,14 +74,19 @@ defmodule Vutuv.References.Skill do
   @doc """
   The prompt in force, as a `%Vutuv.References.SkillVersion{}`.
 
-  The newest stored row, or — on an installation that has never fetched — the
-  vendored copy, which is written to the table on first use so a check can
-  always point at a real row.
+  With fetching off, the row of the vendored copy, found by its digest and
+  stored on first use so a check can always point at a real row. Chosen by
+  identity rather than by date, because a row an earlier release stored is
+  newer than the file a later release ships.
+
+  With fetching on, the newest stored row, or the vendored copy on an
+  installation that has never fetched.
   """
   def current do
-    case newest() do
-      nil -> adopt_vendored()
-      version -> version
+    cond do
+      not fetch_enabled?() -> vendored() || newest()
+      version = newest() -> version
+      true -> vendored()
     end
   end
 
@@ -98,7 +105,7 @@ defmodule Vutuv.References.Skill do
   raises: it runs on a timer, and a GitHub outage is not an incident here.
   """
   def refresh do
-    if fetch_enabled?(), do: fetch_and_store(), else: {:ok, current()}
+    if fetch_enabled?(), do: fetch_and_store(), else: in_force(:no_skill)
   end
 
   defp fetch_and_store do
@@ -112,7 +119,10 @@ defmodule Vutuv.References.Skill do
   # vendored one) stays in force and checks keep running on it.
   defp fall_back(reason) do
     Logger.warning("reference skill fetch failed (#{inspect(reason)}); keeping current body")
+    in_force(reason)
+  end
 
+  defp in_force(reason) do
     case current() do
       nil -> {:error, reason}
       version -> {:ok, version}
@@ -199,8 +209,8 @@ defmodule Vutuv.References.Skill do
   @doc """
   The vendored copy shipped in `priv/`, or nil when it is missing.
 
-  Reading it is deliberately not cached: it is touched once at first use and
-  then never again, because a stored row exists from that point on.
+  Not cached: `current/0` reads it once per check, which takes minutes of
+  inference anyway, and a file read cannot go stale across a deploy.
   """
   def vendored_body do
     path = Application.app_dir(:vutuv, "priv/reference_skill/SKILL.md")
@@ -211,13 +221,20 @@ defmodule Vutuv.References.Skill do
     end
   end
 
-  defp adopt_vendored do
+  # The vendored copy's row, written on first use. Looked up before storing,
+  # because `store/2` bumps `fetched_at` and would reorder the history on
+  # every check.
+  defp vendored do
     with body when is_binary(body) <- vendored_body(),
+         nil <- Repo.get_by(SkillVersion, sha256: digest(body)),
          {:ok, version} <- store(body, "vendored") do
       version
     else
+      %SkillVersion{} = version ->
+        version
+
       _unavailable ->
-        Logger.error("no reference skill available: neither stored nor vendored")
+        Logger.error("no reference skill available: the vendored copy is missing or invalid")
         nil
     end
   end

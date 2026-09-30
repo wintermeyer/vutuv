@@ -32,8 +32,8 @@ defmodule Vutuv.References.JobReference do
   # scanning errors.
   @body_sources ~w(typed pdf_text ocr_tesseract ocr_vision)
 
-  # The body cap. ~13_500 tokens, which leaves room beside the ~35_200-token
-  # analysis prompt inside the model's 65_536-token window. A 14-page Zeugnis
+  # The body cap. ~13_500 tokens, which leaves room beside the ~55_000-token
+  # analysis prompt inside the model's 98_304-token window. A 14-page Zeugnis
   # measured 9_543 characters, so this is roughly 80 pages of headroom.
   @max_body 50_000
 

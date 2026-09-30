@@ -205,13 +205,14 @@ config :vutuv, :tag_merge_assist_model, "qwen3.5:9b"
 # uploaded employment reference reviewed by a text model against an open
 # skill. Shares :ollama_url with the image moderation above.
 #
-# :reference_check_num_ctx is NOT a tuning knob. The prompt measures ~35_200
-# tokens, and a window smaller than that does not make Ollama refuse — it
-# silently truncates and answers anyway. Measured against this prompt: at
-# 32_768 the model saw 16_386 of 35_559 tokens and produced a polished report
-# with no § 109 GewO and no Beweislast in it. 65_536 is the measured working
-# value; Vutuv.References.Analyst refuses to run below what it needs and
-# rejects a reply whose prompt_eval_count shows a truncation.
+# :reference_check_num_ctx is NOT a tuning knob. The prompt measures ~55_000
+# tokens (skill 3.3.0), and a window smaller than that does not make Ollama
+# refuse — it silently truncates and answers anyway. Measured against the
+# earlier ~35_200-token skill: at 32_768 the model saw 16_386 of 35_559 tokens
+# and produced a polished report with no § 109 GewO and no Beweislast in it.
+# 98_304 holds the prompt, the longest Zeugnis and the answer (~75_000);
+# Vutuv.References.Analyst refuses to run below what it needs and rejects a
+# reply whose prompt_eval_count shows a truncation.
 #
 # The analysis reads GERMAN employment law (§ 109 GewO plus BAG case law), so
 # :reference_check_countries lists the countries it may be offered for.
@@ -272,7 +273,7 @@ config :vutuv, :reference_check_model, "qwen3.6:27b"
 config :vutuv, :reference_check_model_url, nil
 config :vutuv, :reference_check_hardware, "NVIDIA GPU"
 config :vutuv, :reference_check_country, "DE"
-config :vutuv, :reference_check_num_ctx, 65_536
+config :vutuv, :reference_check_num_ctx, 98_304
 config :vutuv, :reference_check_timeout, 900_000
 config :vutuv, :reference_checks_per_day, 10
 config :vutuv, :reference_check_countries, ["DE"]
