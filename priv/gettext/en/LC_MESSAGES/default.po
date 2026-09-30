@@ -10,7 +10,7 @@ msgid ""
 msgstr "Language: en\n"
 
 #: lib/vutuv_web/controllers/page_controller.ex:214
-#: lib/vutuv_web/templates/layout/app.html.heex:107
+#: lib/vutuv_web/templates/layout/app.html.heex:110
 #, elixir-autogen
 msgid "About us"
 msgstr ""
@@ -364,7 +364,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/directory/index.html.heex:3
 #: lib/vutuv_web/templates/directory/show.html.heex:4
-#: lib/vutuv_web/templates/layout/app.html.heex:151
+#: lib/vutuv_web/templates/layout/app.html.heex:154
 #: lib/vutuv_web/templates/post_calendar/day.html.heex:4
 #: lib/vutuv_web/templates/post_calendar/index.html.heex:3
 #: lib/vutuv_web/templates/post_calendar/month.html.heex:4
@@ -661,7 +661,7 @@ msgstr ""
 #: lib/vutuv_web/templates/admin/account/index.html.heex:23
 #: lib/vutuv_web/templates/admin/account/index.html.heex:35
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:30
-#: lib/vutuv_web/templates/layout/app.html.heex:156
+#: lib/vutuv_web/templates/layout/app.html.heex:159
 #, elixir-autogen
 msgid "Search"
 msgstr ""
@@ -1608,8 +1608,8 @@ msgstr ""
 #: lib/vutuv_web/live/post_live/composer.ex:2180
 #: lib/vutuv_web/live/post_live/composer.ex:3638
 #: lib/vutuv_web/live/post_live/composer.ex:3890
-#: lib/vutuv_web/templates/layout/app.html.heex:181
-#: lib/vutuv_web/templates/layout/app.html.heex:187
+#: lib/vutuv_web/templates/layout/app.html.heex:184
+#: lib/vutuv_web/templates/layout/app.html.heex:190
 #: lib/vutuv_web/templates/member_card/card.html.heex:17
 #: lib/vutuv_web/templates/remote_actor_card/card.html.heex:29
 #: lib/vutuv_web/views/layout_html.ex:142
@@ -1632,7 +1632,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/page_controller.ex:218
 #: lib/vutuv_web/live/registration_live.ex:910
-#: lib/vutuv_web/templates/layout/app.html.heex:113
+#: lib/vutuv_web/templates/layout/app.html.heex:116
 #: lib/vutuv_web/views/admin/legal_page_html.ex:11
 #, elixir-autogen, elixir-format
 msgid "Datenschutzerklärung"
@@ -1640,7 +1640,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/page_controller.ex:224
 #: lib/vutuv_web/live/registration_live.ex:907
-#: lib/vutuv_web/templates/layout/app.html.heex:114
+#: lib/vutuv_web/templates/layout/app.html.heex:117
 #: lib/vutuv_web/views/admin/legal_page_html.ex:12
 #, elixir-autogen, elixir-format
 msgid "Nutzungsbedingungen"
@@ -1730,7 +1730,7 @@ msgstr ""
 #: lib/vutuv_web/live/message_live/index.ex:1165
 #: lib/vutuv_web/live/shell_live.ex:1562
 #: lib/vutuv_web/live/shell_live.ex:1789
-#: lib/vutuv_web/templates/layout/app.html.heex:153
+#: lib/vutuv_web/templates/layout/app.html.heex:156
 #, elixir-autogen, elixir-format
 msgid "Messages"
 msgstr ""
@@ -1758,7 +1758,7 @@ msgstr ""
 #: lib/vutuv_web/live/notification_live/index.ex:116
 #: lib/vutuv_web/live/notification_live/index.ex:501
 #: lib/vutuv_web/live/shell_live.ex:1587
-#: lib/vutuv_web/templates/layout/app.html.heex:154
+#: lib/vutuv_web/templates/layout/app.html.heex:157
 #: lib/vutuv_web/templates/settings/notifications.html.heex:8
 #, elixir-autogen, elixir-format
 msgid "Notifications"
@@ -1781,12 +1781,12 @@ msgid "Send"
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:35
-#: lib/vutuv_web/templates/layout/app.html.heex:77
+#: lib/vutuv_web/templates/layout/app.html.heex:80
 #, elixir-autogen, elixir-format
 msgid "Source"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:80
+#: lib/vutuv_web/templates/layout/app.html.heex:83
 #, elixir-autogen, elixir-format
 msgid "Submit a bug report or feature request"
 msgstr ""
@@ -2092,7 +2092,7 @@ msgstr ""
 #: lib/vutuv_web/live/post_live/feed_calendar.ex:46
 #: lib/vutuv_web/live/shell_live.ex:1391
 #: lib/vutuv_web/live/shell_live.ex:1762
-#: lib/vutuv_web/templates/layout/app.html.heex:152
+#: lib/vutuv_web/templates/layout/app.html.heex:155
 #, elixir-autogen, elixir-format
 msgid "Feed"
 msgstr ""
@@ -2936,7 +2936,7 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/markdown.ex:414
 #: lib/vutuv_web/agent_docs/text.ex:370
 #: lib/vutuv_web/controllers/page_controller.ex:54
-#: lib/vutuv_web/templates/layout/app.html.heex:115
+#: lib/vutuv_web/templates/layout/app.html.heex:118
 #: lib/vutuv_web/templates/page/community.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Community guidelines"
@@ -3157,7 +3157,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/public_report_controller.ex:262
 #: lib/vutuv_web/controllers/report_controller.ex:57
-#: lib/vutuv_web/templates/layout/app.html.heex:120
+#: lib/vutuv_web/templates/layout/app.html.heex:123
 #: lib/vutuv_web/templates/page/legal.html.heex:42
 #, elixir-autogen, elixir-format
 msgid "Report content"
@@ -3941,7 +3941,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/ad_controller.ex:24
 #: lib/vutuv_web/templates/ad/bookings.html.heex:4
 #: lib/vutuv_web/templates/ad/index.html.heex:14
-#: lib/vutuv_web/templates/layout/app.html.heex:105
+#: lib/vutuv_web/templates/layout/app.html.heex:108
 #, elixir-autogen, elixir-format
 msgid "Advertising"
 msgstr ""
@@ -5146,28 +5146,28 @@ msgstr ""
 #: lib/vutuv_web/live/admin/screenshot_live.ex:372
 #: lib/vutuv_web/live/admin/screenshot_live.ex:500
 #: lib/vutuv_web/live/admin/screenshot_live.ex:656
-#: lib/vutuv_web/templates/layout/app.html.heex:158
+#: lib/vutuv_web/templates/layout/app.html.heex:161
 #, elixir-autogen, elixir-format
 msgid "Actions"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:168
+#: lib/vutuv_web/templates/layout/app.html.heex:171
 #, elixir-autogen, elixir-format
 msgid "Close menus and dialogs"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:165
+#: lib/vutuv_web/templates/layout/app.html.heex:168
 #, elixir-autogen, elixir-format
 msgid "General"
 msgstr ""
 
 #: lib/vutuv_web/live/shell_live.ex:1702
-#: lib/vutuv_web/templates/layout/app.html.heex:176
+#: lib/vutuv_web/templates/layout/app.html.heex:179
 #, elixir-autogen, elixir-format
 msgid "Keyboard shortcuts"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:149
+#: lib/vutuv_web/templates/layout/app.html.heex:152
 #, elixir-autogen, elixir-format
 msgid "Navigation"
 msgstr ""
@@ -5194,17 +5194,17 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:167
+#: lib/vutuv_web/templates/layout/app.html.heex:170
 #, elixir-autogen, elixir-format
 msgid "Show this help"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:160
+#: lib/vutuv_web/templates/layout/app.html.heex:163
 #, elixir-autogen, elixir-format
 msgid "Write a new post"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:155
+#: lib/vutuv_web/templates/layout/app.html.heex:158
 #: lib/vutuv_web/views/member_card_html.ex:31
 #, elixir-autogen, elixir-format
 msgid "Your profile"
@@ -5225,12 +5225,12 @@ msgstr ""
 msgid "Add a profile photo"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:162
+#: lib/vutuv_web/templates/layout/app.html.heex:165
 #, elixir-autogen, elixir-format
 msgid "Next post in the feed"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:163
+#: lib/vutuv_web/templates/layout/app.html.heex:166
 #, elixir-autogen, elixir-format
 msgid "Previous post in the feed"
 msgstr ""
@@ -7324,12 +7324,12 @@ msgstr ""
 msgid "more posts available, append ?cursor=%{cursor}"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:136
+#: lib/vutuv_web/templates/layout/app.html.heex:139
 #, elixir-autogen, elixir-format
 msgid "Last change: %{date} at %{time}"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:136
+#: lib/vutuv_web/templates/layout/app.html.heex:139
 #, elixir-autogen, elixir-format
 msgid "Last commit (Berlin time)"
 msgstr ""
@@ -17016,12 +17016,12 @@ msgstr ""
 msgid "Whole photos"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:161
+#: lib/vutuv_web/templates/layout/app.html.heex:164
 #, elixir-autogen, elixir-format
 msgid "Send the post or message you are writing"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:214
+#: lib/vutuv_web/templates/layout/app.html.heex:217
 #, elixir-autogen, elixir-format
 msgid "The single-key shortcuts pause while you type, and are off on phones and tablets."
 msgstr ""
@@ -19666,12 +19666,12 @@ msgstr ""
 msgid "You are not allowed to change this organization."
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:86
+#: lib/vutuv_web/templates/layout/app.html.heex:89
 #, elixir-autogen, elixir-format
 msgid "Company"
 msgstr ""
 
-#: lib/vutuv_web/templates/layout/app.html.heex:111
+#: lib/vutuv_web/templates/layout/app.html.heex:114
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Legal"
 msgstr ""
@@ -22027,7 +22027,7 @@ msgstr[1] ""
 
 #: lib/vutuv_web/agent_docs/investors_doc.ex:367
 #: lib/vutuv_web/controllers/company_controller.ex:56
-#: lib/vutuv_web/templates/layout/app.html.heex:100
+#: lib/vutuv_web/templates/layout/app.html.heex:103
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Investors"
 msgstr ""
@@ -23147,6 +23147,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: lib/vutuv_web/live/press_kit_live.ex:1324
+#: lib/vutuv_web/live/server_status_live.ex:285
 #, elixir-autogen, elixir-format
 msgid "%{percent}%"
 msgstr ""
@@ -26592,4 +26593,142 @@ msgstr ""
 #: lib/vutuv_web/templates/import/new.html.heex:146
 #, elixir-autogen, elixir-format
 msgid "Uploading…"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:230
+#, elixir-autogen, elixir-format
+msgid "%{degrees} °C"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:226
+#, elixir-autogen, elixir-format
+msgid "%{model}, 1 core"
+msgid_plural "%{model}, %{count} cores"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/live/server_status_live.ex:293
+#, elixir-autogen, elixir-format
+msgid "%{used} / %{total} GB"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:290
+#, elixir-autogen, elixir-format
+msgid "%{used} / %{total} TB"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:238
+#, elixir-autogen, elixir-format
+msgid "%{watts} / %{limit} W"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:240
+#, elixir-autogen, elixir-format
+msgid "%{watts} W"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:223
+#, elixir-autogen, elixir-format
+msgid "1 core"
+msgid_plural "%{count} cores"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/live/server_status_live.ex:262
+#, elixir-autogen, elixir-format
+msgid "Busy"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:110
+#, elixir-autogen, elixir-format
+msgid "CPU"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:263
+#, elixir-autogen, elixir-format
+msgid "Critical"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:137
+#, elixir-autogen, elixir-format
+msgid "Disks"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:148
+#, elixir-autogen, elixir-format
+msgid "GPU load"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:146
+#, elixir-autogen, elixir-format
+msgid "Graphics card"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:151
+#, elixir-autogen, elixir-format
+msgid "Graphics memory"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:51
+#, elixir-autogen, elixir-format
+msgid "How the servers behind this site are doing right now. The page updates itself every second."
+msgid_plural "How the servers behind this site are doing right now. The page updates itself every %{count} seconds."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/live/server_status_live.ex:112
+#, elixir-autogen, elixir-format
+msgid "Load %{one} · %{five} · %{fifteen}"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:130
+#, elixir-autogen, elixir-format
+msgid "Memory"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:264
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Not answering"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:99
+#, elixir-autogen, elixir-format
+msgid "Processor"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:105
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Running for"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:220
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Server %{number}"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:30
+#: lib/vutuv_web/live/server_status_live.ex:49
+#: lib/vutuv_web/templates/layout/app.html.heex:78
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Server status"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:103
+#, elixir-autogen, elixir-format, fuzzy
+msgid "System"
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:60
+#, elixir-autogen, elixir-format
+msgid "The first readings arrive in a few seconds."
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:82
+#, elixir-autogen, elixir-format
+msgid "This server did not answer the last reading."
+msgstr ""
+
+#: lib/vutuv_web/live/server_status_live.ex:261
+#, elixir-autogen, elixir-format
+msgid "Up and running"
 msgstr ""

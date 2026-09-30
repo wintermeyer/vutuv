@@ -370,6 +370,18 @@ config :vutuv, :welcome_suggestions, %{
   ]
 }
 
+# The public server status page at /system/status (Vutuv.ServerStatus) and
+# its footer link. On by default: out of the box it reads only the machine the
+# app runs on, from /proc, and calls nowhere. SERVER_STATUS=false switches the
+# page, the link and the sampler off together (runtime.exs); the other servers
+# come from SERVER_STATUS_HOSTS / SERVER_STATUS_GPU_HOSTS.
+config :vutuv, :server_status_enabled, true
+
+config :vutuv, :server_status,
+  hosts: ["local"],
+  gpu_hosts: [],
+  interval: :timer.seconds(10)
+
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
 # Off unless an installation asks for it with ADS_ENABLED=true (runtime.exs):
 # no ad serves, the public /system/ads flow and the admin review dashboard 404.
