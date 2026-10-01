@@ -5956,6 +5956,13 @@ defmodule VutuvWeb.UI do
              gettext(
                "bandwidth slow internet mobile data saving saver volume metered compression pictures images screenshots editor langsam daten sparen datensparmodus volumen schmalband komprimierung bilder"
              )
+         ),
+         # One switch for every beta feature (Vutuv.Beta). Listed even while
+         # there is none: a member can sign up for what comes next.
+         row(:beta, gettext("Beta features"), ~p"/settings/beta",
+           hint: gettext("Try new features before everybody gets them"),
+           terms:
+             gettext("beta preview experimental test new feature labs ausprobieren neu testen")
          )
        ]},
       {gettext("Privacy"),

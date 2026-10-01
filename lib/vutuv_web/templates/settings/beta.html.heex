@@ -1,0 +1,40 @@
+<%!-- Beta features (Vutuv.Beta): one switch for all of them, the same for
+every member, and below it the features the switch currently brings. The
+"since" line is there so a feature that has sat in beta for months is noticed
+rather than forgotten. --%>
+<.settings_shell user={@user} active={:beta} title={gettext("Beta features")}>
+  <div class="space-y-6">
+    <.toggle_form_card
+      changeset={@changeset}
+      field={:beta?}
+      form_id="beta-form"
+      action={~p"/settings/beta"}
+      title={gettext("Try it before everybody else")}
+      intro={
+        gettext(
+          "New features can reach you before everybody else gets them. They may still change or disappear, and you can switch beta off again at any time."
+        )
+      }
+      label={gettext("Use beta features")}
+      hint={gettext("Applies to every beta feature, now and in the future.")}
+    />
+
+    <.card>
+      <.section_title>{gettext("In beta right now")}</.section_title>
+
+      <p :if={@features == []} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("There are no beta features right now.")}
+      </p>
+
+      <ul :if={@features != []} class="mt-3 space-y-4">
+        <li :for={feature <- @features} data-beta-feature={feature.key} class="text-sm">
+          <span class="block font-medium text-slate-900 dark:text-white">{feature.title}</span>
+          <span class="block text-slate-600 dark:text-slate-300">{feature.description}</span>
+          <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+            {gettext("In beta since %{date}", date: long_date(feature.since))}
+          </span>
+        </li>
+      </ul>
+    </.card>
+  </div>
+</.settings_shell>

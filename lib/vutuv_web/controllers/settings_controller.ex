@@ -38,6 +38,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Beta
   alias Vutuv.ContentFilters
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
@@ -947,6 +948,30 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  # Beta features (Vutuv.Beta): one switch for all of them, the same for
+  # every member, and below it what the switch currently brings.
+  def beta(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "beta.html",
+      user: user,
+      changeset: User.changeset(user),
+      features: Beta.current(),
+      page_title: gettext("Beta features")
+    )
+  end
+
+  def update_beta(conn, %{"user" => params}) do
+    save(
+      conn,
+      Map.take(params, ["beta?"]),
+      "beta.html",
+      ~p"/settings/beta",
+      gettext("Beta features saved."),
+      event: "preferences_changed"
+    )
+  end
+
   # How long the newsfeed is (default 10, up to 250). Its own page under
   # Appearance, for the reason the bandwidth switch beside it has one: the hub
   # is the map, and a knob nobody can find by name might as well not exist. The
@@ -1113,6 +1138,9 @@ defmodule VutuvWeb.SettingsController do
   defp error_assigns(conn, "notifications.html", changeset) do
     [user: conn.assigns[:user], changeset: changeset] ++ push_assigns(conn.assigns[:user])
   end
+
+  defp error_assigns(conn, "beta.html", changeset),
+    do: [user: conn.assigns[:user], changeset: changeset, features: Beta.current()]
 
   defp error_assigns(conn, _template, changeset),
     do: [user: conn.assigns[:user], changeset: changeset]

@@ -1770,6 +1770,9 @@ defmodule VutuvWeb.Router do
     get("/security", SettingsController, :security)
     get("/preferences", SettingsController, :preferences)
     get("/bandwidth", SettingsController, :bandwidth)
+    get("/beta", SettingsController, :beta)
+    put("/beta", SettingsController, :update_beta)
+    patch("/beta", SettingsController, :update_beta)
     # How long the newsfeed is (default 10 posts, up to 250). Its own page
     # beside the data-saving switch — both are the member deciding what a page
     # costs them to load — and the chip row under the timeline is the other way
