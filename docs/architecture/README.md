@@ -23,7 +23,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [organizations.md](organizations.md) | verified organization pages at `/organizations`: the domain-proof trust model (DNS TXT / well-known file), lifecycle states, engagement, moderation, agent formats |
 | [jobs.md](jobs.md) | job postings at `/jobs/:slug`: the 90-day lifecycle & sweeper, structured location (offline GeoNames), the salary model, visibility gates, the AGG hint, easy apply, JSON-LD & agent formats |
 | [settings-and-account.md](settings-and-account.md) | the settings hub, onboarding, username changes, LinkedIn import, GDPR export, the CV (Lebenslauf) download |
-| [beta-features.md](beta-features.md) | opt-in beta features: who is offered one, how to add one, and how it graduates |
+| [beta-features.md](beta-features.md) | the one beta switch per member, how to add a beta feature, and how it graduates |
 | [mentions.md](mentions.md) | `@handle` mentions: the shared grammar, existence validation (anti-reservation), handle availability (anti-hijack), and rewriting mentions + notifying authors when a member renames |
 | [authentication.md](authentication.md) | passwordless PIN login, passkeys, server-side sessions |
 | [account-activity.md](account-activity.md) | the append-only account-activity log: what changed on an account, when, from where and how it was confirmed; the member's page, the admin's page, retention |

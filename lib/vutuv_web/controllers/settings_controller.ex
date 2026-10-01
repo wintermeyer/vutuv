@@ -948,31 +948,28 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
-  # Beta features (Vutuv.Beta): one checkbox per feature offered to this
-  # member, admins included, and nothing is on until they tick it.
+  # Beta features (Vutuv.Beta): one switch for all of them, the same for
+  # every member, and below it what the switch currently brings.
   def beta(conn, _params) do
     user = conn.assigns[:user]
 
     render(conn, "beta.html",
       user: user,
-      features: Beta.available(user),
+      changeset: User.changeset(user),
+      features: Beta.current(),
       page_title: gettext("Beta features")
     )
   end
 
-  # The form sends a hidden "" beside the boxes, so unticking all of them
-  # still arrives as a list; `Beta.choose/2` drops whatever is not offered.
-  def update_beta(conn, %{"beta" => %{"features" => keys}}) when is_list(keys) do
-    {:ok, user} = Beta.choose(conn.assigns[:user], keys)
-
-    AccountEvents.record(user, "preferences_changed",
-      conn: conn,
-      details: %{fields: ["beta_features"]}
+  def update_beta(conn, %{"user" => params}) do
+    save(
+      conn,
+      Map.take(params, ["beta?"]),
+      "beta.html",
+      ~p"/settings/beta",
+      gettext("Beta features saved."),
+      event: "preferences_changed"
     )
-
-    conn
-    |> put_flash(:info, gettext("Beta features saved."))
-    |> redirect(to: ~p"/settings/beta")
   end
 
   # How long the newsfeed is (default 10, up to 250). Its own page under
@@ -1141,6 +1138,9 @@ defmodule VutuvWeb.SettingsController do
   defp error_assigns(conn, "notifications.html", changeset) do
     [user: conn.assigns[:user], changeset: changeset] ++ push_assigns(conn.assigns[:user])
   end
+
+  defp error_assigns(conn, "beta.html", changeset),
+    do: [user: conn.assigns[:user], changeset: changeset, features: Beta.current()]
 
   defp error_assigns(conn, _template, changeset),
     do: [user: conn.assigns[:user], changeset: changeset]

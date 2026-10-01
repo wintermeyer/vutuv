@@ -133,8 +133,9 @@ defmodule VutuvWeb.SettingsHubTest do
 
       # The feed's length joined them, for the same reason: it is the member
       # deciding what a page costs them to load, and "Notifications & feed" is
-      # at its eight-row ceiling.
-      assert Enum.map(appearance, & &1.key) == [:preferences, :feed_page_size, :bandwidth]
+      # at its eight-row ceiling. The beta switch closes the group: it too
+      # changes how vutuv behaves for this member alone.
+      assert Enum.map(appearance, & &1.key) == [:preferences, :feed_page_size, :bandwidth, :beta]
 
       needle = UI.settings_search_text(row)
 

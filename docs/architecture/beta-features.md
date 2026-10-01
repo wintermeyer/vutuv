@@ -1,32 +1,29 @@
 # Beta features
 
-A new feature can ship switched off for everybody and be switched on by each
-member who wants to try it, at `/settings/beta`. `Vutuv.Beta` owns all of it.
+A new feature can ship switched off for everybody except the members who
+switched on beta at `/settings/beta`. `Vutuv.Beta` owns all of it.
 
 ## Who gets a beta feature
 
-Nobody gets one for who they are, admins included. A feature has an
-audience, and the audience only decides who is **offered** it:
+Every member has one switch, `users.beta?`, off by default. When it is on,
+they get every beta feature; when it is off, none. It works the same for
+every account, admins included: nobody gets a beta feature for who they are.
+Visitors who are not signed in never get one, so public pages and their
+agent-format siblings stay the same for everyone.
 
-- `:members`: every signed-in member sees the checkbox.
-- `:admins`: only admins see it (typically a change under `/admin`). An
-  admin still has to tick it, and loses it the moment they lose the role.
-
-Visitors who are not signed in never get a beta feature, so public pages and
-their agent-format siblings stay the same for everyone.
-
-The choice is stored in `users.beta_features`, an array of keys.
-`/settings/beta` is listed on the settings hub only while the release offers
-the member at least one feature.
+The page is always on the settings hub, even when nothing is in beta, so a
+member can sign up for what comes next. Below the switch it lists what is in
+beta right now and since when, so a feature that has sat there for months is
+noticed.
 
 ## Adding one
 
-1. Add a `%Vutuv.Beta.Feature{}` to `registry/0` in `lib/vutuv/beta.ex`: a
-   key, the audience, the day it went into beta, and a translated title and
-   description (the description is all a member reads before ticking it).
+1. Add a `%Vutuv.Beta.Feature{}` to `@registry` in `lib/vutuv/beta.ex`: a
+   key, the day it went into beta, and a title and description wrapped in
+   `gettext_noop/1`.
 2. Branch with `Vutuv.Beta.enabled?(user, :key)` wherever the new behaviour
    differs. In a LiveView pass the current user, never a bare id.
-3. Test both sides: one member with it on, one without.
+3. Test both sides: one member with beta on, one without.
 
 `enabled?/2` raises for a key the registry does not know, so a typo fails the
 suite instead of answering `false` in production.
@@ -35,10 +32,7 @@ suite instead of answering `false` in production.
 
 When the feature graduates, delete its registry entry and every `enabled?`
 call, and keep the new branch. When it is dropped, do the same and keep the
-old branch. No migration is needed: keys of features that no longer exist
-are ignored on read and dropped on the member's next save. The settings page
-shows each feature's start date, so one that has sat in beta for months is
-noticed.
+old branch. The members' switch stays as it is.
 
 ## Other installations
 
