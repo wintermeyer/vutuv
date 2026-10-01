@@ -5957,7 +5957,7 @@ defmodule VutuvWeb.UI do
                "bandwidth slow internet mobile data saving saver volume metered compression pictures images screenshots editor langsam daten sparen datensparmodus volumen schmalband komprimierung bilder"
              )
          )
-       ]},
+       ] ++ beta_rows(user)},
       {gettext("Privacy"),
        [
          row(:privacy, gettext("Visibility"), ~p"/settings/privacy",
@@ -6021,6 +6021,24 @@ defmodule VutuvWeb.UI do
          )
        ]}
     ]
+  end
+
+  # The one row that comes and goes: it is listed while a release offers this
+  # member a beta feature (`Vutuv.Beta.available/1`), which changes with a
+  # deploy rather than with anything the member did. A page whose only
+  # content would be "nothing to try right now" is not worth a row.
+  defp beta_rows(user) do
+    if Vutuv.Beta.available(user) == [] do
+      []
+    else
+      [
+        row(:beta, gettext("Beta features"), ~p"/settings/beta",
+          hint: gettext("Try new features before everybody gets them"),
+          terms:
+            gettext("beta preview experimental test new feature labs ausprobieren neu testen")
+        )
+      ]
+    end
   end
 
   defp row(key, label, path, opts) do

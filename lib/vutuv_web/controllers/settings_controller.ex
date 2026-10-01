@@ -38,6 +38,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Beta
   alias Vutuv.ContentFilters
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
@@ -945,6 +946,33 @@ defmodule VutuvWeb.SettingsController do
       gettext("Bandwidth settings saved."),
       event: "preferences_changed"
     )
+  end
+
+  # Beta features (Vutuv.Beta): one checkbox per feature offered to this
+  # member, admins included, and nothing is on until they tick it.
+  def beta(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "beta.html",
+      user: user,
+      features: Beta.available(user),
+      page_title: gettext("Beta features")
+    )
+  end
+
+  # The form sends a hidden "" beside the boxes, so unticking all of them
+  # still arrives as a list; `Beta.choose/2` drops whatever is not offered.
+  def update_beta(conn, %{"beta" => %{"features" => keys}}) when is_list(keys) do
+    {:ok, user} = Beta.choose(conn.assigns[:user], keys)
+
+    AccountEvents.record(user, "preferences_changed",
+      conn: conn,
+      details: %{fields: ["beta_features"]}
+    )
+
+    conn
+    |> put_flash(:info, gettext("Beta features saved."))
+    |> redirect(to: ~p"/settings/beta")
   end
 
   # How long the newsfeed is (default 10, up to 250). Its own page under

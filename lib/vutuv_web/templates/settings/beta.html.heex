@@ -1,0 +1,55 @@
+<%!-- Beta features (Vutuv.Beta): one box per feature this member is offered,
+admins included, and every box starts unticked. The hidden "" keeps the list
+param present when every box is unticked, so saving can switch the last one
+off. The "since" line is there so a feature that has sat in beta for months
+is noticed rather than forgotten. --%>
+<.settings_shell user={@user} active={:beta} title={gettext("Beta features")}>
+  <.card>
+    <.section_title>{gettext("Try it before everybody else")}</.section_title>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "These features are new and may still change or disappear. Switch on what you want to try; you can switch it off again at any time."
+      )}
+    </p>
+
+    <p :if={@features == []} class="mt-5 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("There are no beta features right now.")}
+    </p>
+
+    <.form
+      :if={@features != []}
+      for={%{}}
+      as={:beta}
+      action={~p"/settings/beta"}
+      method="put"
+      id="beta-features-form"
+      class="mt-5 space-y-5"
+    >
+      <input type="hidden" name="beta[features][]" value="" />
+
+      <.setting_toggle :for={feature <- @features} label={feature.title}>
+        <:checkbox>
+          <input
+            type="checkbox"
+            name="beta[features][]"
+            value={feature.key}
+            checked={to_string(feature.key) in @user.beta_features}
+            data-beta-feature={feature.key}
+            class={checkbox_class()}
+          />
+        </:checkbox>
+        {feature.description}
+        <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+          {gettext("In beta since %{date}", date: long_date(feature.since))}
+          <span :if={feature.audience == :admins}>
+            · {gettext("Admins only")}
+          </span>
+        </span>
+      </.setting_toggle>
+
+      <div class="pt-1">
+        <.button type="submit">{gettext("Save")}</.button>
+      </div>
+    </.form>
+  </.card>
+</.settings_shell>

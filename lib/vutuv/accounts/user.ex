@@ -374,6 +374,10 @@ defmodule Vutuv.Accounts.User do
     # never straight off the struct — and in the view through
     # `VutuvWeb.UI.markdown_editor/1`, which owns the one decision it drives.
     field(:low_bandwidth?, :boolean)
+    # The beta features this member switched on, by key. Not a form field:
+    # `Vutuv.Beta.choose/2` writes it against the registry and
+    # `Vutuv.Beta.enabled?/2` reads it, so a stale key never matters.
+    field(:beta_features, {:array, :string}, default: [])
     # The feed's remembered source tab (issue #1499): "vutuv" / "fediverse",
     # nil = All. Not a form field — `Vutuv.Posts.remember_feed_filter/2` writes
     # it from the tab click and `remembered_feed_filter/1` reads it back at
