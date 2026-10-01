@@ -183,8 +183,14 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
       },
       %{
         name: "Feed",
-        note: "The chronological feed, vutuv posts and Fediverse posts side by side.",
+        note:
+          "The chronological feed: a vutuv post, its Fediverse replies and the tags you follow.",
         path: "/images/brand/screenshot-feed.png"
+      },
+      %{
+        name: "Job search",
+        note: "Open positions, searchable by keyword, place, employment type, tags and salary.",
+        path: "/images/brand/screenshot-jobs.png"
       },
       %{
         name: "CV builder",
