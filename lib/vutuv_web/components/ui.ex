@@ -2302,28 +2302,68 @@ defmodule VutuvWeb.UI do
   variant rather than a `class` override because a padding utility passed in
   `class` does not reliably win against the base one (same layer, and CSS
   source order decides, not attribute order).
+
+  `label` is for a chip whose text is somebody else's and may be long (a tag
+  name): it stays on one line, is cut with an ellipsis at the width of its
+  column and carries the whole text in its `title`, instead of wrapping into a
+  two-line block in a narrow rail. `prefix` (the `#`) is glued to it. `min-w-0` on the chip and on the label is what lets either shrink
+  at all, since a flex item refuses to go below its min-content width.
   """
   attr(:navigate, :string, default: nil)
   attr(:href, :string, default: nil)
   attr(:size, :string, values: ~w(md sm), default: "md")
+  attr(:label, :string, default: nil)
+  attr(:prefix, :string, default: nil)
   attr(:class, :string, default: nil)
   attr(:rest, :global)
-  slot(:inner_block, required: true)
+  slot(:inner_block)
 
   def chip(assigns) do
+    # The label's `title` only fills in: a caller that names its own keeps it.
+    assigns =
+      assigns
+      |> assign(:class, [
+        chip_class(assigns.size),
+        assigns.label && "min-w-0 max-w-full",
+        assigns.class
+      ])
+      |> assign(
+        :rest,
+        if(assigns.label,
+          do: Map.put_new(assigns.rest, :title, assigns.label),
+          else: assigns.rest
+        )
+      )
+
     ~H"""
     <.link
       :if={@navigate || @href}
       navigate={@navigate}
       href={@href}
-      class={[chip_class(@size), "hover:bg-brand-100 dark:hover:bg-brand-800/80", @class]}
+      class={[@class, "hover:bg-brand-100 dark:hover:bg-brand-800/80"]}
       {@rest}
     >
-      {render_slot(@inner_block)}
+      <.chip_text label={@label} prefix={@prefix}>{render_slot(@inner_block)}</.chip_text>
     </.link>
-    <span :if={!(@navigate || @href)} class={[chip_class(@size), @class]} {@rest}>
-      {render_slot(@inner_block)}
+    <span :if={!(@navigate || @href)} class={@class} {@rest}>
+      <.chip_text label={@label} prefix={@prefix}>{render_slot(@inner_block)}</.chip_text>
     </span>
+    """
+  end
+
+  # The prefix sits inside the cut line, glued to the name, so a long tag
+  # reads `#Konzeption, Aufbau …` rather than a lone `#` beside it. It is an
+  # attribute, not slot content, because a slot carries its caller's line
+  # break along and renders it as a space.
+  attr(:label, :string, default: nil)
+  attr(:prefix, :string, default: nil)
+  slot(:inner_block)
+
+  defp chip_text(%{label: nil} = assigns), do: ~H"{render_slot(@inner_block)}"
+
+  defp chip_text(assigns) do
+    ~H"""
+    <span class="min-w-0 truncate"><span :if={@prefix} aria-hidden="true">{@prefix}</span>{@label}</span>
     """
   end
 

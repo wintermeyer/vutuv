@@ -1053,15 +1053,20 @@ defmodule VutuvWeb.PostLive.Feed do
             be curious about somebody, never their whole profile. The +N is what
             the sample leaves out and leads to the rest of them; it is the
             tag-specific plural the member directory already uses, not a bare
-            "+3". --%>
+            "+3". The name goes in as `label`, so a long one is cut rather than
+            wrapped into a two-line block. --%>
             <div
               :if={row.tags != []}
               data-newcomer-tags={row.user.id}
               class="mt-1.5 flex flex-wrap items-center gap-1"
             >
-              <.chip :for={user_tag <- row.tags} size="sm" navigate={~p"/tags/#{UserTag.tag(user_tag)}"}>
-                <span aria-hidden="true">#</span>{UserTag.truncated_name(user_tag)}
-              </.chip>
+              <.chip
+                :for={user_tag <- row.tags}
+                size="sm"
+                navigate={~p"/tags/#{UserTag.tag(user_tag)}"}
+                label={UserTag.name(user_tag)}
+              prefix="#"
+            />
               <.link
                 :if={row.more > 0}
                 navigate={~p"/#{row.user}/tags"}

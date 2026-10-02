@@ -447,9 +447,13 @@ defmodule VutuvWeb.JobBoardLive do
                 {row.work}
               </p>
               <div :if={row.tags != []} class="mt-1.5 flex flex-wrap items-center gap-1">
-                <.chip :for={user_tag <- row.tags} size="sm" navigate={~p"/tags/#{UserTag.tag(user_tag)}"}>
-                  <span aria-hidden="true">#</span>{UserTag.truncated_name(user_tag)}
-                </.chip>
+                <.chip
+                  :for={user_tag <- row.tags}
+                  size="sm"
+                  navigate={~p"/tags/#{UserTag.tag(user_tag)}"}
+                  label={UserTag.name(user_tag)}
+                prefix="#"
+              />
                 <.link
                   :if={row.more > 0}
                   navigate={~p"/#{row.user}/tags"}
