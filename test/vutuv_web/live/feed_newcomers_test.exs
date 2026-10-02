@@ -150,6 +150,25 @@ defmodule VutuvWeb.PostLive.FeedNewcomersTest do
       assert render(view) =~ "+2"
     end
 
+    test "a long tag stays on one line, cut by the chip, named in full on hover",
+         %{conn: conn} do
+      {conn, _me} = create_and_login_user(conn)
+      newbie = newcomer()
+      long = "Konzeption, Aufbau und fortlaufende Betreuung"
+      tag = insert(:tag, name: long)
+      insert(:user_tag, user: newbie, tag: tag)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      chip = ~s([data-newcomer-tags="#{newbie.id}"] a[href="/tags/#{tag.slug}"])
+
+      # The rail is a third of the page wide, so a chip that wraps its text
+      # turns into a two-line block. It truncates instead and keeps the whole
+      # name in its title.
+      assert has_element?(view, ~s(#{chip}[title="#{long}"].max-w-full))
+      assert has_element?(view, ~s(#{chip} span.truncate), "#" <> long)
+    end
+
     test "no overflow link when three tags are all of them", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
       newbie = newcomer()

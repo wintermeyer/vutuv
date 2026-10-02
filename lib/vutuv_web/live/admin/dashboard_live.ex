@@ -575,9 +575,7 @@ defmodule VutuvWeb.Admin.DashboardLive do
   defp member_tags(assigns) do
     ~H"""
     <div class="mt-0.5 flex flex-wrap items-center gap-1.5 pl-[3.375rem]">
-      <.chip :for={user_tag <- @summary.top} size="sm" class="min-w-0 max-w-full" data-member-tag>
-        <span class="truncate">{user_tag.tag.name}</span>
-      </.chip>
+      <.chip :for={user_tag <- @summary.top} size="sm" label={user_tag.tag.name} data-member-tag />
       <span
         :if={@summary.total > length(@summary.top)}
         data-member-more-tags
