@@ -346,9 +346,16 @@ defmodule VutuvWeb.WorkExperienceHTML do
   def employer_name(assigns) do
     ~H"""
     <%= if @organization do %>
+      <%!-- `align-top`: an inline-flex box takes its baseline from its first
+      item, here the logo's bottom edge, which lifts the name above the text
+      that follows it on the line. Top-aligned, the box (as tall as the line)
+      puts its name back on the line's own baseline. --%>
       <a
         href={Organizations.canonical_path(@organization)}
-        class={["inline-flex items-center gap-1.5 hover:text-brand-700 dark:hover:text-brand-400", @class]}
+        class={[
+          "inline-flex items-center gap-1.5 align-top hover:text-brand-700 dark:hover:text-brand-400",
+          @class
+        ]}
       >
         <.organization_logo organization={@organization} class="h-5 w-5 shrink-0" />
         <span>{@organization.name}</span>

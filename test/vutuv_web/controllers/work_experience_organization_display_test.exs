@@ -35,6 +35,26 @@ defmodule VutuvWeb.WorkExperienceOrganizationDisplayTest do
     refute html =~ ">vbridges<"
   end
 
+  # The logo makes the link an inline-flex box, whose baseline is the logo's
+  # bottom edge: without `align-top` the name rides a few pixels above the
+  # "· 9 months" that follows it on the same line.
+  test "a linked organization's name sits on the line of the duration beside it", %{
+    conn: conn,
+    user: user
+  } do
+    organization = insert(:organization, name: "Verified Bridges AG", slug: "verified-bridges")
+    insert(:work_experience, user: user, organization_page: organization, title: "Engineer")
+
+    link =
+      conn
+      |> section(user)
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(~s(a[href="/organizations/verified-bridges"]))
+
+    assert [class] = LazyHTML.attribute(link, "class")
+    assert "align-top" in String.split(class)
+  end
+
   test "an unlinked experience shows the free-text organization", %{conn: conn, user: user} do
     insert(:work_experience, user: user, organization: "Just Free Text", title: "Engineer")
 
