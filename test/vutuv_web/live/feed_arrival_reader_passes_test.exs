@@ -4,8 +4,8 @@ defmodule VutuvWeb.FeedArrivalReaderPassesTest do
   two passes before anything shows or quotes it: their search-and-replace rules
   (`Vutuv.PostRewrites`), then their content filters.
 
-  `Vutuv.Posts.newest_source_entry/3` answers with the post as it was written,
-  and both of its callers once forgot a pass — the feed's pill streamed a
+  `Vutuv.Posts.newest_source_entry/3` and `feed_arrivals_since/5` answer with
+  the post as it was written, and both callers once forgot a pass — the feed's pill streamed a
   fediverse arrival raw, and the browser tab's teaser quoted un-rewritten text.
   Each has one place that discharges the obligation now (`for_reader/2` in the
   feed, `PostTeaser.quote_for/4` for anything that quotes), so this guards the
@@ -19,11 +19,11 @@ defmodule VutuvWeb.FeedArrivalReaderPassesTest do
   """
   use ExUnit.Case, async: true
 
-  @source "newest_source_entry("
+  @sources ["newest_source_entry(", "feed_arrivals_since("]
   @discharges ["for_reader(", "PostTeaser.quote_for("]
 
   test "every module reading an arrival discharges the reader's passes beside it" do
-    readers = Enum.filter(lib_files(), &(File.read!(&1) =~ @source))
+    readers = Enum.filter(lib_files(), &String.contains?(File.read!(&1), @sources))
 
     # The context function that defines it is not a caller.
     readers = readers -- ["lib/vutuv/posts.ex"]
@@ -34,14 +34,16 @@ defmodule VutuvWeb.FeedArrivalReaderPassesTest do
         Enum.any?(@discharges, &(contents =~ &1))
       end)
 
-    assert readers != [], "nothing calls #{@source} any more — retire this test"
+    assert readers != [], "nothing calls #{names()} any more — retire this test"
 
     assert offenders == [],
-           "#{@source} answers with the post as it was written. Put the entry " <>
+           "#{names()} answer with the post as it was written. Put the entry " <>
              "through the reader's rewrite rules and content filters before you " <>
              "show or quote it (#{Enum.join(@discharges, " / ")}). " <>
              "Offending files: #{Enum.join(offenders, ", ")}"
   end
+
+  defp names, do: Enum.join(@sources, " / ")
 
   defp lib_files, do: Path.wildcard("lib/**/*.ex")
 end

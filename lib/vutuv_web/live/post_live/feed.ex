@@ -135,6 +135,10 @@ defmodule VutuvWeb.PostLive.Feed do
   # counted, and the press falls back to loading a fresh page — which after a
   # weekend is what the reader wants anyway, not four hundred stale rows.
   @pending_cap 25
+  # How many arrivals one announcement puts behind the pill. A burst of
+  # deliveries sends one announcement each, so this is a ceiling on a single
+  # query rather than on what the pill can hold.
+  @arrivals_batch 10
   @pending_post_events VutuvWeb.Live.PendingPostActions.events()
 
   # The rail's cards, in the order a member who never touched them gets. The
@@ -1720,6 +1724,9 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:cursor, page.next_cursor)
     |> assign(:empty?, entries == [])
     |> assign(:pending_posts, [])
+    # From when the next arrival announcement asks the sources
+    # (`queue_arrivals/1`): this page holds everything up to now.
+    |> assign(:arrivals_since, NaiveDateTime.utc_now(:second))
     # How many arrivals the cap turned away. Nonzero means the timeline no
     # longer holds a row for every waiting post, so the press has to load a
     # page.
@@ -1815,22 +1822,29 @@ defmodule VutuvWeb.PostLive.Feed do
   # what was waiting; without this the badge would go on promising posts that are
   # on the screen.
   #
-  # Two gates, and both separate showing from discarding. Nothing to mark when
-  # the pill was empty — a band switch with nothing waiting has shown the reader
-  # nothing new — and nothing shown while the timeline is drawing another day:
-  # opening one clears the pill too, but those posts belong to today, so they
-  # stay unread and the badge is the only thing left saying so.
+  # One gate, and it separates showing from discarding: nothing is shown while
+  # the timeline is drawing another day or only the reader's own posts
+  # (`showing_present?/1`). Opening a day clears the pill too, but those posts
+  # belong to today, so they stay unread and the badge is the only thing left
+  # saying so. It is not gated on the pill having held something: the badge can
+  # count what the pill never held (an arrival under "My posts"), and a fresh
+  # page of the present shows that as well.
   #
   # It deliberately does **not** do the bell's half (`Activity.mark_posts_seen/2`,
   # which the press handler keeps): marking a notification seen is the reader
   # choosing to look at exactly these posts, and a band switch is not that.
   defp mark_shown_read(socket) do
-    if pending_count(socket.assigns) > 0 and at_now?(socket.assigns) do
+    if showing_present?(socket.assigns) do
       Posts.mark_feed_read(socket.assigns.current_user)
     end
 
     socket
   end
+
+  # Whether the timeline is the reader's feed as it stands now: no day open in
+  # the calendar and not narrowed to "My posts", which draws nobody else's
+  # writing and so shows no arrival at all.
+  defp showing_present?(assigns), do: at_now?(assigns) and effective_filter(assigns) != :own
 
   # Load the timeline for one source tab, replacing whatever is on screen
   # (`reset: true`). The pending batch is dropped with it rather than
@@ -2114,7 +2128,7 @@ defmodule VutuvWeb.PostLive.Feed do
           engagement: nil
         }
 
-    insert_entry(socket, entry, author_id)
+    socket |> insert_entry(entry, author_id) |> settle_read()
   end
 
   # A repost arrived over the viewer's activity topic. The fan-out only reaches
@@ -2134,13 +2148,15 @@ defmodule VutuvWeb.PostLive.Feed do
       is_nil(reposter) ->
         {:noreply, socket}
 
+      # Folded into a card the reader is looking at: shown without a press, so
+      # nothing will ever reveal it and the marker has to move here.
       shown = find_by_post_id(socket.assigns.entries, post_id) ->
-        {:noreply, restack_shown(socket, shown, reposter)}
+        {:noreply, socket |> restack_shown(shown, reposter) |> settle_read()}
 
       MapSet.member?(shown_post_ids(socket.assigns.entries), post_id) ->
-        {:noreply, socket}
+        {:noreply, settle_read(socket)}
 
-      pending = Enum.find(socket.assigns.pending_posts, &(&1.post.id == post_id)) ->
+      pending = find_by_post_id(socket.assigns.pending_posts, post_id) ->
         {:noreply, restack_pending(socket, pending, reposter)}
 
       true ->
@@ -2157,7 +2173,7 @@ defmodule VutuvWeb.PostLive.Feed do
               engagement: nil
             }
 
-        insert_entry(socket, entry, reposter_id)
+        socket |> insert_entry(entry, reposter_id) |> settle_read()
     end
   end
 
@@ -2168,7 +2184,7 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply,
      socket
      |> stream_delete_by_dom_id(:posts, "feed-post-#{post_id}")
-     |> update(:pending_posts, &Enum.reject(&1, fn entry -> entry.post.id == post_id end))}
+     |> update(:pending_posts, &reject_post(&1, post_id))}
   end
 
   # Periodic reshuffle of the "New here" and "Suggested posts" rails: draw a
@@ -2204,15 +2220,15 @@ defmodule VutuvWeb.PostLive.Feed do
   # `{:new_post, …}` this carries no entry, because whether that write reaches
   # THIS reader depends on their mutes, their follow states, the audience and
   # their language filter; so the nudge only says "look", and the feed asks its
-  # own sources (`Posts.newest_source_entry/3`).
+  # own sources (`Posts.feed_arrivals_since/5`).
   #
   # It used to put a dot on the tab the reader was not standing on. With the
   # tabs gone it joins the same queue everything else waits in, so the rail's
   # "not read yet" card and the pill above the timeline count it like any other
   # arrival — otherwise a fediverse-heavy feed would go completely quiet while
   # the page is open, which is the opposite of what the band is for.
-  def handle_info({:feed_arrival, %{at: at}}, socket) do
-    {:noreply, queue_remote_arrival(socket, at)}
+  def handle_info({:feed_arrival, _stamp}, socket) do
+    {:noreply, socket |> queue_arrivals() |> settle_read()}
   end
 
   # The viewer followed / unfollowed a tag elsewhere (a tag page in another tab,
@@ -2341,7 +2357,9 @@ defmodule VutuvWeb.PostLive.Feed do
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # The queue half of `{:feed_arrival, …}` above: ask this reader's own
-  # sources what actually arrived and put it behind the pill.
+  # sources what arrived since the page last asked
+  # (`Posts.feed_arrivals_since/5`, on the arrival clock the nav badge counts
+  # on) and put it behind the pill.
   #
   # It asks the sources of the band **the reader is standing on**, which is the
   # same question `feed_page/2` asks, so the door cannot answer differently from
@@ -2357,24 +2375,79 @@ defmodule VutuvWeb.PostLive.Feed do
   # "My posts" is the one narrowing that needs no query: the announcement is
   # only ever sent for somebody else's write, and that view holds the reader's
   # own posts alone.
-  #
-  # A reader whose page already holds the entry is told nothing either — the
-  # announcement carries no id, so a burst of deliveries would otherwise queue
-  # the same newest post several times over.
-  defp queue_remote_arrival(socket, at) do
+  defp queue_arrivals(socket) do
     case effective_filter(socket) do
       :own ->
         socket
 
       filter ->
-        entry = Posts.newest_source_entry(socket.assigns.current_user, filter, at)
+        # Read before the query, so whatever lands while it runs is asked for
+        # again by the next announcement rather than falling between two.
+        asked_at = NaiveDateTime.utc_now(:second)
 
-        cond do
-          is_nil(entry) -> socket
-          known_entry?(socket, entry) -> socket
-          true -> place_arrival(socket, decorate_arrival(entry, socket))
-        end
+        # One set for the whole batch, asked before anything is decorated.
+        on_page = shown_keys(socket.assigns.entries ++ socket.assigns.pending_posts)
+
+        arrivals =
+          Posts.feed_arrivals_since(
+            socket.assigns.current_user,
+            filter,
+            socket.assigns.arrivals_since,
+            @arrivals_batch,
+            &MapSet.member?(on_page, dedupe_key(&1))
+          )
+
+        socket =
+          socket
+          |> assign(:arrivals_since, asked_at)
+          |> note_cut_batch(arrivals)
+
+        # From the right: oldest first, since each one is put on top.
+        List.foldr(arrivals, socket, &queue_arrival/2)
     end
+  end
+
+  # A full batch may have been cut, and the next announcement asks from now on,
+  # so what was cut would be counted by the badge and never offered here. The
+  # valve already has the answer for rows the timeline does not hold: the press
+  # loads a fresh page.
+  defp note_cut_batch(socket, arrivals) when length(arrivals) >= @arrivals_batch,
+    do: update(socket, :pending_overflow, &(&1 + 1))
+
+  defp note_cut_batch(socket, _arrivals), do: socket
+
+  # Asked again per entry, against a page that grows as the batch is placed:
+  # one cached post can be in a batch twice, once direct and once as a boost.
+  defp queue_arrival(entry, socket) do
+    if known_entry?(socket, entry),
+      do: socket,
+      else: place_arrival(socket, decorate_arrival(entry, socket))
+  end
+
+  # The nav badge on /feed must never promise what no press here can show.
+  #
+  # The pill is the only thing on this page that moves the read marker, so an
+  # arrival the badge counts and the pill does not hold leaves a figure standing
+  # until the next reload. That happens whenever the page shows the arrival
+  # without a press — a repost folding into a card already on screen — or cannot
+  # offer it at all. So once an arrival is dealt with and nothing is waiting,
+  # the reader has seen everything this page has, and the marker says so.
+  #
+  # Not while the page draws something other than the present
+  # (`showing_present?/1`): there the arrival was neither shown nor offered,
+  # and the badge is the only thing left saying so.
+  #
+  # At most once a second, which is the marker's own resolution: a burst of
+  # deliveries is an announcement each, and a second write inside the same
+  # second would store the value the first one did.
+  defp settle_read({:noreply, socket}), do: {:noreply, settle_read(socket)}
+
+  defp settle_read(socket) do
+    now = NaiveDateTime.utc_now(:second)
+
+    if pending_count(socket.assigns) == 0 and socket.assigns[:settled_at] != now,
+      do: socket |> mark_shown_read() |> assign(:settled_at, now),
+      else: socket
   end
 
   # What an arriving entry still needs, which is not the same for the two kinds
@@ -2789,10 +2862,18 @@ defmodule VutuvWeb.PostLive.Feed do
   defp insert_entry(socket, nil, _actor_id), do: {:noreply, socket}
 
   defp insert_entry(socket, entry, actor_id) do
-    if at_now?(socket.assigns) do
-      insert_at_now(socket, entry, actor_id)
-    else
-      insert_while_travelling(socket, entry, actor_id)
+    cond do
+      # Already on the page or behind the pill: an arrival announcement that
+      # was handled first has asked the sources and found this very post
+      # (`queue_arrivals/1`). Never the reader's own, which has its own way in.
+      actor_id != socket.assigns.current_user.id and known_entry?(socket, entry) ->
+        {:noreply, socket}
+
+      at_now?(socket.assigns) ->
+        insert_at_now(socket, entry, actor_id)
+
+      true ->
+        insert_while_travelling(socket, entry, actor_id)
     end
   end
 
@@ -2920,7 +3001,7 @@ defmodule VutuvWeb.PostLive.Feed do
       {:parent, parent} ->
         socket
         |> stream_delete_by_dom_id(:posts, "feed-post-#{parent.id}")
-        |> update(:pending_posts, &Enum.reject(&1, fn e -> e.post.id == parent.id end))
+        |> update(:pending_posts, &reject_post(&1, parent.id))
 
       _ ->
         socket
@@ -2964,7 +3045,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
   # One arrival's worth of the same, reading the sets the mount compiled. The
   # three doors a single entry comes in by (`decorate/3` for the reader's own
-  # post, `queue_remote_arrival/2` for one from another network, and the
+  # post, `queue_arrivals/1` for one from another network, and the
   # travelling reader's `insert_while_travelling/3`) all end here.
   defp for_reader(entry, socket) do
     [entry]
@@ -3234,11 +3315,15 @@ defmodule VutuvWeb.PostLive.Feed do
     end)
   end
 
-  defp find_by_post_id(entries, post_id) do
-    Enum.find(entries, fn entry ->
-      Posts.local_feed_entry?(entry) and entry.post.id == post_id
-    end)
-  end
+  defp find_by_post_id(entries, post_id), do: Enum.find(entries, &entry_of_post?(&1, post_id))
+
+  defp reject_post(entries, post_id), do: Enum.reject(entries, &entry_of_post?(&1, post_id))
+
+  # Asked through `local_feed_entry?/1` and never as a bare `entry.post.id`: a
+  # card from another server sits in the same lists and carries no post of
+  # ours, so the bare read raised on the first one and took the page down.
+  defp entry_of_post?(entry, post_id),
+    do: Posts.local_feed_entry?(entry) and entry.post.id == post_id
 
   # Every post id currently represented on screen — each streamed entry's own
   # post plus every ancestor it nests — so a live or paged repost of an

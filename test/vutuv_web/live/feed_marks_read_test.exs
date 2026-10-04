@@ -16,6 +16,8 @@ defmodule VutuvWeb.FeedMarksReadTest do
   import Vutuv.PostsHelpers
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse.Follow
+  alias Vutuv.MastodonHelpers
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
@@ -124,5 +126,117 @@ defmodule VutuvWeb.FeedMarksReadTest do
 
     refute render(view) =~ "data-show-new"
     assert Posts.unread_feed_count(reload(user)) == 1
+  end
+
+  # The three ways the badge used to be left standing on /feed with no pill
+  # beside it — a figure the reader could not press away, because the page had
+  # either shown the arrival already or could not find it.
+  describe "an arrival the pill does not hold" do
+    # A post from another server is ordered by when it was written there and
+    # counted by when it reached us. Delivered late, it is not the newest row
+    # of its source, so a door asking for "the newest row" found the post
+    # already on screen and said nothing while the badge counted the arrival.
+    test "a late delivery from another server goes behind the pill", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      account = MastodonHelpers.remote_account()
+
+      Repo.insert!(%Follow{
+        user_id: user.id,
+        remote_account_id: account.id,
+        state: "accepted",
+        follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/#{account.id}"
+      })
+
+      now = DateTime.utc_now(:second)
+      five_ago = DateTime.add(now, -300)
+      MastodonHelpers.cached_post(account, published_at: five_ago, received_at: five_ago)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      user = read_a_minute_ago(user)
+
+      late =
+        MastodonHelpers.cached_post(account,
+          content_text: "Spät zugestellt.",
+          published_at: DateTime.add(now, -600),
+          received_at: DateTime.utc_now(:second)
+        )
+
+      assert Posts.unread_feed_count(reload(user)) == 1
+
+      send(view.pid, {:feed_arrival, %{at: DateTime.to_naive(late.published_at)}})
+
+      assert has_element?(view, "#show-new-posts")
+      assert Posts.unread_feed_count(reload(user)) == 1
+
+      render_click(view, "show-new")
+      assert Posts.unread_feed_count(reload(user)) == 0
+    end
+
+    # A waiting card from another server carries no post of ours, and the three
+    # places that look a waiting card up by post id read `.post.id` off every
+    # one of them. That took the page down, and the remount marked everything
+    # read with the pill gone.
+    test "a deleted post leaves a waiting card from another server alone", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      author = followed_author(user)
+      account = MastodonHelpers.remote_account()
+
+      Repo.insert!(%Follow{
+        user_id: user.id,
+        remote_account_id: account.id,
+        state: "accepted",
+        follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/#{account.id}"
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      remote = MastodonHelpers.cached_post(account)
+      send(view.pid, {:feed_arrival, %{at: DateTime.to_naive(remote.published_at)}})
+      assert has_element?(view, "#show-new-posts")
+
+      post = create_post!(author, %{body: "gone in a moment"})
+      send(view.pid, {:post_deleted, %{post_id: post.id}})
+
+      assert has_element?(view, "#show-new-posts")
+    end
+
+    # A repost of a card already on screen folds into that card's avatar stack,
+    # in place: shown, with nothing left to reveal.
+    test "a repost folded into a card on screen is read", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      author = followed_author(user)
+      reposter = followed_author(user)
+      post = create_post!(author, %{body: "already on the page"})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      user = read_a_minute_ago(user)
+
+      Posts.repost_post(reposter, post)
+
+      refute render(view) =~ "data-show-new"
+      assert Posts.unread_feed_count(reload(user)) == 0
+    end
+
+    # "My posts" draws nobody else's writing, so the arrival is neither shown
+    # nor offered and the badge is right to keep it. The way back loads the
+    # present, and that is the showing.
+    test "what arrived under My posts is read on the way back", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      author = followed_author(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "cal-metric", %{"metric" => "own"})
+      user = read_a_minute_ago(user)
+
+      create_post!(author, %{body: "arrived while looking at my own"})
+
+      refute render(view) =~ "data-show-new"
+      assert Posts.unread_feed_count(reload(user)) == 1
+
+      render_click(view, "cal-metric", %{"metric" => "feed"})
+
+      assert render(view) =~ "arrived while looking at my own"
+      assert Posts.unread_feed_count(reload(user)) == 0
+    end
   end
 end

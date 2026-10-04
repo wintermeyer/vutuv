@@ -627,7 +627,7 @@ defmodule VutuvWeb.FeedCalendarTest do
     end
 
     test "and neither does one from the other network", %{conn: conn} do
-      # The fediverse door is its own (`queue_remote_arrival/2`), and it used to
+      # The fediverse door is its own (`queue_arrivals/1`), and it used to
       # skip the `at_now?` split every local arrival goes through: the row was
       # streamed into the open day hidden, and — worse — the day's own "nothing
       # reached you on this day" card went with it, since drawing a row says the
@@ -643,11 +643,14 @@ defmodule VutuvWeb.FeedCalendarTest do
         follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/#{account.id}"
       })
 
-      post =
-        Vutuv.MastodonHelpers.cached_post(account, content_text: "Von woanders, gerade eben.")
-
       {:ok, view, _html} = live(conn, ~p"/feed")
       render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
+
+      # After the day is open, as an arrival is: the door asks for what reached
+      # us since the page was built, so a post minted before it would be found
+      # or not by which side of a second boundary the click fell on.
+      post =
+        Vutuv.MastodonHelpers.cached_post(account, content_text: "Von woanders, gerade eben.")
 
       # Naive UTC, the shape `Vutuv.Fediverse.nudge_feeds/2` really broadcasts.
       send(view.pid, {:feed_arrival, %{at: DateTime.to_naive(post.published_at)}})
