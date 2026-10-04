@@ -188,6 +188,30 @@ defmodule VutuvWeb.ShellBellPreviewTest do
     assert Activity.unread_notification_count(user.id) == 1
   end
 
+  test "opening a CV update row takes the sitting off the badge", %{conn: conn} do
+    # A sitting is several rows under one synthesised id, so its row names the
+    # newest entry — without that the click had nothing to hand back and the
+    # badge kept its number while the member was already on the profile.
+    user = insert_activated_user()
+    author = insert_activated_user()
+    follow!(user, author)
+    insert(:work_experience, user: author, announce_to_followers?: true)
+    newest = insert(:work_experience, user: author, announce_to_followers?: true)
+
+    {:ok, view, _html} = shell(conn, user)
+    render_hook(view, "bell:preview", %{})
+
+    assert has_element?(
+             view,
+             ~s(a[data-seen-kind="cv_update"][data-seen-source-id="#{newest.id}"])
+           )
+
+    render_hook(view, "notify:seen", %{"kind" => "cv_update", "source_id" => newest.id})
+
+    refute has_element?(view, @bell_badge)
+    assert Activity.unread_notification_count(user.id) == 0
+  end
+
   test "moving the pointer away marks exactly what was shown as read", %{conn: conn} do
     user = insert(:user)
     follower_event(user, ~N[2024-03-01 12:00:00])

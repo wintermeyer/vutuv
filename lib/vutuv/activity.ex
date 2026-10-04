@@ -359,11 +359,20 @@ defmodule Vutuv.Activity do
 
     Enum.map(entries, fn entry ->
       read? =
-        MapSet.member?(seen, subject_post_id(entry)) or MapSet.member?(dismissed, entry[:id])
+        MapSet.member?(seen, subject_post_id(entry)) or
+          MapSet.member?(dismissed, dismissal_id(entry))
 
       Map.put(entry, :seen?, read?)
     end)
   end
+
+  # What `dismissed_event_ids/1` calls this entry. For a row-backed kind that
+  # is the entry's own id; a CV sitting's id names the group, while its
+  # dismissal names the newest entry in it, carried as `:source_id`.
+  defp dismissal_id(%{kind: kind, source_id: source_id}) when is_binary(source_id),
+    do: event_id(kind, source_id)
+
+  defp dismissal_id(entry), do: entry[:id]
 
   # The member's read marker. Re-read rather than taken off a `%User{}` a caller
   # is holding, for the reason `unread_notification_count/1`'s id clause gives:
@@ -717,7 +726,9 @@ defmodule Vutuv.Activity do
   @doc """
   The id one feed item carries: its kind (or pseudo-kind) and the id of the row
   it derives from, which is also what a dismissal stores. Every `*_items/3`
-  builder composes its `:id` through here, so the two can only agree.
+  builder composes its `:id` through here, so the two can only agree. The CV
+  sitting is the exception: its id names the group and its `:source_id` the
+  entry a dismissal stores.
   """
   def event_id(kind, source_id), do: "#{id_prefix(kind)}-#{source_id}"
 
@@ -736,8 +747,7 @@ defmodule Vutuv.Activity do
 
   @doc """
   The kinds a dismissal can name, read straight off the registry's `dismiss`
-  entries — every kind with a single source row behind it, which is all of them
-  but `cv_update`, plus the second name `report_protection` needs for its
+  entries — every kind, plus the second name `report_protection` needs for its
   restore half. A kind cannot end up storing dismissals the tally then ignores,
   because both answers come from the same declaration.
 
@@ -766,9 +776,9 @@ defmodule Vutuv.Activity do
 
   @doc """
   Which of the member's notifications are individually dismissed
-  (`mark_notification_seen/3`), as a `MapSet` of `event_id/2` strings — the
-  same ids the feed items carry, so a page can render those rows as read. One
-  query, and empty for a logged-out visitor.
+  (`mark_notification_seen/3`), as a `MapSet` of `event_id/2` strings — what
+  `with_seen_flags/3` matches the feed items against, so a page can render
+  those rows as read. One query, and empty for a logged-out visitor.
   """
   def dismissed_event_ids(nil), do: MapSet.new()
 
@@ -1418,7 +1428,7 @@ defmodule Vutuv.Activity do
   #   * `dismiss` — one entry per `counts` query saying how a per-event
   #     dismissal (`mark_notification_seen/3`) is excluded from it: `{kind,
   #     :id}` for the ordinary case, where the event's own row is the query's
-  #     first binding, or `nil` for a kind with no single source row. The
+  #     first binding, or `{kind, :later_follow}` for the connection pair. The
   #     `kind` in the tuple is the dismissal's namespace and usually the kind
   #     itself; `report_protection` needs two because one row emits two
   #     events. Declaring it here rather than inside each count query is what
@@ -1606,10 +1616,10 @@ defmodule Vutuv.Activity do
         max_arms: [cv_update_max(user_id)],
         items: &cv_update_items(user_id, &1, &2),
         counts: [count_cv_updates(user_id, read_at)],
-        # The one kind with no source row: an item is a *sitting*, several CV
-        # rows grouped in Elixir under a synthesised id, so there is nothing
-        # for the tally to exclude and clicking its popup leaves the badge be.
-        dismiss: [nil]
+        # The one kind whose item is not a row: a *sitting* is several CV
+        # rows under a synthesised id, so it names itself by its newest entry,
+        # which `CvUpdates.count_query/2` selects as the sitting's `id`.
+        dismiss: [{"cv_update", :id}]
       },
       %{
         kind: "username",
@@ -2927,7 +2937,6 @@ defmodule Vutuv.Activity do
   # Which shape a kind uses is declared in `kind_specs/3`, so this is applied
   # once in `total_count/4` rather than inside seventeen count queries.
   defp unless_dismissed(query, _user_id, _dismiss, false), do: query
-  defp unless_dismissed(query, _user_id, nil, true), do: query
 
   defp unless_dismissed(query, user_id, {kind, :id}, true),
     do: where(query, [event], event.id not in subquery(dismissed_ids(user_id, kind)))

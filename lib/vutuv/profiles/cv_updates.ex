@@ -105,6 +105,21 @@ defmodule Vutuv.Profiles.CvUpdates do
     end
   end
 
+  # The id of a sitting's newest entry, which is what a per-event dismissal
+  # names (`Vutuv.Activity.mark_notification_seen/3`): the sitting's own id is
+  # synthesised and not a row, and the newest entry moves when the sitting
+  # grows, so an entry added after the reader looked rings again. An ordered
+  # `array_agg` rather than `max()`, which is not defined for uuid on every
+  # Postgres we support.
+  defmacrop newest_entry_id_sql do
+    quote do
+      type(
+        fragment("(array_agg(? ORDER BY ? DESC, ? DESC))[1]", e.id, e.inserted_at, e.id),
+        Vutuv.UUIDv7
+      )
+    end
+  end
+
   @doc """
   Pushes the live "new CV entry" notification to the author's eligible
   followers. A no-op for an entry whose author did not tick the box, so the
@@ -172,6 +187,7 @@ defmodule Vutuv.Profiles.CvUpdates do
       started_at: min(e.inserted_at),
       at: max(e.inserted_at),
       count: count(),
+      newest_id: newest_entry_id_sql(),
       sections: fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.section, e.inserted_at, e.id),
       titles: fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.title, e.inserted_at, e.id),
       subtitles:
@@ -204,6 +220,7 @@ defmodule Vutuv.Profiles.CvUpdates do
       started_at: min(e.inserted_at),
       at: max(e.inserted_at),
       count: count(),
+      newest_id: newest_entry_id_sql(),
       author: struct(author, ^User.listing_fields()),
       sections: fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.section, e.inserted_at, e.id),
       titles: fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.title, e.inserted_at, e.id),
@@ -224,14 +241,15 @@ defmodule Vutuv.Profiles.CvUpdates do
   The reader's CV update **sittings**, as a query `Vutuv.Activity` can count.
   `read_at` (nil = everything) keeps a sitting out unless its newest entry is
   newer than the read marker, so a burst counts as the single unread item it
-  renders as.
+  renders as. A row's `id` is its newest entry, the one a dismissal names, so
+  the tally excludes a dismissed sitting the way it excludes any other row.
   """
   def count_query(recipient_id, read_at) do
     query =
       recipient_id
       |> visible_entries()
       |> sittings()
-      |> select([e], %{entries: count()})
+      |> select([e], %{entries: count(), id: newest_entry_id_sql()})
 
     if read_at, do: having(query, [e], max(e.inserted_at) > ^read_at), else: query
   end
@@ -309,20 +327,23 @@ defmodule Vutuv.Profiles.CvUpdates do
         %{section: section, title: title, subtitle: subtitle, param: param}
       end)
 
-    group_item(row.user_id, row.started_at, row.at, entries, row.count)
+    group_item(row.user_id, row.started_at, row.at, entries, row.count, row.newest_id)
   end
 
   # The one shape a CV update row has, wherever it comes from. The id is the
   # author plus the sitting's **start**, so it stays the same while the sitting
   # grows: the live push then updates the row the feed derives instead of
   # doubling it (the start is what does not move; the newest timestamp does).
-  defp group_item(author_id, started_at, at, entries, count) do
+  # `source_id` is the half that does move: the newest entry, which is what the
+  # reader dismisses (`newest_entry_id_sql/0`).
+  defp group_item(author_id, started_at, at, entries, count, newest_id) do
     %{
       id:
         Activity.event_id(
           "cv_update",
           "#{author_id}-#{NaiveDateTime.diff(started_at, ~N[1970-01-01 00:00:00])}"
         ),
+      source_id: newest_id,
       at: at,
       entry_count: count,
       entries: Enum.take(entries, @preview_entries)

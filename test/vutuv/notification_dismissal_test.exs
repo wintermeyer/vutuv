@@ -16,6 +16,7 @@ defmodule Vutuv.NotificationDismissalTest do
 
   alias Vutuv.Activity
   alias Vutuv.Posts
+  alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Social
   alias Vutuv.Tags
 
@@ -199,14 +200,99 @@ defmodule Vutuv.NotificationDismissalTest do
     end
   end
 
+  describe "a CV update, which is a sitting and not a row" do
+    # The one kind whose item is a group: it names itself by its newest entry,
+    # so a click reads the sitting as it stood and a later entry rings again.
+    defp announce(author, attrs \\ []) do
+      entry = insert(:work_experience, [user: author, announce_to_followers?: true] ++ attrs)
+      CvUpdates.announce(author, entry)
+      entry
+    end
+
+    defp followed_author do
+      author = insert_activated_user()
+      me = insert_activated_user()
+      follow!(me, author)
+      {me, author}
+    end
+
+    test "the push and the feed item name the same entry" do
+      {me, author} = followed_author()
+      announce(author, title: "First")
+      Activity.subscribe(me.id)
+      entry = announce(author, title: "Second")
+      assert_receive {:new_notification, notification}
+
+      ref = Activity.dismiss_ref(notification)
+
+      assert ref == %{kind: "cv_update", source_id: entry.id}
+      assert Activity.dismiss_ref(item_of_kind(me.id, "cv_update")) == ref
+    end
+
+    test "dismissing it drops the sitting from the unread count and the preview" do
+      {me, author} = followed_author()
+      announce(author, title: "First")
+      announce(author, title: "Second")
+      assert Activity.unread_notification_count(me.id) == 1
+
+      ref = me.id |> item_of_kind("cv_update") |> Activity.dismiss_ref()
+      Activity.mark_notification_seen(me.id, ref.kind, ref.source_id)
+
+      assert Activity.unread_notification_count(me.id) == 0
+      assert Activity.unread_notifications(me.id, 6).items == []
+
+      assert [%{seen?: true}] =
+               Activity.with_seen_flags(
+                 me.id,
+                 Activity.notifications_page(me.id, limit: 50).entries,
+                 Activity.dismissed_event_ids(me.id)
+               )
+    end
+
+    test "an entry added to the sitting afterwards rings again" do
+      {me, author} = followed_author()
+      announce(author, title: "First")
+
+      ref = me.id |> item_of_kind("cv_update") |> Activity.dismiss_ref()
+      Activity.mark_notification_seen(me.id, ref.kind, ref.source_id)
+      assert Activity.unread_notification_count(me.id) == 0
+
+      announce(author, title: "Second")
+
+      assert Activity.unread_notification_count(me.id) == 1
+      assert [%{entry_count: 2}] = Activity.unread_notifications(me.id, 6).items
+    end
+
+    test "leaves another author's sitting unread" do
+      {me, author} = followed_author()
+      other = insert_activated_user()
+      follow!(me, other)
+      announce(author)
+      announce(other)
+      assert Activity.unread_notification_count(me.id) == 2
+
+      ref =
+        me.id
+        |> Activity.notifications_page(limit: 50)
+        |> Map.fetch!(:entries)
+        |> Enum.find(&(&1.actor_param == author.username))
+        |> Activity.dismiss_ref()
+
+      Activity.mark_notification_seen(me.id, ref.kind, ref.source_id)
+
+      assert [%{actor_param: param}] = Activity.unread_notifications(me.id, 6).items
+      assert param == other.username
+    end
+  end
+
   describe "dismissable_kinds/0" do
     # Both halves come off the registry's `dismiss` entries, so a kind cannot
     # store dismissals the tally ignores. What is worth pinning is the shape of
-    # the vocabulary: exactly one opt-out, and the extra name the two-event
-    # severance needs. A new kind declaring `dismiss: [nil]` by rote fails
-    # here and has to justify itself.
-    test "every kind but the grouped one can be dismissed" do
-      assert Activity.kinds() -- Activity.dismissable_kinds() == ["cv_update"]
+    # the vocabulary: no opt-out, and the extra name the two-event severance
+    # needs. A new kind declaring `dismiss: [nil]` by rote fails here and has
+    # to justify itself.
+    test "every kind can be dismissed" do
+      assert Activity.kinds() -- Activity.dismissable_kinds() == []
     end
 
     test "the report-protection restore half has a name of its own" do
