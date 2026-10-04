@@ -481,9 +481,12 @@ read-marker arm, its feed source and its counts: `dismiss: [{"like", :id}]` and
 seventeen count queries. `:id` covers all but one, because a count query counts
 rows of the table it is named after and that table is its first binding — the
 assumption `since/2` already makes; the connection pair is two rows and names
-itself by the later of them (`:later_follow`). `cv_update` declares `nil`: a
-sitting is several CV rows grouped in Elixir under a synthesised id, so there is
-no row for SQL to exclude. `Activity.dismissable_kinds/0` reads straight off
+itself by the later of them (`:later_follow`). A `cv_update` is a sitting,
+several CV rows under a synthesised id, so it names itself by its newest entry
+(`CvUpdates.count_query/2` selects it as the sitting's `id`, the item carries it
+as `source_id`): opening it reads the sitting as it stood, and an entry added
+afterwards rings again. That makes it the one kind whose dismissal is not its
+item id, which `with_seen_flags/3` accounts for. `Activity.dismissable_kinds/0` reads straight off
 those entries, so a kind cannot store dismissals the tally would then ignore.
 
 The live push has to name the same row the tally counts, and the two are written
