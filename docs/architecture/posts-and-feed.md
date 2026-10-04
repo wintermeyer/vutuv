@@ -451,12 +451,15 @@ two cards. Collapsing only ever reduces, so the figure never undersells.
 `Posts.mark_feed_read/1` writes the marker whenever posts are actually put in
 front of the reader, and the moment it skips is the design. It writes on
 **opening** the feed, on **revealing** what waited behind the pill, and when a
-whole fresh timeline of the live present replaces the one that pill was standing
-on — a source switch in the band, the way home from a day in the calendar
-(`mark_shown_read/1` in the feed LiveView owns all three, which is why it is
-gated on the pill having held something and on the page being the present: an
-opened calendar day clears the pill too, and those posts have *not* been
-shown). It does **not** write on every arrival while the page is open — the
+whole fresh timeline of the live present replaces the one on screen — a source
+switch in the band, the way home from a day in the calendar or from "My posts"
+(`mark_shown_read/1` in the feed LiveView owns all three, gated on the page
+being the present: an opened calendar day clears the pill too, and those posts
+have *not* been shown). And it writes when an arrival has been dealt with and
+**nothing is waiting** (`settle_read/1`): the pill is the only control on the
+page that moves the marker, so an arrival the page showed without a press (a
+repost folding into a card on screen) would otherwise leave a figure no press
+can clear until the next reload. It does **not** write on every arrival while the page is open — the
 notifications page marks its own arrivals read on the spot, but there the event
 *is* on screen as it lands, while these posts are behind a press. So a reader
 who was told and did not look keeps the count when they leave. The write broadcasts a bare `:feed_read`,
@@ -758,8 +761,12 @@ a row on that side (`record_remote_post/2`, `record_remote_boost/2`,
 the dot, carrying the stamp the entry will wear and nothing else: whether the row
 reaches this particular reader depends on their mutes, the follow's state, the
 audience and their language filter, so the feed asks its own sources
-(`Posts.newest_source_entry/3`). Without that the whole fediverse half would go
+(`Posts.feed_arrivals_since/5`). Without that the whole fediverse half would go
 silent while the page is open, which is the opposite of what the band is for.
+The question is "what arrived since this page last asked", on the **arrival**
+clock the nav badge counts on, and not "what is the newest row": a post
+delivered minutes after it was written is not the newest row of its source, so
+the older question found a post already on screen and left the pill empty.
 
 **The reader arranges the rail** (`users.feed_rail`, one JSON map: order,
 collapsed, removed). Every card wears the same chrome — a grip that drags it, a

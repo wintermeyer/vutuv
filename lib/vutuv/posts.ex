@@ -3462,12 +3462,7 @@ defmodule Vutuv.Posts do
     # outside the window and the badge stays at zero while the feed's own pill is
     # holding it. `Vutuv.Fediverse.window_clock/3` owns that choice and the
     # measurement behind it.
-    cursor = %{
-      at: NaiveDateTime.utc_now(:second),
-      ids: [],
-      since: NaiveDateTime.add(viewer.feed_read_at, 1, :second),
-      since_basis: :arrival
-    }
+    cursor = arrival_cursor(NaiveDateTime.add(viewer.feed_read_at, 1, :second))
 
     # Summed with no dedup, because the sources are disjoint **in the query**:
     # the reply source excludes a followee's reply (`feed_reply_to_me_items/3`)
@@ -3493,6 +3488,13 @@ defmodule Vutuv.Posts do
   # source queries it feeds is not a cost worth caching a stale answer for.
   def unread_feed_count(user_id, opts) when is_binary(user_id),
     do: unread_feed_count(Repo.get(User, user_id), opts)
+
+  # The window "reached us at or after `since`", which the badge and the feed's
+  # pill both ask through: one literal, so the two cannot come to read
+  # different clocks.
+  defp arrival_cursor(since) do
+    %{at: NaiveDateTime.utc_now(:second), ids: [], since: since, since_basis: :arrival}
+  end
 
   # An entry the reader put in front of themselves — the two local shapes that
   # can be theirs. A mark from a fediverse source carries neither key, and a
@@ -3649,10 +3651,11 @@ defmodule Vutuv.Posts do
   search-and-replace rules (`Vutuv.PostRewrites.rewrite_entry/3`), then their
   content filters. Two functions discharge that, and a third caller should
   reach for one of them rather than spelling it again: `for_reader/2` in the
-  feed, which STAMPS the filter answer onto the entry so the row can fold to a
-  placeholder the reader may open, and `VutuvWeb.PostTeaser.quote_for/4`, which
-  REFUSES to quote a muted post at all. Both existing callers once skipped a
-  pass and showed a line no other surface in the app would have shown.
+  feed (for `feed_arrivals_since/5`, which carries the same debt), which STAMPS
+  the filter answer onto the entry so the row can fold to a placeholder the
+  reader may open, and `VutuvWeb.PostTeaser.quote_for/4`, which REFUSES to
+  quote a muted post at all. Both callers once skipped a pass and showed a line
+  no other surface in the app would have shown.
   """
   def newest_source_entry(%User{} = viewer, source, %NaiveDateTime{} = since)
       when source in [:vutuv, :fediverse, :all] do
@@ -3676,6 +3679,39 @@ defmodule Vutuv.Posts do
         |> decorate_feed_entries(viewer)
         |> List.first()
     end
+  end
+
+  @doc """
+  What reached `viewer`'s feed at or after `since`, newest first and decorated
+  for rendering — what an open feed puts behind its "new posts" pill when
+  `Vutuv.Activity.nudge_feeds/2` says "look".
+
+  Read on the **arrival** clock, the one `unread_feed_count/1` counts on, and
+  that is the point: the pill and the nav badge have to answer the same
+  question. `newest_source_entry/3` asks each source for its newest row by the
+  stamp the card wears, so a post another server delivers minutes late is not
+  that row — the door found a post already on screen, the pill stayed empty and
+  the badge counted an arrival nothing on the page could clear.
+
+  The reader's own acts are left out as they are there, and the entries come
+  back as written: the caller owes them the reader's passes
+  (see `newest_source_entry/3`).
+
+  `known?` says which rows the caller's page already holds. It is asked before
+  the decorate pass, which is the expensive half: a burst of deliveries
+  announces itself once per post and each announcement finds the whole burst,
+  so most of what a call fetches is on the page already.
+  """
+  def feed_arrivals_since(%User{} = viewer, filter, %NaiveDateTime{} = since, limit, known?)
+      when is_function(known?, 1) do
+    viewer
+    |> feed_sources(filter)
+    |> Vutuv.FeedPage.fetch_sources(limit, arrival_cursor(since))
+    |> Enum.concat()
+    |> Enum.reject(&(own_feed_act?(&1, viewer.id) or known?.(&1)))
+    |> Vutuv.FeedPage.sort_entries()
+    |> Enum.take(limit)
+    |> decorate_feed_entries(viewer, threads: true)
   end
 
   # One source's newest row, kept only if it is at least as new as `since`.
