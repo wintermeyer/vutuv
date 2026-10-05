@@ -71,6 +71,17 @@ validates nothing: `https://evil.example.org;script-src 'unsafe-inline'/cb`
 registers cleanly and comes back with that whole run as its "host", which in a
 header would be a second directive of the app author's choosing.
 
+**That widening only carries a native client now.** For a web callback it
+covered the first hop and nothing after it, and what a callback does next is not
+ours to know: Buffer's `https://account.buffer.com/oauth/mastodon/callback`
+answers with a redirect to plain `http://` on the same host, which the `https`
+origin does not match, so Chrome dropped it and the member pressed "Allow
+access" thirty times without one code being redeemed. An `http(s)` callback is
+therefore answered with the hand-off page (`OauthController.send_back/3`,
+`ControllerHelpers.hand_off/3`): the submission ends at a 200 here and the hop
+out is an ordinary navigation, which `form-action` does not govern however
+often the other side redirects.
+
 Widening the header is the exception, not the pattern: it works here only
 because the destination is registered and known while the page renders. The
 other two forms that leave the site — "follow us from your own server" and the

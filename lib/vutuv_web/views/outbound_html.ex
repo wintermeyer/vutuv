@@ -11,10 +11,13 @@ defmodule VutuvWeb.OutboundHTML do
   page that has nothing to do with the destination. See
   `VutuvWeb.Plug.ContentSecurityPolicy` for the directive itself.
 
-  The consent screen widens the directive instead, because its destination is
-  registered and known while the page renders. Neither caller here can do
-  that: `VutuvWeb.RemoteFollowController` resolves its destination from an
-  address the visitor types, and the job page's apply button lives in a
+  The consent screen widens the directive instead for a native client's own
+  scheme, because that destination is registered and known while the page
+  renders. Its web callbacks come through here too: the first hop is known, the
+  redirects the callback answers with are not. The other two callers cannot
+  name even the first: `VutuvWeb.RemoteFollowController` resolves its
+  destination from an address the visitor types, and the job page's apply
+  button lives in a
   LiveView the visitor may have reached by live navigation, so the document
   holding the form is not the one that would have carried the header.
 

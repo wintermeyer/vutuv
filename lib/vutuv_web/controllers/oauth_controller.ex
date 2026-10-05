@@ -12,7 +12,10 @@ defmodule VutuvWeb.OauthController do
   redirect URI: the site's blanket `form-action 'self'` is enforced on the
   redirect this endpoint answers with, and would otherwise leave the member
   staring at the consent screen with a minted code they never receive. See
-  `VutuvWeb.Plug.ContentSecurityPolicy`.
+  `VutuvWeb.Plug.ContentSecurityPolicy`. Only a native client's own scheme
+  still takes that redirect; a web callback gets the hand-off page
+  (`send_back/3`), because the widened directive cannot cover the redirects the
+  callback itself answers with.
 
   `POST /oauth/token` and `POST /oauth/revoke` are machine endpoints
   (form-encoded in, JSON out, no session/CSRF). Client/redirect problems
@@ -27,6 +30,7 @@ defmodule VutuvWeb.OauthController do
   alias Vutuv.ApiAuth.OAuth
   alias Vutuv.ApiAuth.UserAgent
   alias Vutuv.MastodonApi.Access
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Plug.ContentSecurityPolicy
   alias VutuvWeb.RateLimit
 
@@ -131,7 +135,7 @@ defmodule VutuvWeb.OauthController do
         |> put_resp_header("cache-control", "no-store")
         |> put_status(403)
         |> text("access_denied"),
-      else: redirect(conn, external: callback_url(request, error: "access_denied"))
+      else: send_back(conn, request, error: "access_denied")
   end
 
   # The half of issue #1561 nobody could answer: *which* client resubmits. The
@@ -181,7 +185,7 @@ defmodule VutuvWeb.OauthController do
       {:ok, code} ->
         if request.redirect_uri == @oob_redirect,
           do: conn |> put_resp_header("cache-control", "no-store") |> text(code),
-          else: redirect(conn, external: callback_url(request, code: code))
+          else: send_back(conn, request, code: code)
 
       {:error, _reason} ->
         conn |> put_status(403) |> render("error.html", reason: :forbidden)
@@ -201,6 +205,26 @@ defmodule VutuvWeb.OauthController do
       limit: @consent_limit,
       window_ms: @consent_window
     ) == :ok
+  end
+
+  # The browser's way back to the app. A native client's own scheme gets the
+  # 302 the consent screen's widened `form-action` allows. A web callback gets
+  # the hand-off page, because `form-action` is checked on every hop and the
+  # redirects a callback answers with are not ours to name (Buffer's goes on to
+  # plain `http://`; docs/architecture/api.md).
+  defp send_back(conn, request, query_params) do
+    url = callback_url(request, query_params)
+
+    if URI.parse(url).scheme in ["http", "https"] do
+      conn
+      |> put_resp_header("cache-control", "no-store")
+      |> ControllerHelpers.hand_off(
+        url,
+        gettext("Taking you back to %{app}.", app: request.app.name)
+      )
+    else
+      redirect(conn, external: url)
+    end
   end
 
   # The exact registered redirect URI plus our query params (state echoes
