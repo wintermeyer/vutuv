@@ -40,6 +40,9 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
   /oauth/authorize` answers 302 to the client's registered `redirect_uri` —
   `ivory://…` for a phone client, an off-origin `https://` callback for a web
   one — and under a bare `form-action 'self'` the browser refuses that hop.
+  (A web callback no longer takes the 302 at all: it redirects onward to
+  places no directive written here can name, so `OauthController.send_back/3`
+  answers it with the hand-off page. The widening carries native schemes.)
   The failure is silent and reads as a dead button: the POST *does* reach the
   server, a code *is* minted, and the member is left looking at the consent
   screen with no token, which is what an Ivory user reported.

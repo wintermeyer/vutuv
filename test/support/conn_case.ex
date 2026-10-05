@@ -122,6 +122,14 @@ defmodule VutuvWeb.ConnCase do
         token
       end
 
+      # Where the consent screen sent the browser after Allow or Deny: the
+      # callback URL, code or error included. A web (`http(s)`) callback is
+      # answered with the hand-off page and its meta refresh, a native app's own
+      # scheme with a 302, so a test that only wants the code reads it here
+      # rather than knowing which.
+      defp oauth_callback(%Plug.Conn{status: 302} = conn), do: redirected_to(conn, 302)
+      defp oauth_callback(%Plug.Conn{status: 200} = conn), do: conn.assigns.meta_refresh
+
       # ── /api/2.0 helpers (shared by every API test file) ──
 
       defp authed(conn, token) do

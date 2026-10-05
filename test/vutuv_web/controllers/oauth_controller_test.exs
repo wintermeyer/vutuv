@@ -107,7 +107,7 @@ defmodule VutuvWeb.OauthControllerTest do
           Map.put(authorize_query(app), "decision", "allow")
         )
 
-      location = redirected_to(conn)
+      location = oauth_callback(conn)
       assert location =~ @redirect <> "?"
       %{query: query} = URI.parse(location)
       %{"code" => code, "state" => "st4te"} = URI.decode_query(query)
@@ -181,10 +181,35 @@ defmodule VutuvWeb.OauthControllerTest do
           Map.put(authorize_query(app), "decision", "deny")
         )
 
-      location = redirected_to(conn)
+      location = oauth_callback(conn)
       assert location =~ "error=access_denied"
       assert location =~ "state=st4te"
       assert ApiAuth.list_grants(user) == []
+    end
+
+    # Buffer's callback redirects on to plain `http://`. `form-action` is
+    # checked on every hop of a submission, so a 302 from here made that hop
+    # part of ours and Chrome dropped it. The submission has to end at a 200.
+    test "a web callback ends the submission here instead of redirecting", %{
+      conn: conn,
+      app: app
+    } do
+      {conn, _user} = create_and_login_user(conn)
+      conn = get(conn, "/oauth/authorize?#{URI.encode_query(authorize_query(app))}")
+
+      conn =
+        submit_with_csrf(
+          conn,
+          "/oauth/authorize",
+          Map.put(authorize_query(app), "decision", "allow")
+        )
+
+      body = html_response(conn, 200)
+      callback = oauth_callback(conn)
+      assert callback =~ @redirect <> "?code="
+      assert body =~ ~s|content="0;url=#{Plug.HTML.html_escape(callback)}"|
+      # The page carries a live authorization code.
+      assert get_resp_header(conn, "cache-control") == ["no-store"]
     end
 
     test "wrong client credentials at the token endpoint are a 401", %{conn: conn, app: app} do
