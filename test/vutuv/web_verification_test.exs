@@ -69,6 +69,54 @@ defmodule Vutuv.WebVerificationTest do
              )
     end
 
+    test "a www. host also accepts the record on the bare domain" do
+      token = "abc123"
+      expected = ~c"vutuv-verify=#{token}"
+
+      for name <- ["example.org", "_vutuv.example.org"] do
+        resolver = fn
+          ^name -> [[~c"v=spf1 -all"], [expected]]
+          _ -> []
+        end
+
+        assert WebVerification.dns_verified?("www.example.org", "vutuv-verify=", token, resolver)
+      end
+    end
+
+    test "the bare-domain fallback is for one leading www. only, and never upwards" do
+      token = "abc123"
+
+      only = fn name ->
+        fn
+          ^name -> [[~c"vutuv-verify=#{token}"]]
+          _ -> []
+        end
+      end
+
+      # A record on `www` says nothing about who controls the apex.
+      refute WebVerification.dns_verified?(
+               "example.org",
+               "vutuv-verify=",
+               token,
+               only.("www.example.org")
+             )
+
+      # Any other subdomain may be somebody else's (a hosted page, a customer).
+      refute WebVerification.dns_verified?(
+               "blog.example.org",
+               "vutuv-verify=",
+               token,
+               only.("example.org")
+             )
+
+      refute WebVerification.dns_verified?(
+               "www.www.example.org",
+               "vutuv-verify=",
+               token,
+               only.("example.org")
+             )
+    end
+
     test "dns_challenge_name/1 prefixes the host with the _vutuv label" do
       assert WebVerification.dns_challenge_name("changelog.example.org") ==
                "_vutuv.changelog.example.org"
@@ -128,6 +176,20 @@ defmodule Vutuv.WebVerificationTest do
       assert report.names == ["example.org", "_vutuv.example.org"]
       assert report.expected == "vutuv-organization-verify=tok-123"
       assert report.found == ["v=spf1 -all", "other=1"]
+    end
+
+    test "the dns report for a www. host names the bare domain too" do
+      resolver = fn _host -> [] end
+
+      assert {:error, report} =
+               WebVerification.dns_check("www.example.org", "vutuv-verify=", "tok-123", resolver)
+
+      assert report.names == [
+               "www.example.org",
+               "_vutuv.www.example.org",
+               "example.org",
+               "_vutuv.example.org"
+             ]
     end
 
     test "a hit on the bare host stops there, so the happy path stays one lookup" do

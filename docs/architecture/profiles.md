@@ -987,7 +987,11 @@ Three methods, the member's choice on the owner-only page at
   CNAME (a hosted changelog, a redirect) cannot carry a bare-host TXT record — a
   CNAME and a TXT cannot coexist on one name (RFC 1034) — so the underscore label
   (the `_dmarc` / `_acme-challenge` convention, RFC 8552, never a CNAME target)
-  gives such a member a place to publish it (issue #947).
+  gives such a member a place to publish it (issue #947). A `www.` host is also
+  proven by the record on its bare domain (`www.example.org` by a record on
+  `example.org`), because that is where a DNS panel puts a record by default and
+  whoever writes a zone's apex decides what `www` is. The reverse does not hold,
+  and neither does any other subdomain. Organization domains share the rule.
 
 `LinkVerification.check/3` is the single entry point, and like its organization
 twin it **says what it saw** when the proof is not there (issue #1466):
