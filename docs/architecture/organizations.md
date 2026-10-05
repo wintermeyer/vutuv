@@ -110,6 +110,7 @@ that owns the organization gate and test seams:
 - **DNS** — a `vutuv-organization-verify=<token>` TXT record on the domain, or on
   the CNAME-safe `_vutuv.<domain>` alternate name for a domain that is itself a
   CNAME (see `profiles.md` and `WebVerification.dns_challenge_name/1`, issue #947).
+  A `www.` domain also accepts the record on its bare domain (`profiles.md`).
   The record is read from the zone's **own name servers** (`Vutuv.Dns`), not
   through a recursive resolver — see "Why the DNS read bypasses the cache" below.
 - **Website file** — the token served at

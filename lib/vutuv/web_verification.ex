@@ -7,7 +7,8 @@ defmodule Vutuv.WebVerification do
 
     * `dns` — a `<prefix><token>` TXT record, published either on the host
       itself or on the CNAME-safe `_vutuv.<host>` alternate name (see
-      `dns_challenge_name/1`).
+      `dns_challenge_name/1`). A `www.` host also accepts both on its bare
+      domain.
     * `well_known` — the token served at a `.well-known` path on the host.
     * `rel_me` — the page links back to a given URL with `rel="me"` (the
       IndieWeb / Mastodon standard, which needs no token: the back-link target
@@ -126,12 +127,11 @@ defmodule Vutuv.WebVerification do
       when is_binary(host) and is_binary(prefix) and is_binary(token) and
              is_function(resolver, 1) do
     expected = dns_txt_value(prefix, token)
-    names = [host, dns_challenge_name(host)]
+    names = dns_names(host)
 
-    # The bare host is read first and a hit stops there, so the common
+    # The host itself is read first and a hit stops there, so the common
     # (non-CNAME) case still verifies in a single lookup and only a miss pays
-    # for the second, alternate-name query — the one that then also fills the
-    # report.
+    # for the further queries — the ones that then also fill the report.
     {found, matched?} =
       Enum.reduce_while(names, {[], false}, fn name, {seen, _matched?} ->
         records = txt_records(name, resolver)
@@ -152,6 +152,22 @@ defmodule Vutuv.WebVerification do
 
     if matched?, do: {:ok, report}, else: {:error, report}
   end
+
+  # A `www.` host is also proven by a record on the bare domain. DNS panels put
+  # a new record there unless told otherwise, and whoever writes the apex of a
+  # zone decides what `www` is, so the proof is no weaker. One leading `www.`
+  # only, and never the other way round: any other subdomain may be delegated
+  # to somebody else, and a record on `www` says nothing about the apex.
+  defp www_apex("www." <> bare) do
+    if String.contains?(bare, ".") and not String.starts_with?(bare, "www."),
+      do: [bare],
+      else: []
+  end
+
+  defp www_apex(_host), do: []
+
+  defp dns_names(host),
+    do: Enum.flat_map([host | www_apex(host)], &[&1, dns_challenge_name(&1)])
 
   defp txt_records(host, resolver) do
     host
