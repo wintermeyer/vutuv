@@ -419,7 +419,10 @@ after a day) and audience proxy as a photo added in the web composer — an
 unattached `Vutuv.Posts.PostImage` row simply *is* the Mastodon attachment.
 Accepted: `.jpg .jpeg .png .webp`, plus `.heic/.heif` where the host supports
 them, up to `Posts.max_image_filesize/0` and `Posts.max_images_per_post/0` per
-status. Uploads are rate limited per member.
+status. Uploads are rate limited per member. A filename that names none of
+those is not a refusal: `Vutuv.Uploads.image_extension_from_content/1` reads the
+format from the file's first bytes, because Buffer uploads every picture under
+a name without a usable extension.
 
 **The AI image scan is why the v2 endpoint is worth having.** A fresh upload is
 `pending` and `Posts.moderation_hidden?/1` keeps the whole post owner-only

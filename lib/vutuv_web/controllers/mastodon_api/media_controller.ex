@@ -162,7 +162,22 @@ defmodule VutuvWeb.MastodonApi.MediaController do
         other -> other
       end
     else
-      Posts.create_pending_image(user, upload)
+      Posts.create_pending_image(user, upload.path, image_filename(upload))
+    end
+  end
+
+  # A picture is named by its content when its filename does not name it.
+  # Buffer uploads every picture under a name without a usable extension, and
+  # judging by the name alone refused each one with a 422 that Buffer shows its
+  # member as "An unknown error has occurred". Mastodon reads the content too.
+  defp image_filename(%Plug.Upload{filename: filename, path: path}) do
+    whitelist = Vutuv.PostImageStore.extension_whitelist()
+
+    with false <- Vutuv.Uploads.valid_extension?(filename, whitelist),
+         extension when is_binary(extension) <- Vutuv.Uploads.image_extension_from_content(path) do
+      "upload" <> extension
+    else
+      _named_or_unknown -> filename
     end
   end
 

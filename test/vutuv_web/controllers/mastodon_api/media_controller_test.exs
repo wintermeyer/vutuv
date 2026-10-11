@@ -56,6 +56,45 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
     |> Repo.update!()
   end
 
+  # Buffer uploads every picture under a filename that carries no usable
+  # extension, so judging the upload by its name refused each one with a 422
+  # that Buffer shows as "An unknown error has occurred".
+  for filename <- ["blob", "photo", "photo.jpg?X-Amz-Expires=300", "upload.bin"] do
+    test "a picture named #{inspect(filename)} is recognised by its content", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      user = insert(:activated_user)
+      token = mastodon_token(user, ["read", "write"])
+      upload = %Plug.Upload{jpeg!(tmp) | filename: unquote(filename), content_type: nil}
+
+      uploaded =
+        conn
+        |> mastodon_conn(token)
+        |> post("/api/v2/media", %{"file" => upload})
+        |> json_response(200)
+
+      assert uploaded["type"] == "image"
+      assert Repo.get!(PostImage, uploaded["id"]).content_type == "image/jpeg"
+    end
+  end
+
+  test "a file that is no picture is still refused, whatever it is called", %{tmp: tmp} do
+    user = insert(:activated_user)
+    token = mastodon_token(user, ["read", "write"])
+    path = Path.join(tmp, "notes")
+    File.write!(path, "just some text, long enough to read a header from")
+
+    for filename <- ["blob", "notes.jpg"] do
+      upload = %Plug.Upload{path: path, filename: filename, content_type: "image/jpeg"}
+
+      assert build_conn()
+             |> mastodon_conn(token)
+             |> post("/api/v2/media", %{"file" => upload})
+             |> json_response(422)
+    end
+  end
+
   test "an unposted upload can be taken back again", %{conn: conn, tmp: tmp} do
     user = insert(:activated_user)
     token = mastodon_token(user, ["read", "write"])

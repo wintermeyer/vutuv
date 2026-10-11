@@ -923,6 +923,30 @@ defmodule Vutuv.Uploads do
   defp valid_extension?(file_name), do: valid_extension?(file_name, extension_whitelist())
 
   @doc """
+  The extension a picture's own first bytes name (`".jpg"`, `".png"`,
+  `".webp"`, `".heic"`), or `nil` for anything else.
+
+  For an upload whose filename says nothing: a client that hands its HTTP
+  library a bare buffer sends `blob`, or a name with a signed URL's query still
+  attached. The answer names the container only, so the caller still checks it
+  against its whitelist and the uploader still has to decode the file.
+  """
+  def image_extension_from_content(path) do
+    case File.open(path, [:read, :binary], &IO.binread(&1, 12)) do
+      {:ok, <<0xFF, 0xD8, 0xFF, _::binary>>} -> ".jpg"
+      {:ok, <<0x89, "PNG\r\n", 0x1A, "\n", _::binary>>} -> ".png"
+      {:ok, <<"RIFF", _size::binary-size(4), "WEBP">>} -> ".webp"
+      {:ok, <<_size::binary-size(4), "ftyp", brand::binary-size(4)>>} -> heif_extension(brand)
+      _other -> nil
+    end
+  end
+
+  defp heif_extension(brand) when brand in ~w(heic heix heim heis hevc hevx mif1 msf1),
+    do: ".heic"
+
+  defp heif_extension(_brand), do: nil
+
+  @doc """
   A fresh unguessable URL token (~128 bits, URL-safe Base64) for the
   token-keyed uploaders (`Vutuv.PostImageStore`, `Vutuv.OrganizationImageStore`,
   `Vutuv.JobPostingImageStore`): the token is both the proxy's lookup key and
