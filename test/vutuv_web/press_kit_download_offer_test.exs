@@ -192,4 +192,29 @@ defmodule VutuvWeb.PressKitDownloadOfferTest do
       assert entry["png_width"] == 1600
     end
   end
+
+  describe "a logo whose original is gone" do
+    setup %{logo: logo} do
+      PressKitStore.delete(logo.token)
+      :ok
+    end
+
+    test "does not offer a PNG that the download route cannot provide", %{
+      conn: conn,
+      user: user,
+      logo: logo
+    } do
+      assert get(conn, PressKit.png_download_url(logo)).status == 404
+
+      html = page(conn, user)
+
+      refute html =~ PressKit.png_download_url(logo)
+      assert html =~ "Wortmarke"
+
+      entry = doc_logo(conn, user)
+      refute Map.has_key?(entry, "png_download_url")
+      refute Map.has_key?(entry, "png_width")
+      refute Map.has_key?(entry, "png_height")
+    end
+  end
 end

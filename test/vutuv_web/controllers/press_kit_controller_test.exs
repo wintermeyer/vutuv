@@ -117,15 +117,14 @@ defmodule VutuvWeb.PressKitControllerTest do
       refute html =~ "data-press-download"
     end
 
-    test "a vector logo offers the PNG whatever the cleaner says", %{conn: conn, user: user} do
+    test "a vector logo with no original offers no download", %{conn: conn, user: user} do
       logo = put_press_picture(user, logo: true, content_type: "image/svg+xml", alt: "Wortmarke")
 
       html = conn |> get(~p"/#{user}/media-kit") |> html_response(200)
 
-      # The PNG is a rasterisation of the upload, so no verdict on the markup
-      # reaches it; the vector's own link waits on a file this inserted row has
-      # never had.
-      assert html =~ "/system/press_kit/#{logo.token}/download.png"
+      # Both downloads need the original upload. This row was inserted directly
+      # and has no files, so neither address can answer.
+      refute html =~ "/system/press_kit/#{logo.token}/download.png"
       refute html =~ "/system/press_kit/#{logo.token}/download.orig"
       assert html =~ "Wortmarke"
     end
@@ -291,8 +290,8 @@ defmodule VutuvWeb.PressKitControllerTest do
       assert doc["total"] == 2
       assert length(doc["photos"]) == 1
       assert length(doc["logos"]) == 1
-      assert [%{"png_download_url" => png}] = doc["logos"]
-      assert png =~ "download.png"
+      assert [%{} = logo] = doc["logos"]
+      refute Map.has_key?(logo, "png_download_url")
       assert doc["owner"]["username"] == "presse.person"
       assert doc["rights"] =~ "editorial"
     end
@@ -397,10 +396,9 @@ defmodule VutuvWeb.PressKitControllerTest do
       assert card =~ "Zur freien redaktionellen Verwendung mit Bildnachweis."
       assert page =~ "Pressefotos"
       assert page =~ "Logo-Varianten"
-      # The one download these fileless rows still offer; the German of the
-      # other two buttons is pinned in `VutuvWeb.PressKitDownloadOfferTest`,
-      # against a page that really hands files over.
-      assert page =~ "PNG herunterladen"
+      # Fileless fixtures offer no download; the real-upload test pins the
+      # German labels of all three buttons.
+      refute page =~ "PNG herunterladen"
       # The section-page heading names the member, not a bare category.
       assert page =~ "Media Kit von Ada King"
     end

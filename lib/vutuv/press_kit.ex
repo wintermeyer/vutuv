@@ -722,6 +722,21 @@ defmodule Vutuv.PressKit do
     end
   end
 
+  @doc """
+  The PNG rendering a vector logo can really hand over, or `nil` when the
+  original is gone or cannot be rasterized. Unlike `download_offer/1`, this
+  remains available when the SVG cleaner refuses the original: the raster is
+  still safe to serve.
+  """
+  def png_download_offer(%Image{} = image) do
+    if vector?(image) do
+      case byte_size_of(PressKitStore.png_download_file(image)) do
+        nil -> nil
+        bytes -> %{url: png_download_url(image), bytes: bytes}
+      end
+    end
+  end
+
   defp byte_size_of({path, _ext}) do
     case File.stat(path) do
       {:ok, %File.Stat{size: size}} -> size
