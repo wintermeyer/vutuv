@@ -38,7 +38,10 @@ defmodule Vutuv.SignupTrap do
 
   # Each rule's name (stored with every entry it catches) and the label the
   # weekly report gives it.
-  @rules [same_lowercase_name: "Vor- und Nachname gleich, kleiner Anfangsbuchstabe"]
+  @rules [
+    same_lowercase_name: "Vor- und Nachname gleich, kleiner Anfangsbuchstabe",
+    single_lowercase_name: "Nur ein Name, kleiner Anfangsbuchstabe"
+  ]
   @labels Map.new(@rules, fn {rule, label} -> {Atom.to_string(rule), label} end)
 
   @retention_days 14
@@ -70,9 +73,25 @@ defmodule Vutuv.SignupTrap do
   # name are the same word and who types it in lower case is rare enough that
   # the weekly report is where they would show up.
   defp rule?(:same_lowercase_name, %{first_name: name, last_name: name}) when is_binary(name),
-    do: name =~ ~r/\A\p{Ll}\p{L}{3,}\z/u
+    do: lowercase_word?(name)
+
+  # Three weeks later the same scripts left the second field empty
+  # ("vbsvinwz"). Measured over the 401 sign-ups since July 2026: one member
+  # gave a single name and five typed their first name in lower case, nobody
+  # did both.
+  defp rule?(:single_lowercase_name, %{first_name: first, last_name: last}) do
+    case {blank?(first), blank?(last)} do
+      {false, true} -> lowercase_word?(first)
+      {true, false} -> lowercase_word?(last)
+      _both_or_neither -> false
+    end
+  end
 
   defp rule?(_rule, _fields), do: false
+
+  defp lowercase_word?(name), do: is_binary(name) and name =~ ~r/\A\p{Ll}\p{L}{3,}\z/u
+
+  defp blank?(value), do: value in [nil, ""]
 
   @doc """
   How the weekly report names a stored rule. A rule removed from `@rules` keeps

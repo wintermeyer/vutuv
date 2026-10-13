@@ -53,7 +53,7 @@
               <.local_time at={user.frozen_at} id={"frozen-since-#{user.id}"} format="%Y-%m-%d" />
             </td>
             <td class="text-slate-600 dark:text-slate-400">
-              {freeze_source_label(MapSet.member?(@report_frozen, user.id))}
+              {freeze_source_label(freeze_source(user.id, @report_frozen, @auto_frozen))}
             </td>
             <td class="text-right">
               <.freeze_toggle

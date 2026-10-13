@@ -51,10 +51,25 @@ defmodule Vutuv.SignupTrapTest do
             {"anna", "müller"},
             {"anna", "Anna"},
             {"jo-jo", "jo-jo"},
-            {"anna", nil},
+            {"Tobias", nil},
+            {nil, "Müller"},
+            {"abc", nil},
+            {"jo-jo", ""},
             {nil, nil}
           ] do
         refute SignupTrap.match(%{first_name: first, last_name: last}), "#{first} #{last}"
+      end
+    end
+
+    test "catches a single lowercase name with nothing in the other field" do
+      for {first, last} <- [
+            {"vbsvinwz", nil},
+            {"tqmnkhne", ""},
+            {nil, "tqmnkhne"},
+            {"", "müller"}
+          ] do
+        assert SignupTrap.match(%{first_name: first, last_name: last}) == :single_lowercase_name,
+               "#{first} #{last}"
       end
     end
   end

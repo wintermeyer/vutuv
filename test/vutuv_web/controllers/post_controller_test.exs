@@ -15,7 +15,7 @@ defmodule VutuvWeb.PostControllerTest do
 
   @other_login_attrs %{
     "emails" => %{"0" => %{"value" => "other@example.com"}},
-    "first_name" => "other",
+    "first_name" => "Other",
     "tag_list" => @registration_tags
   }
 

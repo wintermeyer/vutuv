@@ -281,6 +281,8 @@ A few rarely-changed switches are compile-time settings in
 saw 90 days after the last sighting; on by default),
 `:signup_trap_report` (the weekly report of scripted sign-ups, see
 [Scripted sign-ups](#scripted-sign-ups); on by default),
+`:link_spam_check` (every 30 minutes, freezes a new account registered to
+plant a link, see [Scripted sign-ups](#scripted-sign-ups); on by default),
 `:landing_teaser_video` (the silent teaser film in the start page's hero and
 on `/system/investors`, which also hands out its addresses; German for German
 readers and English for everybody else; loads only on a click; on by default), `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
@@ -1381,7 +1383,8 @@ deactivations. A spam mark is never shown publicly.
 
 Some sign-ups come from scripts that create accounts in bulk. vutuv
 recognises the ones it has rules for (today: the same lowercase word as first
-and last name, four letters or more) and shows them the usual PIN screen, but
+and last name, or a single lowercase name with the other field left empty,
+four letters or more) and shows them the usual PIN screen, but
 creates no account and sends no mail. What such a form submitted, with the IP
 address and browser, is kept for 14 days. Every Monday at 07:00 German time
 `OPERATOR_EMAIL` receives a table of the past week's catches, with the most
@@ -1389,6 +1392,17 @@ frequent mail domains and IP addresses, which is what the next rule is written
 from. A real person caught by mistake never gets a PIN, so look through that
 mail. Because the IP address is stored, mention this in your privacy policy
 (`/admin/legal`); vutuv.de's policy has a section on it.
+
+What these accounts are after is a link from your domain, and two things
+answer that after the sign-up. Every link that leaves the site from a
+headline or a profile description carries `rel="ugc nofollow"`, so it is worth
+nothing to a search engine. And every 30 minutes vutuv looks at the accounts
+of the last day: one with a single name and such a link in its headline is
+frozen, which hides it from everybody but its owner and you. It shows up in
+the daily report as "Automatisch eingefrorene Konten" and at
+`/admin/accounts/frozen` with the source "automatic check", where you delete
+it or thaw it. A thawed account is never frozen by the check again. Set
+`:link_spam_check` to `false` to switch the check off.
 
 ### Reports from people who have no account
 

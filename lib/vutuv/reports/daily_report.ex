@@ -4,8 +4,9 @@ defmodule Vutuv.Reports.DailyReport do
   how many posts, reposts, likes and bookmarks were created, how many new
   Fediverse followers were gained and how many were dropped again because the
   remote account is gone, the day's email-deliverability events (hard bounces,
-  address deactivations, account freezes and thaws) and the accounts an admin
-  removed as spam from a moderation case, on one German calendar day
+  address deactivations, account freezes and thaws), the accounts an admin
+  removed as spam from a moderation case and the new accounts a check froze by
+  itself (`Vutuv.Moderation.LinkSpam`), on one German calendar day
   (`Vutuv.BerlinTime`).
 
   Every metric also carries a capped `details` sample (`detail_limit/0` rows,
@@ -41,6 +42,7 @@ defmodule Vutuv.Reports.DailyReport do
     freezes: 0,
     thaws: 0,
     spam_removals: 0,
+    link_spam_freezes: 0,
     # Per-metric sample lists keyed by the metric atom (see the moduledoc); the
     # element shape varies by metric and is normalized in `VutuvWeb.ReportDetails`.
     details: %{}
@@ -60,6 +62,7 @@ defmodule Vutuv.Reports.DailyReport do
           freezes: non_neg_integer(),
           thaws: non_neg_integer(),
           spam_removals: non_neg_integer(),
+          link_spam_freezes: non_neg_integer(),
           details: %{optional(atom()) => list()}
         }
 
@@ -82,7 +85,8 @@ defmodule Vutuv.Reports.DailyReport do
     {:deactivations, "deaktivierte Adresse", "deaktivierte Adressen"},
     {:freezes, "eingefrorenes Konto", "eingefrorene Konten"},
     {:thaws, "aufgetautes Konto", "aufgetaute Konten"},
-    {:spam_removals, "als Spam entferntes Konto", "als Spam entfernte Konten"}
+    {:spam_removals, "als Spam entferntes Konto", "als Spam entfernte Konten"},
+    {:link_spam_freezes, "automatisch eingefrorenes Konto", "automatisch eingefrorene Konten"}
   ]
 
   @doc "Every tallied metric, summed."

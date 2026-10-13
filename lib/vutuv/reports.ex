@@ -19,6 +19,7 @@ defmodule Vutuv.Reports do
   alias Vutuv.Deliverability
   alias Vutuv.Fediverse.Follower
   alias Vutuv.Fediverse.FollowerPrune
+  alias Vutuv.Moderation
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Posts.{Post, PostBookmark, PostLike, PostRepost}
   alias Vutuv.Repo
@@ -53,6 +54,7 @@ defmodule Vutuv.Reports do
       freezes: deliverability.freezes,
       thaws: deliverability.thaws,
       spam_removals: count_spam_removals(day_start, day_end),
+      link_spam_freezes: Moderation.count_auto_freezes(day_start, day_end),
       details: %{
         registrations: registration_sample(day_start, day_end, limit),
         # Both author kinds (issue #1334): the day's posts include what
@@ -75,7 +77,8 @@ defmodule Vutuv.Reports do
         deactivations: deliverability_details.deactivations,
         freezes: deliverability_details.freezes,
         thaws: deliverability_details.thaws,
-        spam_removals: spam_removal_sample(day_start, day_end, limit)
+        spam_removals: spam_removal_sample(day_start, day_end, limit),
+        link_spam_freezes: Moderation.auto_freeze_sample(day_start, day_end, limit)
       }
     }
   end

@@ -21,6 +21,9 @@
   <.email_p><strong>Moderation</strong></.email_p>
   <.email_panel>
     <.email_row label="Als Spam entfernte Konten">{@report.spam_removals}</.email_row>
+    <.email_row label="Automatisch eingefrorene Konten">
+      {@report.link_spam_freezes}
+    </.email_row>
   </.email_panel>
 
   <%= for section <- VutuvWeb.ReportDetails.sections(@report) do %>

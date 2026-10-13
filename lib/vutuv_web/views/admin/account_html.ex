@@ -92,9 +92,21 @@ defmodule VutuvWeb.Admin.AccountHTML do
     do: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
 
   @doc """
-  The frozen list's "Source" label: an account currently frozen by an open
-  report shows "report", one frozen by an admin shows "admin".
+  The frozen list's "Source" label for what `freeze_source/3` answered.
   """
-  def freeze_source_label(true), do: gettext("report")
-  def freeze_source_label(false), do: gettext("admin")
+  def freeze_source_label(:report), do: gettext("report")
+  def freeze_source_label(:automatic), do: gettext("automatic check")
+  def freeze_source_label(:admin), do: gettext("admin")
+
+  @doc """
+  What froze the account: an open report wins (the case is what holds it), then
+  an automatic check (`Vutuv.Moderation.LinkSpam`), else an admin.
+  """
+  def freeze_source(user_id, report_frozen, auto_frozen) do
+    cond do
+      MapSet.member?(report_frozen, user_id) -> :report
+      MapSet.member?(auto_frozen, user_id) -> :automatic
+      true -> :admin
+    end
+  end
 end

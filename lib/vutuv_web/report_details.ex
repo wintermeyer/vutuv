@@ -47,7 +47,8 @@ defmodule VutuvWeb.ReportDetails do
     {:deactivations, "Deaktivierte Adressen"},
     {:freezes, "Eingefrorene Konten"},
     {:thaws, "Aufgetaute Konten"},
-    {:spam_removals, "Als Spam entfernte Konten"}
+    {:spam_removals, "Als Spam entfernte Konten"},
+    {:link_spam_freezes, "Automatisch eingefrorene Konten"}
   ]
 
   @doc """
@@ -98,6 +99,13 @@ defmodule VutuvWeb.ReportDetails do
 
   defp entry(:registrations, user), do: person_entry(user)
   defp entry(:spam_removals, event), do: person_entry(event.case.owner)
+
+  # The account may have been deleted since; the line then keeps the count
+  # honest without a link.
+  defp entry(:link_spam_freezes, %{user: %User{} = user}), do: person_entry(user)
+
+  defp entry(:link_spam_freezes, %{user: nil}),
+    do: %{primary: "Gelöschtes Konto", secondary: nil, path: nil}
 
   defp entry(:posts, post), do: post_entry(post, Vutuv.Posts.author(post))
 

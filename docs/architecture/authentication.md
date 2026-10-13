@@ -96,7 +96,8 @@ unread-conversations nudge) is unchanged.
 Some registrations come from scripts that create accounts in bulk, and they
 read the PIN mail, so the PIN alone does not stop them. `Vutuv.SignupTrap`
 recognises them by what they type (today: the same lowercase word as first and
-last name, four letters or more) and answers with the ordinary PIN screen
+last name, or one lowercase name beside an empty second field, four letters or
+more) and answers with the ordinary PIN screen
 while creating nothing: `Accounts.register_user/3` returns `{:trapped, email}`
 and the controller calls `Accounts.pretend_registration/2`, the same pin
 cookie and screen without any mail. The trap only looks at a form that would
@@ -115,3 +116,16 @@ A new rule is an entry in `@rules` (its name and the label the report shows),
 a `rule?/2` clause and a test in `test/vutuv/signup_trap_test.exs`. Run it
 over the dev database's accounts first and read every one it would have
 caught: a real person caught by a rule never gets a PIN and is never told why.
+
+The form never sees a headline, and the headline is where these accounts put
+the link they were registered for. Two things answer that after the sign-up.
+`VutuvWeb.Markdown.render/1`, the renderer of profile prose, marks every link
+that leaves the site `ugc nofollow`. And `Vutuv.Moderation.LinkSpam.run/1`,
+ticked every 30 minutes by `Vutuv.Moderation.LinkSpamSweeper`, freezes an
+account of the last day that has exactly one of first and last name and such a
+link in its headline (`Markdown.foreign_link?/1`, asked of the rendered HTML).
+The freeze goes through `Moderation.auto_freeze_user/2`: a ledger row in
+`moderation_admin_actions` without an `actor_id`, which is how the frozen list
+and the daily report tell it from an admin's. Any ledger row exempts an account
+from the check, so a thaw is final. Nothing is kept between ticks; the due list
+is the query.

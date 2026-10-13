@@ -46,12 +46,14 @@ defmodule VutuvWeb.Admin.AccountController do
   def frozen(conn, params) do
     total = Moderation.frozen_accounts_count()
     accounts = Moderation.list_frozen_accounts(params, total: total)
-    report_frozen = Moderation.report_frozen_ids(Enum.map(accounts, & &1.id))
+    ids = Enum.map(accounts, & &1.id)
+    report_frozen = Moderation.report_frozen_ids(ids)
 
     render(conn, "frozen.html",
       page_title: gettext("Frozen accounts"),
       accounts: accounts,
       report_frozen: report_frozen,
+      auto_frozen: Moderation.auto_frozen_ids(ids),
       row_count: total,
       params: params
     )

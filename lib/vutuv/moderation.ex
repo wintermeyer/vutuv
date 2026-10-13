@@ -2419,6 +2419,74 @@ defmodule Vutuv.Moderation do
     {:ok, :unfrozen}
   end
 
+  @doc """
+  A freeze no person decided: a check of ours recognised the account
+  (`Vutuv.Moderation.LinkSpam`). It hides the profile exactly like
+  `admin_freeze_user/3` and does not block the login either, so a member caught
+  by mistake still signs in and reads the banner.
+
+  The ledger row carries no `actor_id`, which is what tells an automatic
+  freeze from an admin's (`auto_frozen_ids/1`), and the name of the `rule` in
+  `detail`. The member's own activity log gets its entry too.
+
+  Returns `{:ok, :frozen}`, or `{:ok, :noop}` if the account was already frozen.
+  """
+  def auto_freeze_user(%User{frozen_at: %NaiveDateTime{}}, _rule), do: {:ok, :noop}
+
+  def auto_freeze_user(%User{} = user, rule) when is_binary(rule) do
+    Repo.transaction(fn ->
+      set_user_moderation!(user.id, frozen_at: NaiveDateTime.utc_now(:second))
+
+      Repo.insert!(%AdminAction{
+        user_id: user.id,
+        action: "account_frozen",
+        detail: %{"rule" => rule}
+      })
+    end)
+
+    Vutuv.AccountEvents.record(user, "account_frozen")
+    {:ok, :frozen}
+  end
+
+  @doc """
+  Of the given account ids, the set whose latest freeze was automatic: the
+  newest `account_frozen` ledger row has no actor. Drives the frozen list's
+  "Source" column beside `report_frozen_ids/1`.
+  """
+  def auto_frozen_ids(user_ids) when is_list(user_ids) do
+    from(a in AdminAction,
+      where: a.user_id in ^user_ids and a.action == "account_frozen",
+      distinct: a.user_id,
+      order_by: [asc: a.user_id, desc: a.id],
+      select: {a.user_id, a.actor_id}
+    )
+    |> Repo.all()
+    |> Enum.filter(fn {_user_id, actor_id} -> is_nil(actor_id) end)
+    |> MapSet.new(fn {user_id, _actor_id} -> user_id end)
+  end
+
+  @doc "How many accounts a check froze by itself in the UTC window `[from, to)`."
+  def count_auto_freezes(from, to), do: Repo.aggregate(auto_freezes(from, to), :count)
+
+  @doc """
+  Up to `limit` of those freezes, oldest first, as `%{action: row, user: user}`.
+  `user` is nil once the account has been deleted.
+  """
+  def auto_freeze_sample(from, to, limit) do
+    actions = Repo.all(from(a in auto_freezes(from, to), order_by: [asc: a.id], limit: ^limit))
+    ids = Enum.map(actions, & &1.user_id)
+    users = Map.new(Repo.all(from(u in User, where: u.id in ^ids)), &{&1.id, &1})
+
+    Enum.map(actions, &%{action: &1, user: users[&1.user_id]})
+  end
+
+  defp auto_freezes(from, to) do
+    from(a in AdminAction,
+      where: a.action == "account_frozen" and is_nil(a.actor_id),
+      where: a.inserted_at >= ^from and a.inserted_at < ^to
+    )
+  end
+
   defp log_admin_action(%User{} = user, %User{} = admin, action, reason) do
     Repo.insert!(%AdminAction{
       user_id: user.id,

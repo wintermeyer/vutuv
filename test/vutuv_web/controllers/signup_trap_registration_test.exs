@@ -52,6 +52,16 @@ defmodule VutuvWeb.SignupTrapRegistrationTest do
     assert entry.params["gender"] == "male"
   end
 
+  test "a single lowercase name with no last name is trapped too", %{conn: conn} do
+    params = trapped_params(%{"first_name" => "vbsvinwz", "last_name" => ""})
+
+    conn |> post(~p"/new_registration", user: params) |> html_response(200)
+
+    assert accounts_with(address(params)) == 0
+    assert [entry] = Repo.all(where(Entry, email: ^address(params)))
+    assert entry.rule == "single_lowercase_name"
+  end
+
   test "a real sign-up still gets its account and its PIN", %{conn: conn} do
     params = registration_attrs("real")
 

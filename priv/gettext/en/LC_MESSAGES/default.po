@@ -2178,7 +2178,7 @@ msgstr ""
 #: lib/vutuv_web/live/search_live.ex:546
 #: lib/vutuv_web/live/search_live.ex:1198
 #: lib/vutuv_web/templates/settings/preferences.html.heex:250
-#: lib/vutuv_web/views/admin/report_html.ex:35
+#: lib/vutuv_web/views/admin/report_html.ex:36
 #, elixir-autogen, elixir-format
 msgid "Posts"
 msgstr ""
@@ -2374,7 +2374,7 @@ msgstr ""
 #: lib/vutuv_web/live/shell_live.ex:1554
 #: lib/vutuv_web/live/shell_live.ex:1642
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:172
-#: lib/vutuv_web/views/admin/report_html.ex:38
+#: lib/vutuv_web/views/admin/report_html.ex:39
 #, elixir-autogen, elixir-format
 msgid "Bookmarks"
 msgstr ""
@@ -2397,7 +2397,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:159
 #: lib/vutuv_web/templates/settings/notifications.html.heex:108
 #: lib/vutuv_web/templates/settings/privacy.html.heex:91
-#: lib/vutuv_web/views/admin/report_html.ex:37
+#: lib/vutuv_web/views/admin/report_html.ex:38
 #, elixir-autogen, elixir-format
 msgid "Likes"
 msgstr ""
@@ -4855,7 +4855,7 @@ msgstr ""
 msgid "One per line. Exact https:// URLs (http://localhost is allowed for development). The authorization flow only ever redirects to these."
 msgstr ""
 
-#: lib/vutuv_web/controllers/oauth_controller.ex:70
+#: lib/vutuv_web/controllers/oauth_controller.ex:73
 #, elixir-autogen, elixir-format
 msgid "Please log in to connect %{app} with your account."
 msgstr ""
@@ -5998,7 +5998,7 @@ msgstr ""
 msgid "Metric"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/report_html.ex:34
+#: lib/vutuv_web/views/admin/report_html.ex:35
 #, elixir-autogen, elixir-format
 msgid "New confirmed registrations (by PIN)"
 msgstr ""
@@ -6027,7 +6027,7 @@ msgstr ""
 #: lib/vutuv_web/components/post_components.ex:458
 #: lib/vutuv_web/templates/post/analytics.html.heex:112
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:185
-#: lib/vutuv_web/views/admin/report_html.ex:36
+#: lib/vutuv_web/views/admin/report_html.ex:37
 #, elixir-autogen, elixir-format
 msgid "Reposts"
 msgstr ""
@@ -6202,17 +6202,17 @@ msgid "Confirmed members whose every email address bounced, so they can no longe
 msgstr ""
 
 #: lib/vutuv_web/live/admin/deliverability_live.ex:153
-#: lib/vutuv_web/views/admin/report_html.ex:45
+#: lib/vutuv_web/views/admin/report_html.ex:46
 #, elixir-autogen, elixir-format
 msgid "Deactivated addresses"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/report_html.ex:39
+#: lib/vutuv_web/views/admin/report_html.ex:40
 #, elixir-autogen, elixir-format
 msgid "New Fediverse followers"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/report_html.ex:42
+#: lib/vutuv_web/views/admin/report_html.ex:43
 #, elixir-autogen, elixir-format
 msgid "Removed Fediverse followers (account deleted)"
 msgstr ""
@@ -6240,12 +6240,12 @@ msgstr ""
 msgid "Every deactivation, recovery, freeze and thaw, newest first."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/account_controller.ex:52
+#: lib/vutuv_web/controllers/admin/account_controller.ex:53
 #: lib/vutuv_web/live/admin/deliverability_live.ex:102
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:2
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:3
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:8
-#: lib/vutuv_web/views/admin/report_html.ex:46
+#: lib/vutuv_web/views/admin/report_html.ex:47
 #, elixir-autogen, elixir-format
 msgid "Frozen accounts"
 msgstr ""
@@ -6368,12 +6368,12 @@ msgstr ""
 msgid "system"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/report_html.ex:44
+#: lib/vutuv_web/views/admin/report_html.ex:45
 #, elixir-autogen, elixir-format
 msgid "Bounces"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/report_html.ex:47
+#: lib/vutuv_web/views/admin/report_html.ex:48
 #, elixir-autogen, elixir-format
 msgid "Thawed accounts"
 msgstr ""
@@ -7391,7 +7391,7 @@ msgstr ""
 msgid "Take an unwanted username away from a member: the account is force-renamed to a generated handle. The old name is not blocked afterwards - a name bad enough to ban globally belongs in the moderation tooling."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/account_controller.ex:69
+#: lib/vutuv_web/controllers/admin/account_controller.ex:71
 #: lib/vutuv_web/live/admin/deliverability_live.ex:34
 #: lib/vutuv_web/live/admin/user_delete_live.ex:69
 #, elixir-autogen, elixir-format
@@ -9627,7 +9627,7 @@ msgstr ""
 msgid "Account restored. The member can sign in again."
 msgstr ""
 
-#: lib/vutuv_web/views/admin/report_html.ex:48
+#: lib/vutuv_web/views/admin/report_html.ex:49
 #, elixir-autogen, elixir-format
 msgid "Accounts removed as spam"
 msgstr ""
@@ -13738,22 +13738,22 @@ msgid_plural "%{formatted} accounts are in the moderation freezer."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/admin/account_controller.ex:105
+#: lib/vutuv_web/controllers/admin/account_controller.ex:107
 #, elixir-autogen, elixir-format
 msgid "@%{username} was already frozen."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/account_controller.ex:102
+#: lib/vutuv_web/controllers/admin/account_controller.ex:104
 #, elixir-autogen, elixir-format
 msgid "@%{username} was frozen."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/account_controller.ex:111
+#: lib/vutuv_web/controllers/admin/account_controller.ex:113
 #, elixir-autogen, elixir-format
 msgid "@%{username} was not frozen."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/account_controller.ex:108
+#: lib/vutuv_web/controllers/admin/account_controller.ex:110
 #, elixir-autogen, elixir-format
 msgid "@%{username} was unfrozen."
 msgstr ""
@@ -13856,7 +13856,7 @@ msgstr ""
 msgid "frozen"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/account_html.ex:98
+#: lib/vutuv_web/views/admin/account_html.ex:97
 #, elixir-autogen, elixir-format
 msgid "report"
 msgstr ""
@@ -17383,7 +17383,7 @@ msgstr ""
 msgid "%{address} (whole website)"
 msgstr ""
 
-#: lib/vutuv_web/markdown.ex:396
+#: lib/vutuv_web/markdown.ex:413
 #, elixir-autogen, elixir-format
 msgid "Verified webpage of the author (%{address})"
 msgstr ""
@@ -20405,19 +20405,19 @@ msgstr ""
 
 #: lib/vutuv_web/components/welcome_components.ex:360
 #: lib/vutuv_web/live/registration_live.ex:508
-#: lib/vutuv_web/views/outbound_html.ex:68
-#: lib/vutuv_web/views/outbound_html.ex:81
+#: lib/vutuv_web/views/outbound_html.ex:71
+#: lib/vutuv_web/views/outbound_html.ex:84
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Continue"
 msgstr ""
 
-#: lib/vutuv_web/views/outbound_html.ex:67
-#: lib/vutuv_web/views/outbound_html.ex:80
+#: lib/vutuv_web/views/outbound_html.ex:70
+#: lib/vutuv_web/views/outbound_html.ex:83
 #, elixir-autogen, elixir-format
 msgid "Continue to %{server}"
 msgstr ""
 
-#: lib/vutuv_web/views/outbound_html.ex:60
+#: lib/vutuv_web/views/outbound_html.ex:63
 #, elixir-autogen, elixir-format, fuzzy
 msgid "E-mail to %{address}"
 msgstr ""
@@ -20427,7 +20427,7 @@ msgstr ""
 msgid "The employer takes applications on their own website."
 msgstr ""
 
-#: lib/vutuv_web/views/outbound_html.ex:61
+#: lib/vutuv_web/views/outbound_html.ex:64
 #, elixir-autogen, elixir-format
 msgid "Write e-mail"
 msgstr ""
@@ -26790,7 +26790,17 @@ msgstr ""
 msgid "Use beta features"
 msgstr ""
 
-#: lib/vutuv_web/controllers/oauth_controller.ex:222
+#: lib/vutuv_web/controllers/oauth_controller.ex:223
 #, elixir-autogen, elixir-format
 msgid "Taking you back to %{app}."
+msgstr ""
+
+#: lib/vutuv_web/views/admin/report_html.ex:50
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Accounts frozen automatically"
+msgstr ""
+
+#: lib/vutuv_web/views/admin/account_html.ex:98
+#, elixir-autogen, elixir-format
+msgid "automatic check"
 msgstr ""

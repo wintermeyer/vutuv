@@ -19,6 +19,7 @@ Aufgetaute Konten:                          <%= @report.thaws %>
 Moderation
 ----------
 Als Spam entfernte Konten:                  <%= @report.spam_removals %>
+Automatisch eingefrorene Konten:            <%= @report.link_spam_freezes %>
 
 <%= VutuvWeb.ReportDetails.text_block(@report, @url) %>
 Vollständiger Bericht (mit Zeitreise zu anderen Tagen):

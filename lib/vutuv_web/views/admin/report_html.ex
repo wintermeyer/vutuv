@@ -18,7 +18,8 @@ defmodule VutuvWeb.Admin.ReportHTML do
     :deactivations,
     :freezes,
     :thaws,
-    :spam_removals
+    :spam_removals,
+    :link_spam_freezes
   ]
 
   @doc """
@@ -46,4 +47,5 @@ defmodule VutuvWeb.Admin.ReportHTML do
   def metric_label(:freezes), do: gettext("Frozen accounts")
   def metric_label(:thaws), do: gettext("Thawed accounts")
   def metric_label(:spam_removals), do: gettext("Accounts removed as spam")
+  def metric_label(:link_spam_freezes), do: gettext("Accounts frozen automatically")
 end

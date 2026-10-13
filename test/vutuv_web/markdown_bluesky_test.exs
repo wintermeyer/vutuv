@@ -29,7 +29,7 @@ defmodule VutuvWeb.MarkdownBlueskyTest do
 
       assert html =~ ~s(href="#{@profile}")
       assert html =~ ~s(target="_blank")
-      assert html =~ ~s(rel="noopener noreferrer")
+      assert html =~ ~s(rel="ugc nofollow noopener noreferrer")
       assert html =~ ">#{@handle}</a>"
     end
 

@@ -103,6 +103,25 @@ defmodule VutuvWeb.Admin.AccountControllerTest do
       assert get(build_conn(), "/hideme").status == 403
     end
 
+    test "the frozen list names the automatic check as the source, in German too",
+         %{conn: conn} do
+      user = insert(:activated_user, username: "planted")
+      {:ok, :frozen} = Vutuv.Moderation.auto_freeze_user(user, "new_account_link")
+
+      row = fn conn ->
+        conn
+        |> get(~p"/admin/accounts/frozen")
+        |> html_response(200)
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#frozen-#{user.id}")
+        |> LazyHTML.text()
+      end
+
+      assert row.(conn) =~ "automatic check"
+      german = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+      assert row.(german) =~ "Automatik"
+    end
+
     test "unfreezes a frozen account through a CSRF-protected POST", %{conn: conn} do
       user =
         insert(:activated_user,

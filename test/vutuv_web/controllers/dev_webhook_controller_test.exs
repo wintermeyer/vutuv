@@ -67,7 +67,7 @@ defmodule VutuvWeb.DevWebhookControllerTest do
     {other_conn, _other} =
       create_and_login_user(other_conn, %{
         "emails" => %{"0" => %{"value" => "intruder@example.com"}},
-        "first_name" => "intruder",
+        "first_name" => "Intruder",
         "tag_list" => @registration_tags
       })
 

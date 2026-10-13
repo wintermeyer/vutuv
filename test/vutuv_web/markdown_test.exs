@@ -30,7 +30,7 @@ defmodule VutuvWeb.MarkdownTest do
     html = render("see [the docs](https://hexdocs.pm/phoenix)")
     assert html =~ ~s(href="https://hexdocs.pm/phoenix")
     assert html =~ ~s(target="_blank")
-    assert html =~ ~s(rel="noopener noreferrer")
+    assert html =~ ~s(rel="ugc nofollow noopener noreferrer")
     assert html =~ ">the docs</a>"
   end
 
@@ -465,7 +465,7 @@ defmodule VutuvWeb.MarkdownTest do
 
       assert html =~ ~s(href="https://geno.social/@hostsharing")
       assert html =~ ~s(target="_blank")
-      assert html =~ ~s(rel="noopener noreferrer")
+      assert html =~ ~s(rel="ugc nofollow noopener noreferrer")
       assert html =~ ">@hostsharing@geno.social</a>"
     end
 
@@ -627,6 +627,24 @@ defmodule VutuvWeb.MarkdownTest do
       html = wire_html("> zitiert\n\ndanach")
 
       assert html == "<blockquote><p>zitiert</p></blockquote><p>danach</p>"
+    end
+  end
+
+  describe "links that leave the site in profile prose" do
+    test "render/1 marks them ugc nofollow, a pasted address included" do
+      for source <- ["https://sexualitytest.example Test", "[test](https://acetest.example/a)"] do
+        html = source |> Markdown.render() |> Phoenix.HTML.safe_to_string()
+        assert html =~ ~s(rel="ugc nofollow noopener noreferrer"), source
+        assert Markdown.foreign_link?(source), source
+      end
+    end
+
+    test "text, a hashtag and a mail address are not foreign links" do
+      for source <- ["Softwarearchäologe aus dem Sauerland", "#elixir und mehr", "a@b.example"] do
+        refute Markdown.foreign_link?(source), source
+      end
+
+      refute Markdown.foreign_link?(nil)
     end
   end
 end

@@ -84,17 +84,38 @@ defmodule VutuvWeb.Markdown do
   # A bare email address in rendered text, see `linkify_emails/1`.
   @email ~r/(?<![\w.%+@-])[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}(?![\w-]|\.[A-Za-z0-9])/
 
-  @doc "Render untrusted Markdown to safe HTML (`Phoenix.HTML.safe()`)."
+  # What `mark_foreign_links/1` leaves on every link that leaves the site.
+  @foreign_rel ~s(rel="ugc nofollow noopener noreferrer")
+
+  @doc """
+  Render untrusted Markdown to safe HTML (`Phoenix.HTML.safe()`).
+
+  This is the renderer of a member's profile prose (the headline, the
+  descriptions of a job or a degree), so every link that leaves the site is
+  marked `ugc nofollow` (`mark_foreign_links/1`): a followed link in a headline
+  is what a throwaway account is registered for.
+  """
   def render(text) when is_binary(text) do
     text
     |> render_pipeline()
     |> open_links_in_new_tab()
     |> linkify_entities()
     |> linkify_emails()
+    |> mark_foreign_links()
     |> Phoenix.HTML.raw()
   end
 
   def render(_), do: Phoenix.HTML.raw("")
+
+  @doc """
+  Whether Markdown `text` renders a link that leaves the site, a pasted
+  address included. Asked of the rendered HTML, so it agrees with what a
+  reader can click.
+  """
+  def foreign_link?(text) when is_binary(text),
+    do: text |> render() |> Phoenix.HTML.safe_to_string() |> String.contains?(@foreign_rel)
+
+  def foreign_link?(_), do: false
 
   @doc """
   `render/1` as an HTML string for a reader on another server or in an app,
@@ -264,11 +285,7 @@ defmodule VutuvWeb.Markdown do
   linking they exist for.
   """
   def mark_foreign_links(html) when is_binary(html) do
-    String.replace(
-      html,
-      ~s(rel="noopener noreferrer"),
-      ~s(rel="ugc nofollow noopener noreferrer")
-    )
+    String.replace(html, ~s(rel="noopener noreferrer"), @foreign_rel)
   end
 
   ## The author's own, proven webpages (issue #1246)

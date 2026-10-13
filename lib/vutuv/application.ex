@@ -134,6 +134,7 @@ defmodule Vutuv.Application do
         optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier) ++
         optional_child(:send_notification_digest_emails, Vutuv.Activity.DigestNotifier) ++
         optional_child(:moderation_sweeper, Vutuv.Moderation.Sweeper) ++
+        optional_child(:link_spam_check, Vutuv.Moderation.LinkSpamSweeper) ++
         optional_child(:webhook_deliverer, Vutuv.Webhooks.Deliverer) ++
         optional_child(:fediverse_deliverer, Vutuv.Fediverse.Deliverer) ++
         optional_child(:fediverse_follower_pruning, Vutuv.Fediverse.FollowerPruner) ++
