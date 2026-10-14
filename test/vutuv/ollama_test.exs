@@ -190,4 +190,21 @@ defmodule Vutuv.OllamaTest do
       assert {:ok, _} = Task.await(second)
     end
   end
+
+  describe "remote_timeout/0" do
+    # A non-final instance gets this budget before the next one is tried. 30 s
+    # was enough for a cold model load but not for a chat completion on a
+    # 31b-class model, which takes 15 to 50 s on one A6000: production
+    # abandoned 39 % of its calls at exactly 30.0 s and redid them on the CPU
+    # fallback. So the default has to cover a full generation, not a load.
+    test "the default covers a full generation on a GPU box, not just a model load" do
+      Application.delete_env(:vutuv, :ollama_remote_timeout)
+      assert Ollama.remote_timeout() == 90_000
+    end
+
+    test "an operator sets it in config (OLLAMA_REMOTE_TIMEOUT_SECONDS at runtime)" do
+      put_config(:ollama_remote_timeout, 45_000)
+      assert Ollama.remote_timeout() == 45_000
+    end
+  end
 end

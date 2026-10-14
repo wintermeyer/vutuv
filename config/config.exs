@@ -128,8 +128,8 @@ config :vutuv, :screenshot_blocklist, ["reddit.com", "heise.de"]
 # every entry BUT the last, which is the fallback of record and usually the
 # machine's own CPU Ollama. So gpu,localhost keeps behaving as it always did,
 # and gpu1,gpu2,localhost uses both cards. Runtime overrides:
-# IMAGE_MODERATION_ENABLED, OLLAMA_URL, OLLAMA_CONCURRENCY, OLLAMA_VISION_MODEL
-# (config/runtime.exs).
+# IMAGE_MODERATION_ENABLED, OLLAMA_URL, OLLAMA_CONCURRENCY,
+# OLLAMA_REMOTE_TIMEOUT_SECONDS, OLLAMA_VISION_MODEL (config/runtime.exs).
 config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 # How long the scanner may be unreachable before a post waiting on one of its

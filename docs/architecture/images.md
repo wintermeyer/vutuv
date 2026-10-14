@@ -1773,8 +1773,9 @@ it waits.
 reads it two ways at once.
 
 For **one call** it is a priority list: every instance but the last is tried
-with `:ollama_remote_timeout` (30 s — enough for a GPU box to cold-load the
-model) and skipped on any service failure; the last is the fallback of record
+with `:ollama_remote_timeout` (90 s, `OLLAMA_REMOTE_TIMEOUT_SECONDS`: a whole
+completion on that box, since a 31b text model takes 15 to 50 s per answer on
+one GPU) and skipped on any service failure; the last is the fallback of record
 with the patient `:ollama_timeout` (120 s, covers a CPU cold load). Only
 service-class failures fall through — a verdict is final wherever it came
 from. vutuv.de runs

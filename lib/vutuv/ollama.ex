@@ -202,9 +202,12 @@ defmodule Vutuv.Ollama do
 
   @doc """
   How long a non-final (fast/remote) instance may take before the next one is
-  tried. Generous enough for a GPU box to cold-load a model.
+  tried. It has to cover a whole chat completion on that box, not just a cold
+  model load: at 30 s a 31b-class text model on one GPU (15 to 50 s per
+  answer) lost two calls in five at exactly the deadline, each then redone on
+  the patient CPU fallback. `OLLAMA_REMOTE_TIMEOUT_SECONDS` overrides it.
   """
-  def remote_timeout, do: Application.get_env(:vutuv, :ollama_remote_timeout, 30_000)
+  def remote_timeout, do: Application.get_env(:vutuv, :ollama_remote_timeout, 90_000)
 
   @doc "The default full timeout for the fallback instance."
   def default_timeout, do: Application.get_env(:vutuv, :ollama_timeout, 120_000)

@@ -735,6 +735,14 @@ if config_env() == :prod do
     config :vutuv, :ollama_concurrency, String.to_integer(concurrency)
   end
 
+  # The budget for every instance but the last before the next one is tried.
+  # It must cover a whole answer on that box (a 31b text model takes 15 to 50 s
+  # per completion on one GPU), or healthy calls are abandoned at the deadline
+  # and redone on the patient fallback.
+  if seconds = System.get_env("OLLAMA_REMOTE_TIMEOUT_SECONDS") do
+    config :vutuv, :ollama_remote_timeout, String.to_integer(String.trim(seconds)) * 1_000
+  end
+
   # How long the pixelated preview stands in for a picture the scan has not judged yet.
   # `0` turns it off, and readers get the grey "being checked" tile the whole
   # way through — the strictest posture, for an installation that wants nothing
