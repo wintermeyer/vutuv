@@ -20,6 +20,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   and the entry show page.
   """
   def kind_name("employment"), do: gettext("Employment")
+  def kind_name("civil_service"), do: gettext("Civil service")
   def kind_name("self_employed"), do: gettext("Freelance / Self-employed")
   def kind_name("internship"), do: gettext("Internship")
   # Issue #916: the volunteer category also welcomes hobbies and general
@@ -30,6 +31,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
 
   @doc "A category's group heading on the list renderings."
   def kind_label("employment"), do: gettext("Professional Experience")
+  def kind_label("civil_service"), do: gettext("Civil service")
   def kind_label("self_employed"), do: gettext("Freelance / Self-employed")
   def kind_label("internship"), do: gettext("Internships")
   def kind_label("volunteer"), do: gettext("Volunteering & hobbies")
@@ -129,13 +131,13 @@ defmodule VutuvWeb.WorkExperienceHTML do
         do: {kind, take_roles(kind_blocks, caps[kind])}
   end
 
-  # What a business network is read for is the paid work, so employment and
-  # self-employment preview generously while an internship, an Ehrenamt or a
+  # What a business network is read for is the paid work, so employment, civil
+  # service and self-employment preview generously while an internship, an Ehrenamt or a
   # hobby keeps a short taste with a link to the rest. Per category, never one
   # shared budget: with 7 jobs and 13 Ehrenämter sharing a budget of 10 spent
   # newest-first, tim_lueck's profile showed two jobs (2026-09).
   @preview_caps Map.new(WorkExperience.kinds(), fn
-                  kind when kind in ~w(employment self_employed) -> {kind, 8}
+                  kind when kind in ~w(employment civil_service self_employed) -> {kind, 8}
                   kind -> {kind, 3}
                 end)
 

@@ -197,8 +197,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       title: work.title,
       organization: work.organization,
       description: work.description,
-      # The CV category (issue #840): employment | self_employed | internship |
-      # volunteer | other.
+      # The CV category (issue #840): employment | civil_service |
+      # self_employed | internship | volunteer | other.
       kind: work.kind,
       # The verified organization page this experience is linked to (issue #931), or
       # nil for free-text-only. Mirrors the profile card, which shows the

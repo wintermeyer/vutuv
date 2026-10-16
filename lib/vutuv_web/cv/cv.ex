@@ -21,7 +21,7 @@ defmodule VutuvWeb.CV do
     * identity fields — `"name"`, `"photo"`, `"headline"`, `"email"`,
       `"phone"`, `"address"`, `"url"` (the profile link) and `"birthdate"`
     * whole sections — a work/education category key (`"employment"`,
-      `"self_employed"`, `"internship"`, `"volunteer"`, `"other"`,
+      `"civil_service"`, `"self_employed"`, `"internship"`, `"volunteer"`, `"other"`,
       `"university"`, `"apprenticeship"`, `"school"`, or `"education"` when
       the categories are collapsed), plus `"tags"`, `"qualifications"`,
       `"languages"`, `"links"` and `"social_media"`

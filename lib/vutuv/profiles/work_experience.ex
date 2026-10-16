@@ -10,11 +10,12 @@ defmodule Vutuv.Profiles.WorkExperience do
   alias Vutuv.Profiles.CvSection
   alias Vutuv.Profiles.Qualification
 
-  # The CV categories (issue #840): a paid job, self-employment/freelance,
+  # The CV categories (issue #840): a paid job, a Beamtenverhältnis (a
+  # Dienstverhältnis, not an employment contract), self-employment/freelance,
   # a Praktikum, volunteering (Ehrenamt, hobby or Freiwilligenarbeit, issue
   # #916), and a catch-all for anything else. Display order everywhere is this
   # list's order.
-  @kinds ~w(employment self_employed internship volunteer other)
+  @kinds ~w(employment civil_service self_employed internship volunteer other)
 
   schema "work_experiences" do
     field(:organization, :string)

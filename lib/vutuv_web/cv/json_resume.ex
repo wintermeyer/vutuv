@@ -47,7 +47,7 @@ defmodule VutuvWeb.CV.JsonResume do
 
   defp work(work_groups) do
     for {kind, entries} <- work_groups,
-        kind in ["employment", "self_employed", "internship", "other"],
+        kind in ["employment", "civil_service", "self_employed", "internship", "other"],
         entry <- entries do
       compact(%{
         "name" => entry.organization,

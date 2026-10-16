@@ -31,6 +31,7 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       assert html =~ ~s(action="/settings/work_experiences")
       assert html =~ ~s(<select id="work_experience_kind" name="work_experience[kind]")
       assert html =~ ~s(value="employment")
+      assert html =~ ~s(value="civil_service")
       assert html =~ ~s(value="self_employed")
       assert html =~ ~s(value="internship")
       assert html =~ ~s(value="volunteer")
@@ -226,6 +227,43 @@ defmodule VutuvWeb.WorkExperienceKindTest do
         assert label =~ "Hobby"
         assert label =~ "Freiwilligenarbeit"
       end
+    end
+  end
+
+  # A Beamter serves in a Dienstverhältnis, not an Arbeitsverhältnis, so
+  # neither "Anstellung" nor "Sonstiges" fit; a member asked for it by DM.
+  describe "the civil-service category" do
+    alias VutuvWeb.WorkExperienceHTML
+
+    test "it sits right after employment" do
+      assert ["employment", "civil_service" | _] = WorkExperience.kinds()
+    end
+
+    test "the German labels name the Beamtenverhältnis" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+      assert WorkExperienceHTML.kind_name("civil_service") == "Beamtenverhältnis"
+      assert WorkExperienceHTML.kind_label("civil_service") == "Beamtenverhältnis"
+    end
+
+    test "create persists it and the profile groups it under its heading",
+         %{conn: conn, user: user} do
+      conn =
+        post(conn, ~p"/settings/work_experiences", %{
+          "work_experience" => %{
+            "title" => "Oberstudienrat",
+            "organization" => "Land Rheinland-Pfalz",
+            "start_month" => "8",
+            "start_year" => "2010",
+            "kind" => "civil_service"
+          }
+        })
+
+      assert redirected_to(conn)
+      assert [%{kind: "civil_service"}] = Repo.all(Ecto.assoc(user, :work_experiences))
+
+      html = build_conn() |> get(~p"/#{user}") |> html_response(200)
+      assert html =~ "Civil service"
     end
   end
 end

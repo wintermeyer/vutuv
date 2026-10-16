@@ -1102,8 +1102,8 @@ msgstr "I 100 utenti con più follower"
 msgid "Curious? Have a look at the "
 msgstr "Curioso? Dai un'occhiata a "
 
-#: lib/vutuv_web/views/work_experience_html.ex:422
-#: lib/vutuv_web/views/work_experience_html.ex:475
+#: lib/vutuv_web/views/work_experience_html.ex:424
+#: lib/vutuv_web/views/work_experience_html.ex:477
 #, elixir-autogen
 msgid "Present"
 msgstr "Oggi"
@@ -1961,26 +1961,26 @@ msgstr "Elimina voce"
 msgid "Options"
 msgstr "Opzioni"
 
-#: lib/vutuv_web/views/work_experience_html.ex:534
+#: lib/vutuv_web/views/work_experience_html.ex:536
 #, elixir-autogen, elixir-format
 msgid "%{count} month"
 msgid_plural "%{count} months"
 msgstr[0] "%{count} mese"
 msgstr[1] "%{count} mesi"
 
-#: lib/vutuv_web/views/work_experience_html.ex:537
+#: lib/vutuv_web/views/work_experience_html.ex:539
 #, elixir-autogen, elixir-format
 msgid "%{count} year"
 msgid_plural "%{count} years"
 msgstr[0] "%{count} anno"
 msgstr[1] "%{count} anni"
 
-#: lib/vutuv_web/views/work_experience_html.ex:619
+#: lib/vutuv_web/views/work_experience_html.ex:621
 #, elixir-autogen, elixir-format
 msgid "Time in this role"
 msgstr "Tempo in questo ruolo"
 
-#: lib/vutuv_web/views/work_experience_html.ex:618
+#: lib/vutuv_web/views/work_experience_html.ex:620
 #, elixir-autogen, elixir-format
 msgid "Total time at this employer"
 msgstr "Tempo totale presso questo datore di lavoro"
@@ -8820,12 +8820,12 @@ msgid "Employment"
 msgstr "Lavoro dipendente"
 
 #: lib/vutuv/jobs/job_posting.ex:155
-#: lib/vutuv_web/views/work_experience_html.ex:24
+#: lib/vutuv_web/views/work_experience_html.ex:25
 #, elixir-autogen, elixir-format
 msgid "Internship"
 msgstr "Tirocinio"
 
-#: lib/vutuv_web/views/work_experience_html.ex:34
+#: lib/vutuv_web/views/work_experience_html.ex:36
 #, elixir-autogen, elixir-format
 msgid "Internships"
 msgstr "Tirocini"
@@ -8837,13 +8837,13 @@ msgstr ""
 "In quella pagina seleziona \"Download larger data archive\" (profilo, "
 "posizioni, volontariato, formazione, competenze)."
 
-#: lib/vutuv_web/views/work_experience_html.ex:32
+#: lib/vutuv_web/views/work_experience_html.ex:33
 #, elixir-autogen, elixir-format
 msgid "Professional Experience"
 msgstr "Esperienza professionale"
 
-#: lib/vutuv_web/views/work_experience_html.ex:28
-#: lib/vutuv_web/views/work_experience_html.ex:35
+#: lib/vutuv_web/views/work_experience_html.ex:29
+#: lib/vutuv_web/views/work_experience_html.ex:37
 #, elixir-autogen, elixir-format
 msgid "Volunteering & hobbies"
 msgstr "Volontariato e hobby"
@@ -9007,14 +9007,14 @@ msgstr ""
 "Il CV di %{name} su vutuv: esperienza lavorativa, formazione e competenze da"
 " consultare e scaricare."
 
-#: lib/vutuv_web/views/work_experience_html.ex:23
-#: lib/vutuv_web/views/work_experience_html.ex:33
+#: lib/vutuv_web/views/work_experience_html.ex:24
+#: lib/vutuv_web/views/work_experience_html.ex:35
 #, elixir-autogen, elixir-format
 msgid "Freelance / Self-employed"
 msgstr "Libero professionista / Lavoratore autonomo"
 
-#: lib/vutuv_web/views/work_experience_html.ex:29
-#: lib/vutuv_web/views/work_experience_html.ex:36
+#: lib/vutuv_web/views/work_experience_html.ex:30
+#: lib/vutuv_web/views/work_experience_html.ex:38
 #, elixir-autogen, elixir-format
 msgid "Other activities"
 msgstr "Altre attività"
@@ -10640,12 +10640,12 @@ msgstr ""
 msgid "PHP, JavaScript, Ruby on Rails"
 msgstr "PHP, JavaScript, Ruby on Rails"
 
-#: lib/vutuv_web/views/work_experience_html.ex:550
+#: lib/vutuv_web/views/work_experience_html.ex:552
 #, elixir-autogen, elixir-format
 msgid "%{n}m"
 msgstr "%{n}m"
 
-#: lib/vutuv_web/views/work_experience_html.ex:551
+#: lib/vutuv_web/views/work_experience_html.ex:553
 #, elixir-autogen, elixir-format
 msgid "%{n}y"
 msgstr "%{n}a"
@@ -14140,7 +14140,7 @@ msgstr ""
 msgid "Qualification"
 msgstr "Certificazione"
 
-#: lib/vutuv_web/views/work_experience_html.ex:738
+#: lib/vutuv_web/views/work_experience_html.ex:740
 #, elixir-autogen, elixir-format
 msgid "With qualification:"
 msgstr "Con certificazione:"
@@ -19231,7 +19231,7 @@ msgstr "dall'avvocato Tom Braegelmann"
 msgid "Documents:"
 msgstr "Documenti:"
 
-#: lib/vutuv_web/views/work_experience_html.ex:777
+#: lib/vutuv_web/views/work_experience_html.ex:779
 #, elixir-autogen, elixir-format
 msgid "Employment reference:"
 msgstr "Attestato di lavoro:"
@@ -24670,14 +24670,14 @@ msgstr "Ingrandisci le foto"
 msgid "Show this photo larger"
 msgstr "Ingrandisci la foto"
 
-#: lib/vutuv_web/views/work_experience_html.ex:220
+#: lib/vutuv_web/views/work_experience_html.ex:222
 #, elixir-autogen, elixir-format
 msgid "One more entry"
 msgid_plural "%{formatted} more entries"
 msgstr[0] "Un'altra voce"
 msgstr[1] "Altre %{formatted} voci"
 
-#: lib/vutuv_web/views/work_experience_html.ex:212
+#: lib/vutuv_web/views/work_experience_html.ex:214
 #, elixir-autogen, elixir-format
 msgid "One more entry (%{years})"
 msgid_plural "%{formatted} more entries (%{years})"
@@ -28391,3 +28391,9 @@ msgstr "Account bloccati automaticamente"
 #, elixir-autogen, elixir-format
 msgid "automatic check"
 msgstr "controllo automatico"
+
+#: lib/vutuv_web/views/work_experience_html.ex:23
+#: lib/vutuv_web/views/work_experience_html.ex:34
+#, elixir-autogen, elixir-format
+msgid "Civil service"
+msgstr "Pubblico impiego"

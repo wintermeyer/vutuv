@@ -381,8 +381,9 @@ formats; with nothing pinned, behaviour is exactly as before.
 ## Work-experience CV categories (issue #840)
 
 Every work experience carries a **category** (`work_experiences.kind`:
-`employment` | `internship` | `volunteer`, default `employment`) so a CV
-reader can tell a paid job from a Praktikum or an Ehrenamt. The member picks
+`employment` | `civil_service` | `self_employed` | `internship` |
+`volunteer` | `other`, default `employment`) so a CV reader can tell a paid
+job from a Beamtenverhältnis, a Praktikum or an Ehrenamt. The member picks
 it in a select on the entry form; every list rendering — the profile's
 Experience card, the public `/:slug/work_experiences` page and the
 `/settings/work_experiences` editor — splits into labeled groups
