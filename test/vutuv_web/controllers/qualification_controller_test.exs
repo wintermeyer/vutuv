@@ -94,11 +94,61 @@ defmodule VutuvWeb.QualificationControllerTest do
       %{conn: conn, owner: owner}
     end
 
-    test "a visitor's public page hides expired credentials", %{owner: owner} do
-      html = build_conn() |> get(~p"/#{owner}/qualifications") |> html_response(200)
+    test "a visitor's public page lists expired credentials after the valid ones",
+         %{owner: owner} do
+      html =
+        build_conn()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/#{owner}/qualifications")
+        |> html_response(200)
 
       assert html =~ "Current cert"
-      refute html =~ "Lapsed cert"
+      assert html =~ "Früher gehalten"
+      [valid, former] = String.split(html, "data-former-qualifications", parts: 2)
+      assert valid =~ "Current cert"
+      refute valid =~ "Lapsed cert"
+      assert former =~ "Lapsed cert"
+    end
+
+    test "a renewed credential shows once on the public page", %{owner: owner} do
+      insert(:qualification,
+        user: owner,
+        name: "Lapsed cert",
+        awarded_year: 2018,
+        expires_year: 2040
+      )
+
+      html = build_conn() |> get(~p"/#{owner}/qualifications") |> html_response(200)
+
+      refute html =~ "data-former-qualifications"
+      assert length(String.split(html, "Lapsed cert")) == 2
+    end
+
+    test "the CV lists expired credentials last, marked as expired", %{owner: owner} do
+      labels = VutuvWeb.CV.build(owner).qualifications |> Enum.map(& &1.label)
+
+      assert [current, lapsed] = labels
+      assert current =~ "Current cert"
+      assert lapsed =~ "Lapsed cert"
+      assert lapsed =~ "expired 2018"
+    end
+
+    test "the agent docs flag expired credentials", %{owner: owner} do
+      doc = build_conn() |> get("/#{owner.username}/qualifications.json") |> json_response(200)
+
+      flags = Map.new(doc["entries"], &{&1["name"], &1["expired"]})
+      assert flags == %{"Current cert" => false, "Lapsed cert" => true}
+    end
+
+    test "the profile card folds expired credentials under their own heading",
+         %{owner: owner} do
+      html = build_conn() |> get(~p"/#{owner}") |> html_response(200)
+
+      [_, card] = String.split(html, ~s(id="profile-qualifications"), parts: 2)
+      [valid, former] = String.split(card, "data-former-qualifications", parts: 2)
+      assert valid =~ "Current cert"
+      refute valid =~ "Lapsed cert"
+      assert former =~ "Lapsed cert"
     end
 
     test "the owner's /settings editor shows expired credentials", %{conn: conn} do

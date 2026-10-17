@@ -319,6 +319,9 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       url: qualification.url,
       awarded: CV.year_month(qualification.awarded_year, qualification.awarded_month),
       expires: CV.year_month(qualification.expires_year, qualification.expires_month),
+      # Expired entries are listed too (after the valid ones), as the HTML
+      # pages show them under "Previously held".
+      expired: Qualification.expired?(qualification),
       # The jobs earned with this credential (issue #1005), mirroring the HTML
       # usage badges and, since #1109, the credential page's list of them. nil
       # when no job cites it — and, like qualification_ref/1 on the work entry,

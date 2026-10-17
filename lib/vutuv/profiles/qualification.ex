@@ -238,9 +238,10 @@ defmodule Vutuv.Profiles.Qualification do
   the whole of that month, and one with only an expiry year is valid through
   the whole of that year.
 
-  The per-entry predicate for the owner's "Expired" badge; `visible_to/2` is
-  the SQL equivalent that hides lapsed entries from the public. Keep the two
-  in sync — they must agree on when a credential is still valid.
+  The per-entry predicate that sorts an entry into the "Previously held" group;
+  `expired_dynamic/0` is its SQL twin behind `visible_to/2` and
+  `valid_first/1`. Keep the two in sync: they must agree on when a credential
+  is still valid.
   """
   def expired?(qualification, today \\ BerlinTime.today())
   def expired?(%__MODULE__{expires_year: nil}, _today), do: false
@@ -264,24 +265,59 @@ defmodule Vutuv.Profiles.Qualification do
   end
 
   @doc """
-  Scopes the query to the entries a `viewer?`-less visitor may see: an owner
-  (`true`) sees every entry, everyone else sees only the non-expired ones. Kept
-  in SQL so the profile card, the public section page and its agent-format
-  siblings all hide the same lapsed credentials.
+  Scopes the query to the entries a visitor may see. The owner (`true`) sees
+  every entry. Everyone else sees expired credentials too, since a lapsed
+  certificate still tells a CV something, but not one a renewal replaced: an
+  expired entry is dropped when the member holds another entry of the same
+  name (case and outer spaces ignored) that expires later or never. Of a chain
+  that lapsed entirely, the latest entry stays. Kept in SQL so the profile
+  card, the public section page, the CV and the agent formats agree.
   """
   def visible_to(query \\ __MODULE__, owner?)
   def visible_to(query, true), do: query
 
   def visible_to(query, false) do
+    renewals =
+      from(r in __MODULE__,
+        where:
+          r.user_id == parent_as(:qualification).user_id and
+            r.id != parent_as(:qualification).id and
+            fragment("lower(btrim(?))", r.name) ==
+              fragment("lower(btrim(?))", parent_as(:qualification).name) and
+            (is_nil(r.expires_year) or
+               fragment(
+                 "(?, coalesce(?, 12)) > (?, coalesce(?, 12))",
+                 r.expires_year,
+                 r.expires_month,
+                 parent_as(:qualification).expires_year,
+                 parent_as(:qualification).expires_month
+               ))
+      )
+
+    shown = dynamic(not (^expired_dynamic()) or not exists(subquery(renewals)))
+
+    from(q in query, as: :qualification, where: ^shown)
+  end
+
+  @doc """
+  Orders valid entries before expired ones, so a list read in this order splits
+  into the two groups the pages show, and a preview cut keeps the valid ones.
+  Compose it before `ordered/1`, which then orders within each group.
+  """
+  def valid_first(query \\ __MODULE__), do: order_by(query, ^[asc: expired_dynamic()])
+
+  # The SQL twin of `expired?/2`: an expiry year that has passed, or this
+  # year's expiry month that has. An expiry with no month lasts through its
+  # whole year. Keep the two in sync.
+  defp expired_dynamic do
     %{year: year, month: month} = BerlinTime.today()
 
-    # Not expired: no expiry year, or an expiry that has not yet passed. An
-    # expiry with no month lasts through its whole year.
-    from(q in query,
-      where:
-        is_nil(q.expires_year) or q.expires_year > ^year or
-          (q.expires_year == ^year and
-             (is_nil(q.expires_month) or q.expires_month >= ^month))
+    dynamic(
+      [q],
+      not is_nil(q.expires_year) and
+        (q.expires_year < ^year or
+           (q.expires_year == ^year and not is_nil(q.expires_month) and
+              q.expires_month < ^month))
     )
   end
 

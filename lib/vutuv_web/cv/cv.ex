@@ -253,8 +253,12 @@ defmodule VutuvWeb.CV do
       # with (issue #858).
       work_experiences: {WorkExperience.order_by_date(WorkExperience), [:qualification]},
       educations: Education.order_by_date(Education),
-      # A CV is a public document, so it hides expired credentials too (#859).
-      qualifications: Qualification.visible_to(false) |> Qualification.ordered(),
+      # A CV is a public document, so it reads the visitor scope: valid
+      # credentials first, then the expired ones a renewal did not replace.
+      qualifications:
+        Qualification.visible_to(false)
+        |> Qualification.valid_first()
+        |> Qualification.ordered(),
       languages: Language.ordered(),
       social_media_accounts: SocialMediaAccount.ordered(),
       phone_numbers: PhoneNumber.ordered(),
@@ -422,8 +426,17 @@ defmodule VutuvWeb.CV do
       issuer: issuer,
       date: date,
       url: presence(qualification.url),
-      label: qualification_label(qualification.name, [issuer, date])
+      label: qualification_label(qualification.name, [issuer, date, expired_note(qualification)])
     }
+  end
+
+  # An expired credential stays on the CV, marked so no reader takes it for
+  # one held today: "CCNA (Cisco, 2014, expired 2017)".
+  defp expired_note(qualification) do
+    if Qualification.expired?(qualification) do
+      expires = year_month(qualification.expires_year, qualification.expires_month)
+      gettext("expired %{date}", date: expires)
+    end
   end
 
   defp qualification_label(name, details) do

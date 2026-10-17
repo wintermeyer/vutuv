@@ -134,6 +134,19 @@ defmodule VutuvWeb.QualificationHTML do
 
   defdelegate expired?(qualification), to: Qualification
 
+  @doc """
+  The list split into `{valid, expired}`, the given order kept in each. The
+  expired half is what the pages show under "Previously held": a lapsed
+  credential still belongs on a CV, it just no longer counts as held today.
+  """
+  def split_expired(qualifications), do: Enum.split_with(qualifications, &(not expired?(&1)))
+
+  @doc "The profile card's fold label for the selected tab, e.g. `Previously held (3)`."
+  def former_summary(former, tab) do
+    count = former |> tab_entries(tab) |> length()
+    gettext("Previously held (%{formatted})", formatted: compact_count(count))
+  end
+
   defp usage_count_text(usage) do
     ngettext("Used for %{formatted} job", "Used for %{formatted} jobs", usage.count,
       formatted: compact_count(usage.count)
@@ -370,8 +383,8 @@ defmodule VutuvWeb.QualificationHTML do
   end
 
   @doc """
-  One credential's row body (glyph + name link + owner "Expired" badge + the
-  issuer/date meta line + the verification "Proof" link), shared by the profile
+  One credential's row body (glyph + name link + the issuer/date meta line +
+  the verification "Proof" link), shared by the profile
   card and the section `card_list` so both read the same. The caller supplies
   the wrapping `<li>` and, on the management pages, the trailing `<.row_actions>`.
   """
@@ -394,9 +407,6 @@ defmodule VutuvWeb.QualificationHTML do
       >
         {@qualification.name}
       </.link>
-      <.pill :if={@as_owner? and expired?(@qualification)} class="ml-2" data-expired>
-        {gettext("Expired")}
-      </.pill>
       <p :if={@meta != ""} class="text-sm text-slate-600 dark:text-slate-400">{@meta}</p>
       <p
         :if={@usage}

@@ -1,16 +1,18 @@
 <%!-- The qualifications list, shared by the public /:slug/qualifications index
-and the /settings/qualifications editor. Split into "Certificates" and
-"Licenses" headings only when the member holds both kinds (mirroring the
-education section). Each row: a glyph, the credential name (linking to its
-entry page), the issuer · issued year · "valid until" meta line, an optional
-verification link, and, for the owner, an "Expired" badge plus the calm
-Edit/Delete actions. --%>
+and the /settings/qualifications editor. Valid credentials come first, split
+into "Certificates" and "Licenses" headings only when the member holds both
+kinds (mirroring the education section); expired ones follow under their own
+"Previously held" heading, since a lapsed credential still counts for a CV.
+Each row: a glyph, the credential name (linking to its entry page), the
+issuer · issued year · "valid until" meta line, an optional verification link,
+and, for the owner, the calm Edit/Delete actions. --%>
+<% {valid, former} = split_expired(@qualifications) %>
 <div
-  :for={{kind, entries} <- group_by_kind(@qualifications)}
+  :for={{kind, entries} <- group_by_kind(valid)}
   class="mt-6 first:mt-0"
 >
   <h3
-    :if={mixed_kinds?(@qualifications)}
+    :if={mixed_kinds?(valid)}
     class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
   >
     {kind_label(kind)}
@@ -19,6 +21,28 @@ Edit/Delete actions. --%>
   <ul class="divide-y divide-slate-100 dark:divide-slate-800">
     <li
       :for={qualification <- entries}
+      class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+    >
+      <.qualification_row user={@user} qualification={qualification} as_owner?={@as_owner?} />
+
+      <.row_actions
+        :if={@as_owner?}
+        class="ml-auto shrink-0"
+        edit_to={~p"/settings/qualifications/#{qualification}/edit"}
+        delete_to={~p"/settings/qualifications/#{qualification}"}
+      />
+    </li>
+  </ul>
+</div>
+
+<div :if={former != []} class="mt-6 first:mt-0" data-former-qualifications>
+  <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+    {gettext("Previously held")}
+  </h3>
+
+  <ul class="divide-y divide-slate-100 opacity-80 dark:divide-slate-800">
+    <li
+      :for={qualification <- former}
       class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
     >
       <.qualification_row user={@user} qualification={qualification} as_owner?={@as_owner?} />

@@ -285,26 +285,75 @@ defmodule Vutuv.Profiles.QualificationTest do
   end
 
   describe "visible_to/2" do
-    test "an owner sees expired entries; a visitor does not" do
+    defp names(query, user),
+      do: query |> where(user_id: ^user.id) |> Repo.all() |> Enum.map(& &1.name)
+
+    test "a visitor sees expired entries too; they still count for a CV" do
       user = insert(:user)
       insert(:qualification, user: user, name: "Current", expires_year: nil)
       insert(:qualification, user: user, name: "Lapsed", awarded_year: 2015, expires_year: 2018)
 
-      owner_names =
-        Qualification.visible_to(true)
+      assert Enum.sort(names(Qualification.visible_to(false), user)) == ["Current", "Lapsed"]
+    end
+
+    test "a visitor does not see an expired entry its renewal replaced; the owner does" do
+      user = insert(:user)
+      insert(:qualification, user: user, name: "AWS Pro", awarded_year: 2019, expires_year: 2022)
+      insert(:qualification, user: user, name: "aws pro ", awarded_year: 2022, expires_year: 2040)
+
+      assert names(Qualification.visible_to(false), user) == ["aws pro "]
+      assert length(names(Qualification.visible_to(true), user)) == 2
+    end
+
+    test "of a chain that lapsed entirely, only the latest entry stays" do
+      user = insert(:user)
+      insert(:qualification, user: user, name: "CCNA", awarded_year: 2011, expires_year: 2014)
+
+      latest =
+        insert(:qualification, user: user, name: "CCNA", awarded_year: 2014, expires_year: 2017)
+
+      assert [%{id: id}] =
+               Qualification.visible_to(false) |> where(user_id: ^user.id) |> Repo.all()
+
+      assert id == latest.id
+    end
+  end
+
+  describe "valid_first/1" do
+    test "puts every valid entry before the expired ones, newest first within each" do
+      user = insert(:user)
+
+      insert(:qualification,
+        user: user,
+        name: "Old lapsed",
+        awarded_year: 2010,
+        expires_year: 2013
+      )
+
+      insert(:qualification,
+        user: user,
+        name: "New lapsed",
+        awarded_year: 2020,
+        expires_year: 2021
+      )
+
+      insert(:qualification, user: user, name: "Old valid", awarded_year: 2005)
+
+      insert(:qualification,
+        user: user,
+        name: "New valid",
+        awarded_year: 2024,
+        expires_year: 2040
+      )
+
+      names =
+        Qualification.valid_first()
+        |> Qualification.ordered()
         |> where(user_id: ^user.id)
         |> Repo.all()
         |> Enum.map(& &1.name)
 
-      visitor_names =
-        Qualification.visible_to(false)
-        |> where(user_id: ^user.id)
-        |> Repo.all()
-        |> Enum.map(& &1.name)
-
-      assert "Lapsed" in owner_names
-      assert "Current" in visitor_names
-      refute "Lapsed" in visitor_names
+      assert names == ["New valid", "Old valid", "New lapsed", "Old lapsed"]
     end
   end
 end

@@ -61,6 +61,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.VideoProgress
+  alias VutuvWeb.QualificationHTML
   alias VutuvWeb.WorkExperienceHTML
 
   # The daily text ad the request chose (`VutuvWeb.AdServing`), and its ✕.
@@ -998,10 +999,11 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:education, user.educations)
     |> assign(:education_groups, EducationHTML.profile_groups(user.educations))
     |> assign(:languages, user.languages)
-    # Expired-credential hiding (issue #859) is already applied in the preload
-    # via Qualification.visible_to(owner?): a visitor gets only valid entries,
-    # the owner gets all of theirs (their card marks the lapsed ones).
-    |> assign(:qualifications, user.qualifications)
+    # The preload already applied Qualification.visible_to(owner?) and put the
+    # valid entries first; the card shows the expired ones folded away under
+    # "Previously held". JSON-LD reads :qualifications alone, so a search
+    # engine is never told a lapsed credential is held.
+    |> assign_qualifications(user.qualifications)
     # Only the published ones are preloaded, so the owner sees exactly what a
     # visitor sees here; their private entries live at /settings/job_references.
     |> assign(:job_references, user.job_references)
@@ -1409,13 +1411,14 @@ defmodule VutuvWeb.UserProfileLive do
       # its own in memory — a cut before the grouping drops whole categories.
       educations: Education.order_by_date(Education),
       languages: Language.ordered() |> limit(^preview_limit(:languages)),
-      # visible_to(owner?) hides expired credentials from visitors in SQL (the
-      # same scope the section page, CV and agent docs use), so the card renders
-      # what is loaded — no in-memory filter, and limit-after-filter is correct.
-      # citing_jobs_preload: the jobs earned with each credential ride along
-      # for the usage badges (issue #1005).
+      # visible_to(owner?) drops renewed credentials for visitors in SQL (the
+      # same scope the section page, CV and agent docs use), so limit-after-
+      # filter is correct; valid_first keeps the valid ones inside the preview
+      # cut. citing_jobs_preload: the jobs earned with each credential ride
+      # along for the usage badges (issue #1005).
       qualifications:
         {Qualification.visible_to(owner?)
+         |> Qualification.valid_first()
          |> Qualification.ordered()
          |> limit(^preview_limit(:qualifications)), Qualification.citing_jobs_preload()},
       # Published Arbeitszeugnisse. No limit: a member holds a handful, and the
@@ -1443,6 +1446,14 @@ defmodule VutuvWeb.UserProfileLive do
     UserTag.ordered_by_endorsements()
     |> limit(30)
     |> preload(endorsements: ^UserTagEndorsement.visible_with_endorser())
+  end
+
+  defp assign_qualifications(socket, qualifications) do
+    {valid, former} = QualificationHTML.split_expired(qualifications)
+
+    socket
+    |> assign(:qualifications, valid)
+    |> assign(:former_qualifications, former)
   end
 
   # Every count the profile renders — the nine section totals ("N total,
