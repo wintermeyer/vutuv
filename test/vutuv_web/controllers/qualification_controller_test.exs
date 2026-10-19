@@ -110,7 +110,17 @@ defmodule VutuvWeb.QualificationControllerTest do
       assert former =~ "Lapsed cert"
     end
 
-    test "a renewed credential shows once on the public page", %{owner: owner} do
+    # A member who enters the same name twice wants both periods on the
+    # record (two CCNA terms from 2001 and 2009); a visitor sees what the
+    # owner sees.
+    test "a visitor sees every entry of a renewed credential", %{owner: owner} do
+      insert(:qualification,
+        user: owner,
+        name: "lapsed cert ",
+        awarded_year: 2010,
+        expires_year: 2012
+      )
+
       insert(:qualification,
         user: owner,
         name: "Lapsed cert",
@@ -119,9 +129,12 @@ defmodule VutuvWeb.QualificationControllerTest do
       )
 
       html = build_conn() |> get(~p"/#{owner}/qualifications") |> html_response(200)
+      [valid, former] = String.split(html, "data-former-qualifications", parts: 2)
 
-      refute html =~ "data-former-qualifications"
-      assert length(String.split(html, "Lapsed cert")) == 2
+      assert valid =~ "Lapsed cert"
+      assert former =~ "lapsed cert"
+      assert former =~ "2015"
+      assert former =~ "2010"
     end
 
     test "the CV lists expired credentials last, marked as expired", %{owner: owner} do

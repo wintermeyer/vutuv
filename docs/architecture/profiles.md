@@ -599,14 +599,16 @@ and a display-only verification `url` (scheme-validated to http(s), **never
 fetched server-side** — SSRF). A nullable `education_id` FK is reserved for issue
 #857 (folding degrees into this table) and is always NULL today.
 
-**Expired credentials are hidden from the public and shown to the owner.**
-`Qualification.visible_to(owner?)` is the single SQL scope for this: the profile
-preload (through `owner?`), the public `/:slug/qualifications` page, the CV and
-the agent docs all compose it, so they hide the same lapsed entries; the owner's
-own profile card and the `/settings/qualifications` editor show all of theirs and
-mark the lapsed ones with an "Expired" badge (`Qualification.expired?/2`, the
-per-entry twin of the scope — keep the two in sync). Entries display most
-recently awarded first (`Qualification.ordered/1`).
+**Visitors see every credential the owner sees, expired ones included**: a
+lapsed certificate still counts for a CV. Every surface reads
+`Qualification.valid_first/1 |> Qualification.ordered/1` (valid first, then most
+recently awarded) and splits the list with `QualificationHTML.split_expired/1`:
+the profile card folds the expired ones under "Previously held", the section
+page gives them their own heading, the CV labels them "expired 2017", the agent
+docs flag them `expired`, and JSON-LD names only the valid ones. Two entries of
+the same name stay two entries: a member who renewed a certificate and kept the
+old period on record wants both shown. `Qualification.expired?/2` is the
+per-entry twin of the SQL order; keep the two in sync.
 
 The **profile card** carries an All / Certificates / Licenses tabber (a
 `phx-click` filter on `UserProfileLive`, shown only when the member holds both
@@ -646,8 +648,8 @@ which silently drops.
 the "Mit Qualifikation: …" line (naming and linking the credential), shared by
 the profile Experience card, the section page and the entry show page. The
 display policy lives in `WorkExperience.cited_qualification/1`: a lapsed
-credential keeps showing on the jobs it earned (deliberately not scoped by
-`Qualification.visible_to/2`), and every rendering surface preloads through
+credential keeps showing on the jobs it earned, and every rendering surface
+preloads through
 `WorkExperience.display_preloads/0`. The
 agent formats carry it too (`SectionDocs.work_entry/1` adds a
 `qualification: {id, name, kind}` ref; md/txt show a bracketed "With

@@ -239,9 +239,8 @@ defmodule Vutuv.Profiles.Qualification do
   the whole of that year.
 
   The per-entry predicate that sorts an entry into the "Previously held" group;
-  `expired_dynamic/0` is its SQL twin behind `visible_to/2` and
-  `valid_first/1`. Keep the two in sync: they must agree on when a credential
-  is still valid.
+  `expired_dynamic/0` is its SQL twin behind `valid_first/1`. Keep the two in
+  sync: they must agree on when a credential is still valid.
   """
   def expired?(qualification, today \\ BerlinTime.today())
   def expired?(%__MODULE__{expires_year: nil}, _today), do: false
@@ -262,41 +261,6 @@ defmodule Vutuv.Profiles.Qualification do
       desc_nulls_last: q.awarded_month,
       asc: q.name
     )
-  end
-
-  @doc """
-  Scopes the query to the entries a visitor may see. The owner (`true`) sees
-  every entry. Everyone else sees expired credentials too, since a lapsed
-  certificate still tells a CV something, but not one a renewal replaced: an
-  expired entry is dropped when the member holds another entry of the same
-  name (case and outer spaces ignored) that expires later or never. Of a chain
-  that lapsed entirely, the latest entry stays. Kept in SQL so the profile
-  card, the public section page, the CV and the agent formats agree.
-  """
-  def visible_to(query \\ __MODULE__, owner?)
-  def visible_to(query, true), do: query
-
-  def visible_to(query, false) do
-    renewals =
-      from(r in __MODULE__,
-        where:
-          r.user_id == parent_as(:qualification).user_id and
-            r.id != parent_as(:qualification).id and
-            fragment("lower(btrim(?))", r.name) ==
-              fragment("lower(btrim(?))", parent_as(:qualification).name) and
-            (is_nil(r.expires_year) or
-               fragment(
-                 "(?, coalesce(?, 12)) > (?, coalesce(?, 12))",
-                 r.expires_year,
-                 r.expires_month,
-                 parent_as(:qualification).expires_year,
-                 parent_as(:qualification).expires_month
-               ))
-      )
-
-    shown = dynamic(not (^expired_dynamic()) or not exists(subquery(renewals)))
-
-    from(q in query, as: :qualification, where: ^shown)
   end
 
   @doc """

@@ -25,16 +25,15 @@ defmodule VutuvWeb.QualificationController do
   # Index and show are also served as Markdown / text / JSON / XML via
   # VutuvWeb.AgentDocs.SectionDocs (keep the templates and the doc builder in
   # sync, see agent_docs_drift_test.exs). Both show the anonymous public view:
-  # valid credentials first, then the expired ones a renewal did not replace.
+  # valid credentials first, then the expired ones.
   def index(conn, _params) do
     # citing_jobs_preload: the jobs earned with each credential ride along for
     # the usage badges (issue #1005).
     user =
       Repo.preload(conn.assigns[:user],
         qualifications:
-          {Qualification.visible_to(false)
-           |> Qualification.valid_first()
-           |> Qualification.ordered(), Qualification.citing_jobs_preload()}
+          {Qualification.valid_first() |> Qualification.ordered(),
+           Qualification.citing_jobs_preload()}
       )
 
     AgentDocs.respond(conn,

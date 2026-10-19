@@ -253,12 +253,8 @@ defmodule VutuvWeb.CV do
       # with (issue #858).
       work_experiences: {WorkExperience.order_by_date(WorkExperience), [:qualification]},
       educations: Education.order_by_date(Education),
-      # A CV is a public document, so it reads the visitor scope: valid
-      # credentials first, then the expired ones a renewal did not replace.
-      qualifications:
-        Qualification.visible_to(false)
-        |> Qualification.valid_first()
-        |> Qualification.ordered(),
+      # Valid credentials first, then the expired ones.
+      qualifications: Qualification.valid_first() |> Qualification.ordered(),
       languages: Language.ordered(),
       social_media_accounts: SocialMediaAccount.ordered(),
       phone_numbers: PhoneNumber.ordered(),

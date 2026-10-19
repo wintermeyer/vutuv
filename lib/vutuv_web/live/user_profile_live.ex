@@ -874,7 +874,7 @@ defmodule VutuvWeb.UserProfileLive do
     # runs — and one engagement read serves both.
     [user, pinned_post, entries, press, cv_page | count_rows] =
       Concurrent.run([
-        fn -> preload_user_for_show(base_user, owner?) end,
+        fn -> preload_user_for_show(base_user) end,
         fn -> Vutuv.Posts.pinned_post(base_user, current_user) end,
         fn -> Vutuv.Posts.profile_posts(base_user, current_user, type: :all) end,
         # The press kit (#2086). Not a preload and not a count arm: both shelves
@@ -999,8 +999,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:education, user.educations)
     |> assign(:education_groups, EducationHTML.profile_groups(user.educations))
     |> assign(:languages, user.languages)
-    # The preload already applied Qualification.visible_to(owner?) and put the
-    # valid entries first; the card shows the expired ones folded away under
+    # The preload put the valid entries first; the card shows the expired ones folded away under
     # "Previously held". JSON-LD reads :qualifications alone, so a search
     # engine is never told a lapsed credential is held.
     |> assign_qualifications(user.qualifications)
@@ -1391,7 +1390,7 @@ defmodule VutuvWeb.UserProfileLive do
   """
   def preview_limit(section), do: Map.fetch!(@preview_limits, section)
 
-  defp preload_user_for_show(user, owner?) do
+  defp preload_user_for_show(user) do
     user
     |> Repo.preload(
       social_media_accounts: SocialMediaAccount.ordered(),
@@ -1411,14 +1410,12 @@ defmodule VutuvWeb.UserProfileLive do
       # its own in memory — a cut before the grouping drops whole categories.
       educations: Education.order_by_date(Education),
       languages: Language.ordered() |> limit(^preview_limit(:languages)),
-      # visible_to(owner?) drops renewed credentials for visitors in SQL (the
-      # same scope the section page, CV and agent docs use), so limit-after-
-      # filter is correct; valid_first keeps the valid ones inside the preview
-      # cut. citing_jobs_preload: the jobs earned with each credential ride
-      # along for the usage badges (issue #1005).
+      # valid_first keeps the valid ones inside the preview cut (the same
+      # order the section page, CV and agent docs use). citing_jobs_preload:
+      # the jobs earned with each credential ride along for the usage badges
+      # (issue #1005).
       qualifications:
-        {Qualification.visible_to(owner?)
-         |> Qualification.valid_first()
+        {Qualification.valid_first()
          |> Qualification.ordered()
          |> limit(^preview_limit(:qualifications)), Qualification.citing_jobs_preload()},
       # Published Arbeitszeugnisse. No limit: a member holds a handful, and the

@@ -252,13 +252,12 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       work_experiences:
         {WorkExperience.order_by_date(WorkExperience), WorkExperience.display_preloads()},
       educations: Education.order_by_date(Education),
-      # The anonymous public view: valid credentials first, then the expired
-      # ones a renewal did not replace, each flagged `expired`. The citing
+      # Valid credentials first, then the expired ones, each flagged
+      # `expired`. The citing
       # jobs ride along for the usage facts (issue #1005).
       qualifications:
-        {Qualification.visible_to(false)
-         |> Qualification.valid_first()
-         |> Qualification.ordered(), Qualification.citing_jobs_preload()},
+        {Qualification.valid_first() |> Qualification.ordered(),
+         Qualification.citing_jobs_preload()},
       # The same scope the profile card reads (`UserProfileLive`), so the doc
       # and the page cannot disagree about which Zeugnisse are public.
       job_references: {JobReference.public_scope(), :links},
