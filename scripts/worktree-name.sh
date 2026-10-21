@@ -14,3 +14,10 @@
 worktree_db_name() {
   printf %s "$1" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9]+/_/g' | cut -c1-20
 }
+
+# The prefix the databases carry: `vutuv1_dev`, `vutuv1_dev_<name>`,
+# `vutuv1_test_<name>`. The `cw` shell function reads it here instead of knowing
+# the project, so one function serves every repository with this rule.
+worktree_db_prefix() {
+  printf %s vutuv1
+}

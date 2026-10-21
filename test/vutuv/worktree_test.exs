@@ -120,6 +120,16 @@ defmodule Vutuv.WorktreeTest do
     end
   end
 
+  # `cw` names the databases it creates `<prefix>_dev_<name>` and reads the
+  # prefix from the same file, with no fallback: a repository that lacks it gets
+  # no databases rather than another project's. So the function has to exist.
+  test "the shell rule names the database prefix" do
+    rule = Path.expand("scripts/worktree-name.sh", File.cwd!())
+    {out, 0} = System.cmd("sh", ["-c", ". \"$1\" && worktree_db_prefix", "sh", rule])
+
+    assert out == "vutuv1"
+  end
+
   defp script_db_name(name) do
     script = Path.expand("scripts/worktree-db-gc.sh", File.cwd!())
     {out, 0} = System.cmd(script, ["--db-name", name])
