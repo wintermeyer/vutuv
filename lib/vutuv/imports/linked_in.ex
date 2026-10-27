@@ -996,7 +996,7 @@ defmodule Vutuv.Imports.LinkedIn do
       phones: mark(parsed.phones, existing.phones, &Phone.tel(&1.params["value"])),
       skills:
         parsed.skills
-        |> mark(existing.skills, &String.downcase(&1.name))
+        |> mark(existing.skills, &skill_key(&1.name))
         |> preselect_within(Tags.free_user_tag_slots(user)),
       emails: parsed.emails,
       profile: profile_candidates(user, parsed.profile)
@@ -1326,7 +1326,7 @@ defmodule Vutuv.Imports.LinkedIn do
   end
 
   defp add_skill(candidate, acc, user) do
-    key = String.downcase(candidate.name)
+    key = skill_key(candidate.name)
 
     cond do
       MapSet.member?(acc.seen, key) -> bump(acc, :skipped)
@@ -1338,9 +1338,9 @@ defmodule Vutuv.Imports.LinkedIn do
   # A successful add counts as created, remembers its key and spends a slot; a
   # failure (a racing duplicate, an invalid name) is blocked like any other
   # refused insert and spends nothing.
-  defp tally_skill({:ok, _row}, key, acc) do
+  defp tally_skill({:ok, row}, key, acc) do
     acc
-    |> Map.update!(:seen, &MapSet.put(&1, key))
+    |> Map.update!(:seen, &(&1 |> MapSet.put(key) |> MapSet.put(row.tag_id)))
     |> Map.update!(:budget, &(&1 - 1))
     |> bump(:created)
   end
@@ -1418,15 +1418,23 @@ defmodule Vutuv.Imports.LinkedIn do
     |> MapSet.new()
   end
 
+  # A skill is keyed by the tag its name resolves to, not by its spelling:
+  # "Open Source" and "Open-Source", or an alias and its target, are two names
+  # to LinkedIn and one tag here. Keyed by spelling, the second one reached the
+  # user_tags unique index inside the import transaction and every query after
+  # it died with 25P02. A name no tag answers to yet keys by its spelling until
+  # the insert creates the tag, and `tally_skill/3` then records the tag id.
   defp skill_keys(user_id) do
-    from(ut in UserTag,
-      join: t in assoc(ut, :tag),
-      where: ut.user_id == ^user_id,
-      select: t.name
-    )
+    from(ut in UserTag, where: ut.user_id == ^user_id, select: ut.tag_id)
     |> Repo.all()
-    |> Enum.map(&String.downcase/1)
     |> MapSet.new()
+  end
+
+  defp skill_key(name) do
+    case Tag.find_by_value(name) do
+      %Tag{id: id} -> id
+      nil -> String.downcase(name)
+    end
   end
 
   # The start year belongs to the key: somebody who left and came back to the

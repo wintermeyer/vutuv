@@ -113,6 +113,26 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
       assert summary.blocked.tag_limit == 1
     end
 
+    # Two spellings LinkedIn keeps apart ("Open Source", "Open-Source") resolve
+    # to one tag, so the second insert hit the user_tags unique index inside the
+    # import transaction and every query after it died with 25P02: the confirm
+    # step 500ed for a real member on 2026-10-27.
+    test "two spellings of one tag import it once, the rest still lands" do
+      user = insert(:user)
+      base = unique_tag_name("li skill")
+      held = unique_tag_name("li skill")
+      {:ok, _} = Tags.add_user_tag(user, held)
+      fresh = unique_tag_name("li-skill")
+
+      names = [base, String.replace(base, " ", "-"), String.replace(held, " ", "_"), fresh]
+      {:ok, parsed} = LinkedIn.parse(skills_archive(names))
+      {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+      assert summary.created.skills == 2
+      assert summary.skipped.skills == 2
+      assert Tags.user_tag_count(user) == 3
+    end
+
     test "the preview preselects no more skills than fit" do
       max = Tags.max_user_tags()
       user = insert(:user) |> fill_tags(max - 4)
