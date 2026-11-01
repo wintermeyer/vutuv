@@ -14,15 +14,43 @@ defmodule VutuvWeb.LanguageControllerTest do
     assert html =~ "Native"
   end
 
-  test "the opaque CEFR badge carries a plain-language tooltip (issue #888)", %{conn: conn} do
+  test "the CEFR badge names the level in words beside the code", %{conn: conn} do
     {_conn, user} = create_and_login_user(conn)
     insert(:language, user: user, language_code: "en", proficiency: "b2")
 
     html = build_conn() |> get(~p"/#{user}/languages") |> html_response(200)
-    # The badge still shows the bare code, now with a `title` gloss so a reader
-    # who does not know the CEFR scale learns what "B2" means on hover.
-    assert html =~ "B2"
-    assert html =~ "title=\"B2 (Upper intermediate)\""
+    # The code stays, the word beside it says this is the member's own
+    # assessment rather than an exam grade, and the hover reads the can-do line.
+    assert html =~ "B2 · Fluent"
+    assert html =~ "A normal conversation with native speakers works without much effort."
+  end
+
+  test "the badge and the form read in German", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    insert(:language, user: user, language_code: "en", proficiency: "c1")
+
+    html =
+      build_conn()
+      |> put_req_header("accept-language", "de-DE,de")
+      |> get(~p"/#{user}/languages")
+      |> html_response(200)
+
+    assert html =~ "C1 · Verhandlungssicher"
+
+    form =
+      conn
+      |> recycle()
+      |> put_req_header("accept-language", "de-DE,de")
+      |> get(~p"/settings/languages/new")
+      |> html_response(200)
+
+    assert form =~ "Schätzen Sie sich selbst ein. Eine Prüfung brauchen Sie dafür nicht."
+    assert form =~ "Muttersprache"
+    assert form =~ "Annähernd muttersprachlich"
+    assert form =~ "Grundkenntnisse"
+    assert form =~ "Ich spreche spontan und fließend und setze die Sprache im Beruf wirksam ein."
+    # One radio per level, so the description sits beside each choice.
+    assert length(Regex.scan(~r/type="radio"[^>]*name="language\[proficiency\]"/, form)) == 7
   end
 
   test "redirect when creating a valid language", %{conn: conn} do

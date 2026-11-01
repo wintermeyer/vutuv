@@ -560,9 +560,16 @@ member picks from a `<select>`; `Vutuv.Languages.known?/1` gates the changeset s
 a stray code can never be stored, and a unique index on `(user_id,
 language_code)` keeps a language from being listed twice.
 
-The **proficiency** is `native` or a CEFR level (`a1`..`c2`). The badge shows the
-compact form ("Native" / "B2"); the form and entry page show the descriptive
-label ("Native speaker" / "B2 (Upper intermediate)"). Proficiency is shown per
+The **proficiency** is `native` or a CEFR level (`a1`..`c2`). Wherever the code
+shows, a word sits beside it ("B2 · Fließend", "C1 · Verhandlungssicher"), and
+the badge's hover title is a first-person can-do sentence. A member without an
+exam felt a bare "C1" claimed a certificate; the word reads as the
+self-assessment it is. The form is a radio list with that sentence under each
+level and says outright that no exam is needed. The agent formats keep the bare
+code as `level`. The LinkedIn import reads `Languages.csv`: the free-text name
+resolves through `Vutuv.Languages.code_for_name/1` (any site locale), and
+LinkedIn's five levels map to native, C1, B2, B1 and A2 (its scale has no C2 or
+A1). An unknown language or a missing level drops the row. Proficiency is shown per
 entry but **no longer drives the sort**: `Language.ordered/1` delegates to
 `Vutuv.Ordering.by_position/1`, so the member's own order wins (see below).
 

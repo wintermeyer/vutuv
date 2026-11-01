@@ -28,10 +28,13 @@ defmodule Vutuv.Imports.LinkedIn do
   alias NimbleCSV.RFC4180, as: CSV
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Languages
   alias Vutuv.Mentions
+  alias Vutuv.Ordering
   alias Vutuv.PageScreenshot.Sweeper
   alias Vutuv.Phone
   alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
@@ -49,6 +52,7 @@ defmodule Vutuv.Imports.LinkedIn do
     positions: [],
     educations: [],
     certifications: [],
+    languages: [],
     skills: [],
     emails: [],
     phones: [],
@@ -451,6 +455,11 @@ defmodule Vutuv.Imports.LinkedIn do
         |> Map.get(:certifications, [])
         |> Enum.map(&certification_candidate/1)
         |> tidy(),
+      languages:
+        rows_by_type
+        |> Map.get(:languages, [])
+        |> Enum.map(&language_candidate/1)
+        |> tidy(),
       skills: rows_by_type |> Map.get(:skills, []) |> parse_skills(),
       emails: rows_by_type |> Map.get(:emails, []) |> Enum.map(&email_info/1),
       phones: rows_by_type |> Map.get(:phones, []) |> Enum.map(&phone_candidate/1) |> tidy(),
@@ -517,6 +526,8 @@ defmodule Vutuv.Imports.LinkedIn do
     # Certifications.csv: Name, Url, Authority, Started On, Finished On,
     # License Number. "Name" + "Authority" together are unique to this file.
     certifications: ["Name", "Authority"],
+    # Languages.csv: Name, Proficiency.
+    languages: ["Name", "Proficiency"],
     connections: ["Connected On"],
     profile: ["First Name", "Headline"],
     phones: ["Number"],
@@ -540,6 +551,7 @@ defmodule Vutuv.Imports.LinkedIn do
     {"volunteering", :volunteering},
     {"education", :educations},
     {"certification", :certifications},
+    {"languages", :languages},
     {"skills", :skills},
     {"profile", :profile},
     {"phonenumbers", :phones},
@@ -871,6 +883,49 @@ defmodule Vutuv.Imports.LinkedIn do
     end
   end
 
+  # ── Languages.csv → Language params ──
+  #
+  # LinkedIn stores the language as free text in the member's own language
+  # ("English", "Englisch") and the level on its own five-step scale. The name
+  # resolves through `Languages.code_for_name/1`; the level maps onto the CEFR
+  # code that describes the same ability. LinkedIn's scale has no C2 and no A1,
+  # so an import never sets those two. A row we cannot resolve (an unlisted
+  # language, no level) is dropped: a guess would put a level on the profile
+  # the member never claimed.
+
+  @linkedin_levels [
+    {"native", "native"},
+    {"full professional", "c1"},
+    {"professional working", "b2"},
+    {"limited working", "b1"},
+    {"elementary", "a2"}
+  ]
+
+  defp language_candidate(row) do
+    code = Languages.code_for_name(row["Name"])
+    proficiency = linkedin_level(row["Proficiency"])
+
+    if code && proficiency do
+      %{
+        id: cid("language", code),
+        label: Languages.name(code),
+        params: %{"language_code" => code, "proficiency" => proficiency}
+      }
+    end
+  end
+
+  # "Full professional proficiency" and the enum spelling "FULL_PROFESSIONAL"
+  # both occur in exports.
+  defp linkedin_level(value) when is_binary(value) do
+    normalized = value |> String.downcase() |> String.replace("_", " ")
+
+    Enum.find_value(@linkedin_levels, fn {marker, level} ->
+      if String.contains?(normalized, marker), do: level
+    end)
+  end
+
+  defp linkedin_level(_value), do: nil
+
   # ── Skills.csv → tag candidates ──
   #
   # One CSV row is one skill, and tags may contain spaces now, so a multi-word
@@ -991,6 +1046,7 @@ defmodule Vutuv.Imports.LinkedIn do
       educations: mark(parsed.educations, existing.educations, &education_key(&1.params)),
       certifications:
         mark(parsed.certifications, existing.certifications, &certification_key(&1.params)),
+      languages: mark(parsed.languages, existing.languages, & &1.params["language_code"]),
       urls: mark(parsed.urls, existing.urls, &downcase(&1.params["value"])),
       social: mark(parsed.social, existing.social, &social_key(&1.params)),
       phones: mark(parsed.phones, existing.phones, &Phone.tel(&1.params["value"])),
@@ -1030,6 +1086,7 @@ defmodule Vutuv.Imports.LinkedIn do
     :positions,
     :educations,
     :certifications,
+    :languages,
     :skills,
     :urls,
     :social,
@@ -1098,6 +1155,7 @@ defmodule Vutuv.Imports.LinkedIn do
       "positions" => Enum.map(parsed.positions, &Map.take(&1, [:id, :params])),
       "educations" => Enum.map(parsed.educations, &Map.take(&1, [:id, :params])),
       "certifications" => Enum.map(parsed.certifications, &Map.take(&1, [:id, :params])),
+      "languages" => Enum.map(parsed.languages, &Map.take(&1, [:id, :params])),
       "urls" => Enum.map(parsed.urls, &Map.take(&1, [:id, :params])),
       "social" => Enum.map(parsed.social, &Map.take(&1, [:id, :params])),
       "phones" => Enum.map(parsed.phones, &Map.take(&1, [:id, :params])),
@@ -1120,6 +1178,7 @@ defmodule Vutuv.Imports.LinkedIn do
       positions: pick(payload["positions"], set),
       educations: pick(payload["educations"], set),
       certifications: pick(payload["certifications"], set),
+      languages: pick(payload["languages"], set),
       urls: pick(payload["urls"], set),
       social: pick(payload["social"], set),
       phones: pick(payload["phones"], set),
@@ -1199,6 +1258,13 @@ defmodule Vutuv.Imports.LinkedIn do
           {certification_key(c.params), &Qualification.changeset(&1, c.params), :qualifications}
         end)
 
+      # Each language lands after the ones already listed, so the member's
+      # preferred contact language (the first entry) stays where it was.
+      {existing, languages} =
+        insert_scoped(existing, :languages, Map.get(selection, :languages, []), fn c ->
+          {c.params["language_code"], &language_changeset(&1, c.params), :languages}
+        end)
+
       {existing, urls} =
         insert_scoped(existing, :urls, Map.get(selection, :urls, []), fn c ->
           {downcase(c.params["value"]), &Url.changeset(&1, c.params), :urls}
@@ -1223,6 +1289,7 @@ defmodule Vutuv.Imports.LinkedIn do
         positions: positions,
         educations: educations,
         certifications: certifications,
+        languages: languages,
         urls: urls,
         social: social,
         phones: phones,
@@ -1239,6 +1306,11 @@ defmodule Vutuv.Imports.LinkedIn do
         blocked: tallies |> by_outcome(:blocked) |> Map.put(:tag_limit, skills.tag_limit)
       }
     end)
+  end
+
+  defp language_changeset(row, params) do
+    %{row | position: Ordering.next_position(Language, row.user_id)}
+    |> Language.changeset(params)
   end
 
   defp by_outcome(tallies, outcome), do: Map.new(tallies, fn {k, t} -> {k, t[outcome]} end)
@@ -1398,6 +1470,7 @@ defmodule Vutuv.Imports.LinkedIn do
         keys(Qualification, user.id, fn r ->
           certification_key(%{"name" => r.name, "issuer" => r.issuer})
         end),
+      languages: keys(Language, user.id, & &1.language_code),
       urls: keys(Url, user.id, fn r -> downcase(r.value) end),
       social:
         keys(SocialMediaAccount, user.id, fn r ->

@@ -7,9 +7,42 @@
     <%= error_tag f, :language_code %>
   </.editform_field>
 
+  <%!-- One radio per level with its can-do sentence, so the choice is a
+  self-assessment the member can read off rather than an exam grade they have
+  to claim. --%>
   <.editform_field form={f} field={:proficiency}>
-    <%= label f, :proficiency, gettext("Proficiency") %>
-    <%= select f, :proficiency, proficiency_options(), [prompt: gettext("Select a proficiency")] ++ err_attrs(f, :proficiency) %>
+    <fieldset>
+      <legend class="font-semibold">{gettext("Proficiency")}</legend>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("Rate yourself. You do not need an exam for this.")}
+      </p>
+      <div class="mt-2 divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 dark:divide-slate-700 dark:border-slate-700">
+        <label
+          :for={level <- proficiencies()}
+          class="flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors hover:bg-slate-50 has-checked:bg-brand-50 dark:hover:bg-slate-800/60 dark:has-checked:bg-brand-800/30"
+        >
+          <input
+            type="radio"
+            name={f[:proficiency].name}
+            id={f[:proficiency].id <> "_" <> level}
+            value={level}
+            checked={to_string(f[:proficiency].value) == level}
+            class="mt-1 accent-brand-600"
+          />
+          <span class="min-w-0">
+            <span class="block font-medium text-slate-900 dark:text-white">
+              <span :if={level != "native"} class="mr-1 font-mono text-sm font-semibold">
+                {proficiency_badge(level)}
+              </span>
+              {proficiency_word(level)}
+            </span>
+            <span class="block text-sm text-slate-600 dark:text-slate-400">
+              {proficiency_can_do(level)}
+            </span>
+          </span>
+        </label>
+      </div>
+    </fieldset>
     <%= error_tag f, :proficiency %>
   </.editform_field>
 

@@ -167,6 +167,25 @@ defmodule Vutuv.Languages do
   def name(code) when is_binary(code), do: String.upcase(code)
 
   @doc """
+  The code for a language name as a member typed it elsewhere (the LinkedIn
+  export writes "English" or "Englisch", depending on the member's settings).
+  Matches the name in every site locale and the bare code, ignoring case; nil
+  for a language this list does not carry.
+  """
+  def code_for_name(name) when is_binary(name) do
+    key = name |> String.trim() |> String.downcase()
+    if key != "", do: Enum.find(@codes, &(key == &1 or key in localized_names(&1)))
+  end
+
+  def code_for_name(_name), do: nil
+
+  defp localized_names(code) do
+    for locale <- site_locales() do
+      Gettext.with_locale(VutuvWeb.Gettext, locale, fn -> String.downcase(name(code)) end)
+    end
+  end
+
+  @doc """
   The `{localized_name, code}` options for the language `<select>`, sorted by
   the localized name so the list reads alphabetically in the viewer's locale.
   """

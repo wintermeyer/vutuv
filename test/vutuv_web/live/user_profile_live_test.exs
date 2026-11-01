@@ -764,15 +764,19 @@ defmodule VutuvWeb.UserProfileLiveTest do
       assert has_element?(view, "#profile-languages [data-language-pill]", "English")
       assert has_element?(view, "#profile-languages [data-language-pill]", "French")
 
-      # Each pill still carries the compact proficiency badge (Native / A2)...
-      html = render(view)
-      assert html =~ "Native"
-      assert html =~ "A2"
+      # Each pill carries the code with its word beside it, and hovering it
+      # reads the can-do sentence (issue #888).
+      assert has_element?(
+               view,
+               "#profile-languages [title=\"I can communicate in simple, familiar situations.\"]",
+               "A2 · Basic knowledge"
+             )
 
-      # ...and the opaque CEFR badge carries a native tooltip glossing the level
-      # (issue #888): hovering "A2" explains it in plain language.
-      assert has_element?(view, "#profile-languages [title=\"A2 (Elementary)\"]", "A2")
-      assert has_element?(view, "#profile-languages [title=\"Native speaker\"]", "Native")
+      assert has_element?(
+               view,
+               "#profile-languages [title=\"The language I grew up with.\"]",
+               "Native speaker"
+             )
 
       # ...but the profile card drops the quieter "Preferred" contact-language
       # marker; that detail lives on the dedicated /:slug/languages page.
