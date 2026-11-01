@@ -58,6 +58,11 @@ defmodule VutuvWeb.OrganizationVocabularyTest do
     prove = de("Prove you control %{domain} to publish this page.", domain: "acme.example")
     assert prove =~ "acme.example"
     refute prove =~ "Prove you control", "the German msgstr must not fall back to English"
+
+    assert de("Cancel and delete this page") == "Abbrechen und diese Seite löschen"
+
+    assert de("Cannot verify this domain? Cancel the claim and the page is deleted.") =~
+             "Brechen Sie die Anmeldung ab"
   end
 
   test "the 'Your organizations' settings hub explains ownership in German" do

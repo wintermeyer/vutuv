@@ -386,6 +386,23 @@ defmodule VutuvWeb.OrganizationLive.Show do
     end
   end
 
+  # Walking away from a claim that will never verify (a test page, a domain the
+  # member does not control). Owner-only and pending-only, re-checked here
+  # because the event can be forged: an active page is deleted from its edit
+  # page's danger zone instead, behind the job-postings guard.
+  def handle_event("cancel_claim", _params, socket) do
+    if socket.assigns.owner? and socket.assigns.pending? do
+      {:ok, _} = Organizations.delete_organization(socket.assigns.organization)
+
+      {:noreply,
+       socket
+       |> put_flash(:info, gettext("The organization page was deleted."))
+       |> push_navigate(to: ~p"/settings/organizations")}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # Who the follow belongs to: the page being acted as, else the member. A page
   # can never follow itself, so acting as *this* page falls back to nobody
   # rather than offering a control that could only fail.
@@ -1176,6 +1193,23 @@ defmodule VutuvWeb.OrganizationLive.Show do
             {gettext("Domain verification is disabled on this installation.")}
           </p>
         <% end %>
+
+        <div :if={@owner?} class="mt-8 border-t border-slate-200 pt-4 dark:border-slate-800">
+          <p class="text-xs text-slate-600 dark:text-slate-400">
+            {gettext("Cannot verify this domain? Cancel the claim and the page is deleted.")}
+          </p>
+          <.button
+            id="cancel-organization-claim"
+            variant="danger"
+            class="mt-3"
+            phx-click="cancel_claim"
+            data-confirm={
+              gettext("Really delete %{name}? This cannot be undone.", name: @organization.name)
+            }
+          >
+            {gettext("Cancel and delete this page")}
+          </.button>
+        </div>
       </.card>
     </div>
     """

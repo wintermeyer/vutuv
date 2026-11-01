@@ -197,6 +197,40 @@ defmodule VutuvWeb.OrganizationManagementTest do
       assert html =~ "vutuv-organization-verify=#{domain.verification_token}"
       refute html =~ "@dns_value"
     end
+
+    # A claim that can never be verified (a test page, a domain the member does
+    # not control) used to have no way out: the panel offered only "Verify now".
+    test "the owner cancels the claim and the pending page is gone", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+
+      {:ok, %{organization: organization, domain: domain}} =
+        Organizations.create_pending_organization(owner, @valid, "dns")
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}")
+
+      assert {:error, {:live_redirect, %{to: "/settings/organizations"}}} =
+               view |> element("#cancel-organization-claim") |> render_click()
+
+      refute Organizations.get_organization(organization.id)
+
+      refute Vutuv.Repo.get(Vutuv.Organizations.OrganizationDomain, domain.id)
+    end
+
+    test "an admin of a pending page sees no cancel control and is refused", %{conn: conn} do
+      {conn, admin} = create_and_login_user(conn)
+      owner = insert(:activated_user)
+
+      {:ok, %{organization: organization}} =
+        Organizations.create_pending_organization(owner, @valid, "dns")
+
+      {:ok, _} = Organizations.add_role(organization, admin, "admin", owner)
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}")
+
+      refute has_element?(view, "#cancel-organization-claim")
+      render_click(view, "cancel_claim", %{})
+      assert Organizations.get_organization(organization.id)
+    end
   end
 
   describe "aliases on the edit page" do

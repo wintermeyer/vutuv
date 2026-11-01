@@ -36,7 +36,7 @@ msgstr "Aggiungi"
 #: lib/vutuv_web/live/admin/deliverability_live.ex:251
 #: lib/vutuv_web/live/cv_live.ex:169
 #: lib/vutuv_web/live/organization_live/fediverse.ex:123
-#: lib/vutuv_web/live/organization_live/show.ex:980
+#: lib/vutuv_web/live/organization_live/show.ex:997
 #: lib/vutuv_web/templates/address/card_list.html.heex:6
 #: lib/vutuv_web/templates/address/card_list.html.heex:16
 #: lib/vutuv_web/templates/address/show.html.heex:2
@@ -337,7 +337,7 @@ msgstr "Follower"
 #: lib/vutuv_web/components/ui.ex:3326
 #: lib/vutuv_web/controllers/followee_controller.ex:29
 #: lib/vutuv_web/live/import_connections_live.ex:468
-#: lib/vutuv_web/live/organization_live/show.ex:641
+#: lib/vutuv_web/live/organization_live/show.ex:658
 #: lib/vutuv_web/templates/followee/index.html.heex:4
 #: lib/vutuv_web/templates/followee/index.html.heex:40
 #: lib/vutuv_web/templates/member_card/card.html.heex:74
@@ -1705,8 +1705,8 @@ msgstr "Approva"
 #: lib/vutuv_web/live/fediverse_lookup_live.ex:320
 #: lib/vutuv_web/live/organization_live/following.ex:340
 #: lib/vutuv_web/live/organization_live/following.ex:421
-#: lib/vutuv_web/live/organization_live/show.ex:602
-#: lib/vutuv_web/live/organization_live/show.ex:639
+#: lib/vutuv_web/live/organization_live/show.ex:619
+#: lib/vutuv_web/live/organization_live/show.ex:656
 #: lib/vutuv_web/live/post_live/feed.ex:947
 #: lib/vutuv_web/templates/member_card/card.html.heex:80
 #: lib/vutuv_web/templates/remote_actor_card/card.html.heex:303
@@ -1746,7 +1746,7 @@ msgid "Member"
 msgstr "Membro"
 
 #: lib/vutuv_web/live/fediverse_account_live.ex:460
-#: lib/vutuv_web/live/organization_live/show.ex:661
+#: lib/vutuv_web/live/organization_live/show.ex:678
 #: lib/vutuv_web/views/user_html.ex:667
 #: lib/vutuv_web/views/user_html.ex:668
 #: lib/vutuv_web/views/user_html.ex:678
@@ -1938,7 +1938,7 @@ msgstr "Paginazione"
 #: lib/vutuv_web/components/ui.ex:5552
 #: lib/vutuv_web/live/organization_live/activity.ex:159
 #: lib/vutuv_web/live/organization_live/feed.ex:258
-#: lib/vutuv_web/live/organization_live/show.ex:833
+#: lib/vutuv_web/live/organization_live/show.ex:850
 #, elixir-autogen, elixir-format
 msgid "Load more"
 msgstr "Carica altro"
@@ -2214,7 +2214,7 @@ msgstr "Post eliminato."
 #: lib/vutuv_web/gettext_extraction_anchors.ex:117
 #: lib/vutuv_web/live/admin/dashboard_live.ex:266
 #: lib/vutuv_web/live/fediverse_account_live.ex:488
-#: lib/vutuv_web/live/organization_live/show.ex:756
+#: lib/vutuv_web/live/organization_live/show.ex:773
 #: lib/vutuv_web/live/post_live/saved.ex:552
 #: lib/vutuv_web/live/post_live/tag_sources.ex:694
 #: lib/vutuv_web/live/search_live.ex:546
@@ -2503,7 +2503,7 @@ msgstr "Togli Mi piace"
 #: lib/vutuv_web/components/ui.ex:3327
 #: lib/vutuv_web/live/organization_live/following.ex:392
 #: lib/vutuv_web/live/organization_live/following.ex:476
-#: lib/vutuv_web/live/organization_live/show.ex:644
+#: lib/vutuv_web/live/organization_live/show.ex:661
 #: lib/vutuv_web/live/post_live/feed.ex:934
 #: lib/vutuv_web/templates/followee/index.html.heex:30
 #: lib/vutuv_web/templates/member_card/card.html.heex:75
@@ -3217,7 +3217,7 @@ msgstr "Rimuovilo. La segnalazione si chiude, senza altre domande."
 #: lib/vutuv_web/components/post_components.ex:3521
 #: lib/vutuv_web/components/post_components.ex:3738
 #: lib/vutuv_web/components/post_components.ex:4939
-#: lib/vutuv_web/live/organization_live/show.ex:696
+#: lib/vutuv_web/live/organization_live/show.ex:713
 #: lib/vutuv_web/templates/user/show.html.heex:273
 #, elixir-autogen, elixir-format
 msgid "Report"
@@ -4574,7 +4574,7 @@ msgstr "Non è una corrispondenza esatta, ma somiglia alla tua ricerca."
 #: lib/vutuv_web/agent_docs/markdown.ex:566
 #: lib/vutuv_web/agent_docs/text.ex:549
 #: lib/vutuv_web/components/saved_search_components.ex:57
-#: lib/vutuv_web/live/organization_live/show.ex:843
+#: lib/vutuv_web/live/organization_live/show.ex:860
 #: lib/vutuv_web/live/post_live/saved.ex:555
 #: lib/vutuv_web/live/search_live.ex:543
 #: lib/vutuv_web/live/search_live.ex:1070
@@ -5402,7 +5402,7 @@ msgstr "Completa il tuo profilo"
 msgid "A few quick steps so people can find and recognize you."
 msgstr "Pochi passaggi veloci perché le persone ti trovino e ti riconoscano."
 
-#: lib/vutuv_web/live/user_profile_live.ex:1527
+#: lib/vutuv_web/live/user_profile_live.ex:1524
 #, elixir-autogen, elixir-format
 msgid "Add a profile photo"
 msgstr "Aggiungi una foto del profilo"
@@ -6059,7 +6059,7 @@ msgstr "ad esempio MacBook"
 msgid "or"
 msgstr "oppure"
 
-#: lib/vutuv_web/live/user_profile_live.ex:1532
+#: lib/vutuv_web/live/user_profile_live.ex:1529
 #, elixir-autogen, elixir-format
 msgid "Add a tagline"
 msgstr "Aggiungi una descrizione breve"
@@ -8224,7 +8224,7 @@ msgstr "Titolo di studio"
 #: lib/vutuv_web/controllers/education_controller.ex:43
 #: lib/vutuv_web/controllers/education_controller.ex:60
 #: lib/vutuv_web/controllers/education_controller.ex:140
-#: lib/vutuv_web/cv/cv.ex:332
+#: lib/vutuv_web/cv/cv.ex:328
 #: lib/vutuv_web/templates/education/edit.html.heex:4
 #: lib/vutuv_web/templates/education/index.html.heex:5
 #: lib/vutuv_web/templates/education/index.html.heex:10
@@ -8286,7 +8286,7 @@ msgstr "Importa"
 
 #: lib/vutuv_web/controllers/import_controller.ex:37
 #: lib/vutuv_web/controllers/import_controller.ex:135
-#: lib/vutuv_web/live/user_profile_live.ex:1544
+#: lib/vutuv_web/live/user_profile_live.ex:1541
 #: lib/vutuv_web/templates/import/new.html.heex:1
 #: lib/vutuv_web/templates/import/preview.html.heex:1
 #, elixir-autogen, elixir-format
@@ -9710,17 +9710,17 @@ msgstr "Aggiungi un certificato o un'abilitazione"
 msgid "Certificate"
 msgstr "Certificato"
 
-#: lib/vutuv_web/controllers/qualification_controller.ex:98
+#: lib/vutuv_web/controllers/qualification_controller.ex:96
 #, elixir-autogen, elixir-format
 msgid "Certificate or license added successfully."
 msgstr "Certificato o abilitazione aggiunto."
 
-#: lib/vutuv_web/controllers/qualification_controller.ex:166
+#: lib/vutuv_web/controllers/qualification_controller.ex:164
 #, elixir-autogen, elixir-format
 msgid "Certificate or license deleted successfully."
 msgstr "Certificato o abilitazione eliminato."
 
-#: lib/vutuv_web/controllers/qualification_controller.ex:154
+#: lib/vutuv_web/controllers/qualification_controller.ex:152
 #, elixir-autogen, elixir-format
 msgid "Certificate or license updated successfully."
 msgstr "Certificato o abilitazione aggiornato."
@@ -9733,9 +9733,9 @@ msgstr "Certificati"
 #: lib/vutuv_web/agent_docs/markdown.ex:48
 #: lib/vutuv_web/agent_docs/text.ex:44
 #: lib/vutuv_web/components/ui.ex:5852
-#: lib/vutuv_web/controllers/qualification_controller.ex:48
-#: lib/vutuv_web/controllers/qualification_controller.ex:67
-#: lib/vutuv_web/controllers/qualification_controller.ex:134
+#: lib/vutuv_web/controllers/qualification_controller.ex:46
+#: lib/vutuv_web/controllers/qualification_controller.ex:65
+#: lib/vutuv_web/controllers/qualification_controller.ex:132
 #: lib/vutuv_web/cv/docx.ex:183
 #: lib/vutuv_web/cv/html.ex:171
 #: lib/vutuv_web/cv/latex.ex:142
@@ -10381,7 +10381,7 @@ msgstr[1] "%{count} stelle"
 
 #: lib/vutuv_web/live/fediverse_account_live.ex:349
 #: lib/vutuv_web/live/investors_reach_live.ex:321
-#: lib/vutuv_web/live/organization_live/show.ex:671
+#: lib/vutuv_web/live/organization_live/show.ex:688
 #: lib/vutuv_web/templates/remote_actor_card/card.html.heex:108
 #: lib/vutuv_web/views/user_html.ex:977
 #: lib/vutuv_web/views/user_html.ex:1153
@@ -11233,7 +11233,7 @@ msgstr "Il tuo elenco è vuoto. Non è ancora escluso nessuno."
 msgid "AI agents"
 msgstr "Agenti IA"
 
-#: lib/vutuv_web/live/organization_live/show.ex:746
+#: lib/vutuv_web/live/organization_live/show.ex:763
 #, elixir-autogen, elixir-format
 msgid "About"
 msgstr "Presentazione"
@@ -11246,7 +11246,7 @@ msgstr "Prosegui con la verifica"
 #: lib/vutuv_web/live/organization_live/domains.ex:284
 #: lib/vutuv_web/live/organization_live/domains.ex:319
 #: lib/vutuv_web/live/organization_live/new.ex:161
-#: lib/vutuv_web/live/organization_live/show.ex:1103
+#: lib/vutuv_web/live/organization_live/show.ex:1120
 #: lib/vutuv_web/templates/url/verify.html.heex:50
 #, elixir-autogen, elixir-format
 msgid "DNS TXT record"
@@ -11254,8 +11254,8 @@ msgstr "Record DNS TXT"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:204
 #: lib/vutuv_web/live/organization_live/domains.ex:359
-#: lib/vutuv_web/live/organization_live/show.ex:1168
-#: lib/vutuv_web/live/organization_live/show.ex:1176
+#: lib/vutuv_web/live/organization_live/show.ex:1185
+#: lib/vutuv_web/live/organization_live/show.ex:1193
 #, elixir-autogen, elixir-format
 msgid "Domain verification is disabled on this installation."
 msgstr "La verifica dei domini è disattivata su questa installazione."
@@ -11291,7 +11291,7 @@ msgstr ""
 msgid "Please log in first."
 msgstr "Prima accedi."
 
-#: lib/vutuv_web/live/organization_live/show.ex:1076
+#: lib/vutuv_web/live/organization_live/show.ex:1093
 #, elixir-autogen, elixir-format
 msgid "Prove you control %{domain} to publish this page."
 msgstr "Dimostra di controllare %{domain} per pubblicare questa pagina."
@@ -11318,7 +11318,7 @@ msgid "Select a country"
 msgstr "Seleziona un paese"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:338
-#: lib/vutuv_web/live/organization_live/show.ex:1138
+#: lib/vutuv_web/live/organization_live/show.ex:1155
 #, elixir-autogen, elixir-format
 msgid "Serve this file at:"
 msgstr "Pubblica questo file all'indirizzo:"
@@ -11340,12 +11340,12 @@ msgid "The upload failed."
 msgstr "Il caricamento non è riuscito."
 
 #: lib/vutuv_web/live/organization_live/new.ex:146
-#: lib/vutuv_web/live/organization_live/show.ex:1091
+#: lib/vutuv_web/live/organization_live/show.ex:1108
 #, elixir-autogen, elixir-format
 msgid "Verification method"
 msgstr "Metodo di verifica"
 
-#: lib/vutuv_web/live/organization_live/show.ex:1002
+#: lib/vutuv_web/live/organization_live/show.ex:1019
 #, elixir-autogen, elixir-format
 msgid "Verified domains"
 msgstr "Domini verificati"
@@ -11356,18 +11356,18 @@ msgstr "Domini verificati"
 msgid "Verified via"
 msgstr "Verificato tramite"
 
-#: lib/vutuv_web/live/organization_live/show.ex:1062
+#: lib/vutuv_web/live/organization_live/show.ex:1079
 #, elixir-autogen, elixir-format
 msgid "Verified via %{domain}"
 msgstr "Verificato tramite %{domain}"
 
-#: lib/vutuv_web/live/organization_live/show.ex:1073
+#: lib/vutuv_web/live/organization_live/show.ex:1090
 #, elixir-autogen, elixir-format
 msgid "Verify %{name}"
 msgstr "Verifica %{name}"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:353
-#: lib/vutuv_web/live/organization_live/show.ex:1162
+#: lib/vutuv_web/live/organization_live/show.ex:1179
 #, elixir-autogen, elixir-format
 msgid "Verify now"
 msgstr "Verifica ora"
@@ -11382,7 +11382,7 @@ msgstr "Sito web"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:285
 #: lib/vutuv_web/live/organization_live/domains.ex:329
-#: lib/vutuv_web/live/organization_live/show.ex:1114
+#: lib/vutuv_web/live/organization_live/show.ex:1131
 #: lib/vutuv_web/templates/url/verify.html.heex:103
 #, elixir-autogen, elixir-format
 msgid "Website file"
@@ -11401,7 +11401,7 @@ msgstr ""
 "controllare il dominio."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:340
-#: lib/vutuv_web/live/organization_live/show.ex:1144
+#: lib/vutuv_web/live/organization_live/show.ex:1161
 #: lib/vutuv_web/templates/url/verify.html.heex:109
 #, elixir-autogen, elixir-format
 msgid "with this exact content:"
@@ -11452,7 +11452,7 @@ msgstr "Alias rimosso."
 #: lib/vutuv_web/agent_docs/markdown.ex:558
 #: lib/vutuv_web/agent_docs/text.ex:542
 #: lib/vutuv_web/live/organization_live/edit.ex:384
-#: lib/vutuv_web/live/organization_live/show.ex:990
+#: lib/vutuv_web/live/organization_live/show.ex:1007
 #: lib/vutuv_web/templates/tag/single_card.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Also known as"
@@ -11715,6 +11715,7 @@ msgid "Danger zone"
 msgstr "Zona pericolosa"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:488
+#: lib/vutuv_web/live/organization_live/show.ex:1207
 #, elixir-autogen, elixir-format
 msgid "Really delete %{name}? This cannot be undone."
 msgstr "Eliminare davvero %{name}? L'operazione non si può annullare."
@@ -11817,7 +11818,7 @@ msgid "%{min} to %{max} characters: letters (a-z), numbers (0-9) and underscores
 msgstr ""
 "Da %{min} a %{max} caratteri: lettere (a-z), cifre (0-9) e trattini bassi."
 
-#: lib/vutuv_web/live/organization_live/show.ex:865
+#: lib/vutuv_web/live/organization_live/show.ex:882
 #, elixir-autogen, elixir-format
 msgid "Former"
 msgstr "Precedente"
@@ -11951,7 +11952,7 @@ msgstr ""
 "successivo mostriamo le istruzioni esatte, così puoi semplicemente "
 "inoltrarle."
 
-#: lib/vutuv_web/live/organization_live/show.ex:1085
+#: lib/vutuv_web/live/organization_live/show.ex:1102
 #, elixir-autogen, elixir-format
 msgid "These steps are technical. If you don't manage %{domain} yourself, copy the record or file shown below and send it to your IT team or whoever runs your website. Once they have added it, come back here and press Verify now."
 msgstr ""
@@ -12124,11 +12125,12 @@ msgid "That name is already listed for this organization."
 msgstr "Questo nome è già presente per questa organizzazione."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:201
+#: lib/vutuv_web/live/organization_live/show.ex:399
 #, elixir-autogen, elixir-format
 msgid "The organization page was deleted."
 msgstr "La pagina dell'organizzazione è stata eliminata."
 
-#: lib/vutuv_web/live/organization_live/show.ex:493
+#: lib/vutuv_web/live/organization_live/show.ex:510
 #, elixir-autogen, elixir-format
 msgid "This organization page was reported and is hidden while it is reviewed. Only you and the moderators can see it."
 msgstr ""
@@ -12165,7 +12167,7 @@ msgid "Your organization handle is set."
 msgstr "L'handle della tua organizzazione è impostato."
 
 #: lib/vutuv_web/live/organization_live/show.ex:379
-#: lib/vutuv_web/live/organization_live/show.ex:432
+#: lib/vutuv_web/live/organization_live/show.ex:449
 #, elixir-autogen, elixir-format
 msgid "Your organization page is verified and now live."
 msgstr "La pagina della tua organizzazione è verificata e ora è online."
@@ -12898,7 +12900,7 @@ msgstr ""
 "invece questo nome, con esattamente lo stesso valore di sopra:"
 
 #: lib/vutuv_web/live/organization_live/domains.ex:336
-#: lib/vutuv_web/live/organization_live/show.ex:1131
+#: lib/vutuv_web/live/organization_live/show.ex:1148
 #, elixir-autogen, elixir-format
 msgid "If %{domain} is a CNAME / alias (a TXT record cannot share a name with a CNAME), put the record on %{name} instead, with the same value."
 msgstr ""
@@ -12906,7 +12908,7 @@ msgstr ""
 "con un CNAME), metti il record su %{name}, con lo stesso valore."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:334
-#: lib/vutuv_web/live/organization_live/show.ex:1122
+#: lib/vutuv_web/live/organization_live/show.ex:1139
 #, elixir-autogen, elixir-format
 msgid "In your DNS settings, create a TXT record on the name %{domain} with this value:"
 msgstr ""
@@ -13007,7 +13009,7 @@ msgid "Minimum yearly salary"
 msgstr "Retribuzione annua minima"
 
 #: lib/vutuv_web/live/job_board_live.ex:383
-#: lib/vutuv_web/live/organization_live/show.ex:887
+#: lib/vutuv_web/live/organization_live/show.ex:904
 #, elixir-autogen, elixir-format
 msgid "More jobs"
 msgstr "Altri annunci"
@@ -13036,7 +13038,7 @@ msgstr "Nessuna posizione corrispondente. Prova a modificare i filtri."
 #: lib/vutuv_web/agent_docs/markdown.ex:643
 #: lib/vutuv_web/agent_docs/text.ex:613
 #: lib/vutuv_web/agent_docs/text.ex:625
-#: lib/vutuv_web/live/organization_live/show.ex:879
+#: lib/vutuv_web/live/organization_live/show.ex:896
 #: lib/vutuv_web/templates/tag/show.html.heex:93
 #, elixir-autogen, elixir-format
 msgid "Open positions"
@@ -14279,7 +14281,7 @@ msgstr "Rimuovere il file caricato? La voce resta."
 msgid "Show this file publicly"
 msgstr "Mostra pubblicamente questo file"
 
-#: lib/vutuv_web/controllers/qualification_controller.ex:186
+#: lib/vutuv_web/controllers/qualification_controller.ex:184
 #, elixir-autogen, elixir-format
 msgid "The uploaded file was removed."
 msgstr "Il file caricato è stato rimosso."
@@ -20186,7 +20188,7 @@ msgstr ""
 "avere più ruoli, e la facoltà di scrivere a nome dell'organizzazione viene "
 "sempre concessa a sé."
 
-#: lib/vutuv_web/live/organization_live/show.ex:828
+#: lib/vutuv_web/live/organization_live/show.ex:845
 #, elixir-autogen, elixir-format
 msgid "Nothing published yet."
 msgstr "Ancora nulla di pubblicato."
@@ -20221,7 +20223,7 @@ msgstr "Ha iniziato a scrivere come organizzazione"
 msgid "Stopped writing as an organization"
 msgstr "Ha smesso di scrivere come organizzazione"
 
-#: lib/vutuv_web/live/organization_live/show.ex:792
+#: lib/vutuv_web/live/organization_live/show.ex:809
 #, elixir-autogen, elixir-format
 msgid "Write as %{name} for now"
 msgstr "Scrivi come %{name} per ora"
@@ -20461,14 +20463,14 @@ msgstr ""
 
 #: lib/vutuv_web/live/organization_live/fediverse.ex:92
 #: lib/vutuv_web/live/organization_live/new.ex:211
-#: lib/vutuv_web/live/organization_live/show.ex:957
+#: lib/vutuv_web/live/organization_live/show.ex:974
 #, elixir-autogen, elixir-format
 msgid "People who have no vutuv account can follow this page and read its posts, in networks like Mastodon."
 msgstr ""
 "Le persone che non hanno un account vutuv possono seguire questa pagina e "
 "leggerne i post, su reti come Mastodon."
 
-#: lib/vutuv_web/live/organization_live/show.ex:971
+#: lib/vutuv_web/live/organization_live/show.ex:988
 #, elixir-autogen, elixir-format
 msgid "Set this page up for other networks"
 msgstr "Prepari questa pagina per le altre reti"
@@ -20483,7 +20485,7 @@ msgstr "Disattivalo"
 msgid "Switch it on"
 msgstr "Attivalo"
 
-#: lib/vutuv_web/live/organization_live/show.ex:962
+#: lib/vutuv_web/live/organization_live/show.ex:979
 #, elixir-autogen, elixir-format
 msgid "The page gets an address of its own for that, written like an email address."
 msgstr ""
@@ -20771,7 +20773,7 @@ msgstr ""
 "così puoi chiudere questa pagina."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:351
-#: lib/vutuv_web/live/organization_live/show.ex:1160
+#: lib/vutuv_web/live/organization_live/show.ex:1177
 #, elixir-autogen, elixir-format
 msgid "Checking …"
 msgstr "Controllo in corso…"
@@ -22762,7 +22764,7 @@ msgctxt "heatmap scale"
 msgid "More"
 msgstr "Più"
 
-#: lib/vutuv_web/live/organization_live/show.ex:572
+#: lib/vutuv_web/live/organization_live/show.ex:589
 #, elixir-autogen, elixir-format
 msgid "The website of %{name}"
 msgstr "Il sito web di %{name}"
@@ -22818,7 +22820,7 @@ msgstr "Da scansionare con il dispositivo su cui è installata l'app"
 msgid "A new version is ready."
 msgstr "È pronta una nuova versione."
 
-#: lib/vutuv_web/live/organization_live/show.ex:720
+#: lib/vutuv_web/live/organization_live/show.ex:737
 #, elixir-autogen, elixir-format
 msgid "Page management"
 msgstr "Gestione"
@@ -26266,7 +26268,7 @@ msgstr "Una parola della nota, un nome o un handle"
 
 #: lib/vutuv_web/components/personal_note_components.ex:361
 #: lib/vutuv_web/live/fediverse_account_live.ex:473
-#: lib/vutuv_web/live/organization_live/show.ex:690
+#: lib/vutuv_web/live/organization_live/show.ex:707
 #: lib/vutuv_web/templates/user/show.html.heex:260
 #, elixir-autogen, elixir-format
 msgid "Add a personal note"
@@ -28407,7 +28409,17 @@ msgstr "Posseduti in passato"
 msgid "Previously held (%{formatted})"
 msgstr "Posseduti in passato (%{formatted})"
 
-#: lib/vutuv_web/cv/cv.ex:438
+#: lib/vutuv_web/cv/cv.ex:434
 #, elixir-autogen, elixir-format
 msgid "expired %{date}"
 msgstr "scaduto nel %{date}"
+
+#: lib/vutuv_web/live/organization_live/show.ex:1210
+#, elixir-autogen, elixir-format
+msgid "Cancel and delete this page"
+msgstr "Annulla ed elimina questa pagina"
+
+#: lib/vutuv_web/live/organization_live/show.ex:1199
+#, elixir-autogen, elixir-format
+msgid "Cannot verify this domain? Cancel the claim and the page is deleted."
+msgstr "Non riesci a verificare questo dominio? Annulla la richiesta e la pagina verrà eliminata."
