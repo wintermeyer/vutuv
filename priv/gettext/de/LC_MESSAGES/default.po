@@ -126,7 +126,7 @@ msgstr "Geburtstag"
 #: lib/vutuv_web/live/press_kit_live.ex:1164
 #: lib/vutuv_web/templates/admin/legal_page/edit.html.heex:40
 #: lib/vutuv_web/templates/admin/newsletter/form_content.html.heex:57
-#: lib/vutuv_web/templates/import/preview.html.heex:113
+#: lib/vutuv_web/templates/import/preview.html.heex:125
 #: lib/vutuv_web/templates/report/new.html.heex:134
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:276
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:243
@@ -427,7 +427,7 @@ msgstr "Link wurde geändert."
 #: lib/vutuv_web/templates/url/manage.html.heex:4
 #: lib/vutuv_web/templates/url/new.html.heex:4
 #: lib/vutuv_web/templates/url/show.html.heex:6
-#: lib/vutuv_web/views/import_html.ex:73
+#: lib/vutuv_web/views/import_html.ex:74
 #, elixir-autogen
 msgid "Links"
 msgstr "Links"
@@ -1409,7 +1409,7 @@ msgstr "Tag-URLs"
 #: lib/vutuv_web/templates/user_tag/index.html.heex:26
 #: lib/vutuv_web/templates/user_tag/manage.html.heex:4
 #: lib/vutuv_web/templates/user_tag/show.html.heex:6
-#: lib/vutuv_web/views/import_html.ex:72
+#: lib/vutuv_web/views/import_html.ex:73
 #, elixir-autogen
 msgid "Tags"
 msgstr "Tags"
@@ -3185,7 +3185,7 @@ msgstr "Besitzer"
 #: lib/vutuv_web/components/ui.ex:5823
 #: lib/vutuv_web/live/shell_live.ex:1423
 #: lib/vutuv_web/templates/import/new.html.heex:16
-#: lib/vutuv_web/views/import_html.ex:76
+#: lib/vutuv_web/views/import_html.ex:77
 #, elixir-autogen, elixir-format
 msgid "Profile"
 msgstr "Profil"
@@ -5504,7 +5504,7 @@ msgstr ""
 #: lib/vutuv_web/templates/email/edit.html.heex:4
 #: lib/vutuv_web/templates/email/manage.html.heex:4
 #: lib/vutuv_web/templates/email/new.html.heex:4
-#: lib/vutuv_web/templates/import/preview.html.heex:96
+#: lib/vutuv_web/templates/import/preview.html.heex:108
 #: lib/vutuv_web/templates/settings/security.html.heex:17
 #, elixir-autogen, elixir-format
 msgid "Email addresses"
@@ -7374,13 +7374,13 @@ msgstr "Konten"
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:986
 #: lib/vutuv_web/live/post_live/filter_band.ex:510
-#: lib/vutuv_web/views/import_html.ex:230
+#: lib/vutuv_web/views/import_html.ex:231
 #, elixir-autogen, elixir-format
 msgid "Select all"
 msgstr "Alle auswählen"
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:989
-#: lib/vutuv_web/views/import_html.ex:240
+#: lib/vutuv_web/views/import_html.ex:241
 #, elixir-autogen, elixir-format
 msgid "Unselect all"
 msgstr "Alle abwählen"
@@ -8177,49 +8177,49 @@ msgstr "Noch keine Mitglieder."
 msgid "Nobody is online right now."
 msgstr "Zurzeit ist niemand online."
 
-#: lib/vutuv_web/controllers/import_controller.ex:211
+#: lib/vutuv_web/controllers/import_controller.ex:214
 #, elixir-autogen, elixir-format
 msgid "%{count} education entry"
 msgid_plural "%{count} education entries"
 msgstr[0] "%{count} Ausbildungseintrag"
 msgstr[1] "%{count} Ausbildungseinträge"
 
-#: lib/vutuv_web/controllers/import_controller.ex:219
+#: lib/vutuv_web/controllers/import_controller.ex:222
 #, elixir-autogen, elixir-format
 msgid "%{count} link"
 msgid_plural "%{count} links"
 msgstr[0] "%{count} Link"
 msgstr[1] "%{count} Links"
 
-#: lib/vutuv_web/controllers/import_controller.ex:223
+#: lib/vutuv_web/controllers/import_controller.ex:224
 #, elixir-autogen, elixir-format
 msgid "%{count} phone number"
 msgid_plural "%{count} phone numbers"
 msgstr[0] "%{count} Telefonnummer"
 msgstr[1] "%{count} Telefonnummern"
 
-#: lib/vutuv_web/controllers/import_controller.ex:225
+#: lib/vutuv_web/controllers/import_controller.ex:227
 #, elixir-autogen, elixir-format
 msgid "%{count} profile field"
 msgid_plural "%{count} profile fields"
 msgstr[0] "%{count} Profilfeld"
 msgstr[1] "%{count} Profilfelder"
 
-#: lib/vutuv_web/controllers/import_controller.ex:221
+#: lib/vutuv_web/controllers/import_controller.ex:223
 #, elixir-autogen, elixir-format
 msgid "%{count} social account"
 msgid_plural "%{count} social accounts"
 msgstr[0] "%{count} Social-Media-Konto"
 msgstr[1] "%{count} Social-Media-Konten"
 
-#: lib/vutuv_web/controllers/import_controller.ex:218
+#: lib/vutuv_web/controllers/import_controller.ex:221
 #, elixir-autogen, elixir-format
 msgid "%{count} tag"
 msgid_plural "%{count} tags"
 msgstr[0] "%{count} Tag"
 msgstr[1] "%{count} Tags"
 
-#: lib/vutuv_web/controllers/import_controller.ex:209
+#: lib/vutuv_web/controllers/import_controller.ex:210
 #, elixir-autogen, elixir-format
 msgid "%{count} work experience"
 msgid_plural "%{count} work experiences"
@@ -8279,7 +8279,7 @@ msgstr "Ausbildung von %{name}"
 msgid "Education updated successfully."
 msgstr "Ausbildung erfolgreich aktualisiert."
 
-#: lib/vutuv_web/templates/import/preview.html.heex:98
+#: lib/vutuv_web/templates/import/preview.html.heex:110
 #, elixir-autogen, elixir-format
 msgid "Email addresses are not imported automatically because each one is confirmed by PIN. Add them yourself if you like:"
 msgstr ""
@@ -8314,17 +8314,17 @@ msgstr "Import"
 msgid "Import from LinkedIn"
 msgstr "LinkedIn-Profil importieren"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:111
+#: lib/vutuv_web/templates/import/preview.html.heex:123
 #, elixir-autogen, elixir-format
 msgid "Import selected"
 msgstr "Auswahl importieren"
 
-#: lib/vutuv_web/controllers/import_controller.ex:231
+#: lib/vutuv_web/controllers/import_controller.ex:238
 #, elixir-autogen, elixir-format
 msgid "Imported %{items}."
 msgstr "%{items} importiert."
 
-#: lib/vutuv_web/controllers/import_controller.ex:230
+#: lib/vutuv_web/controllers/import_controller.ex:237
 #, elixir-autogen, elixir-format
 msgid "Nothing new to import."
 msgstr "Nichts Neues zu importieren."
@@ -8338,7 +8338,7 @@ msgstr "Nichts Neues zu importieren."
 #: lib/vutuv_web/templates/phone_number/edit.html.heex:4
 #: lib/vutuv_web/templates/phone_number/manage.html.heex:4
 #: lib/vutuv_web/templates/phone_number/new.html.heex:4
-#: lib/vutuv_web/views/import_html.ex:75
+#: lib/vutuv_web/views/import_html.ex:76
 #, elixir-autogen, elixir-format
 msgid "Phone numbers"
 msgstr "Telefonnummern"
@@ -8354,13 +8354,13 @@ msgstr "Bitte wählen Sie zuerst Ihre LinkedIn-Export-ZIP-Datei."
 msgid "School"
 msgstr "Schule"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:87
+#: lib/vutuv_web/templates/import/preview.html.heex:99
 #, elixir-autogen, elixir-format
 msgid "Set %{field}:"
 msgstr "%{field} setzen:"
 
 #: lib/vutuv_web/templates/import/new.html.heex:14
-#: lib/vutuv_web/views/import_html.ex:74
+#: lib/vutuv_web/views/import_html.ex:75
 #, elixir-autogen, elixir-format
 msgid "Social media"
 msgstr "Soziale Medien"
@@ -8404,12 +8404,12 @@ msgstr "Hochladen und Vorschau"
 msgid "Work experience"
 msgstr "Berufserfahrung"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:102
+#: lib/vutuv_web/templates/import/preview.html.heex:114
 #, elixir-autogen, elixir-format
 msgid "add an email address"
 msgstr "eine E-Mail-Adresse hinzufügen"
 
-#: lib/vutuv_web/views/import_html.ex:110
+#: lib/vutuv_web/views/import_html.ex:111
 #, elixir-autogen, elixir-format
 msgid "already on your profile"
 msgstr "bereits in Ihrem Profil"
@@ -9209,16 +9209,6 @@ msgstr "Ehren-Tag (nur Admins können es vergeben)"
 msgid "honor tag"
 msgstr "Ehren-Tag"
 
-#: lib/vutuv_web/views/language_html.ex:25
-#, elixir-autogen, elixir-format
-msgid "A1 (Beginner)"
-msgstr "A1 (Anfänger)"
-
-#: lib/vutuv_web/views/language_html.ex:24
-#, elixir-autogen, elixir-format
-msgid "A2 (Elementary)"
-msgstr "A2 (Grundkenntnisse)"
-
 #: lib/vutuv_web/live/feed_languages_live.ex:317
 #: lib/vutuv_web/templates/language/manage.html.heex:8
 #: lib/vutuv_web/templates/language/new.html.heex:5
@@ -9257,16 +9247,6 @@ msgstr "Armenisch"
 msgid "Azerbaijani"
 msgstr "Aserbaidschanisch"
 
-#: lib/vutuv_web/views/language_html.ex:23
-#, elixir-autogen, elixir-format
-msgid "B1 (Intermediate)"
-msgstr "B1 (Mittelstufe)"
-
-#: lib/vutuv_web/views/language_html.ex:22
-#, elixir-autogen, elixir-format
-msgid "B2 (Upper intermediate)"
-msgstr "B2 (Obere Mittelstufe)"
-
 #: lib/vutuv/languages.ex:164
 #, elixir-autogen, elixir-format
 msgid "Basque"
@@ -9286,16 +9266,6 @@ msgstr "Bosnisch"
 #, elixir-autogen, elixir-format
 msgid "Bulgarian"
 msgstr "Bulgarisch"
-
-#: lib/vutuv_web/views/language_html.ex:21
-#, elixir-autogen, elixir-format
-msgid "C1 (Advanced)"
-msgstr "C1 (Fortgeschritten)"
-
-#: lib/vutuv_web/views/language_html.ex:20
-#, elixir-autogen, elixir-format
-msgid "C2 (Proficient)"
-msgstr "C2 (Annähernd muttersprachlich)"
 
 #: lib/vutuv/languages.ex:164
 #, elixir-autogen, elixir-format
@@ -9447,6 +9417,7 @@ msgstr "Sprache erfolgreich aktualisiert."
 #: lib/vutuv_web/templates/language/new.html.heex:4
 #: lib/vutuv_web/templates/language/show.html.heex:6
 #: lib/vutuv_web/templates/user/show.html.heex:818
+#: lib/vutuv_web/views/import_html.ex:72
 #, elixir-autogen, elixir-format
 msgid "Languages"
 msgstr "Sprachen"
@@ -9481,12 +9452,12 @@ msgstr "Malaiisch"
 msgid "Maltese"
 msgstr "Maltesisch"
 
-#: lib/vutuv_web/views/language_html.ex:31
+#: lib/vutuv_web/views/language_html.ex:67
 #, elixir-autogen, elixir-format
 msgid "Native"
 msgstr "Muttersprache"
 
-#: lib/vutuv_web/views/language_html.ex:19
+#: lib/vutuv_web/views/language_html.ex:21
 #, elixir-autogen, elixir-format
 msgid "Native speaker"
 msgstr "Muttersprache"
@@ -9511,7 +9482,7 @@ msgstr "Polnisch"
 msgid "Portuguese"
 msgstr "Portugiesisch"
 
-#: lib/vutuv_web/templates/language/form_content.html.heex:11
+#: lib/vutuv_web/templates/language/form_content.html.heex:15
 #: lib/vutuv_web/templates/language/show.html.heex:22
 #, elixir-autogen, elixir-format
 msgid "Proficiency"
@@ -9536,11 +9507,6 @@ msgstr "Russisch"
 #, elixir-autogen, elixir-format
 msgid "Select a language"
 msgstr "Sprache auswählen"
-
-#: lib/vutuv_web/templates/language/form_content.html.heex:12
-#, elixir-autogen, elixir-format
-msgid "Select a proficiency"
-msgstr "Sprachniveau auswählen"
 
 #: lib/vutuv/languages.ex:164
 #, elixir-autogen, elixir-format
@@ -9729,7 +9695,7 @@ msgstr ""
 msgid "“%{name}” is an honor tag now. Add members below."
 msgstr "„%{name}“ ist jetzt ein Ehren-Tag. Fügen Sie unten Mitglieder hinzu."
 
-#: lib/vutuv_web/controllers/import_controller.ex:213
+#: lib/vutuv_web/controllers/import_controller.ex:218
 #, elixir-autogen, elixir-format
 msgid "%{count} certificate or license"
 msgid_plural "%{count} certificates or licenses"
@@ -9896,14 +9862,14 @@ msgstr ""
 "Zum Sortieren ziehen oder die Pfeile verwenden. Die erste Sprache ist Ihre "
 "bevorzugte Kontaktsprache."
 
-#: lib/vutuv_web/views/language_html.ex:116
+#: lib/vutuv_web/views/language_html.ex:150
 #, elixir-autogen, elixir-format
 msgid "Preferred"
 msgstr "Bevorzugt"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:878
 #: lib/vutuv_web/live/section_reorder_live.ex:289
-#: lib/vutuv_web/views/language_html.ex:114
+#: lib/vutuv_web/views/language_html.ex:148
 #, elixir-autogen, elixir-format
 msgid "Preferred contact language"
 msgstr "Bevorzugte Kontaktsprache"
@@ -20376,14 +20342,14 @@ msgstr "Unternehmen"
 msgid "Legal"
 msgstr "Rechtliches"
 
-#: lib/vutuv_web/controllers/import_controller.ex:270
+#: lib/vutuv_web/controllers/import_controller.ex:277
 #, elixir-autogen, elixir-format
 msgid "%{count} entry could not be added."
 msgid_plural "%{count} entries could not be added."
 msgstr[0] "%{count} Eintrag konnte nicht hinzugefügt werden."
 msgstr[1] "%{count} Einträge konnten nicht hinzugefügt werden."
 
-#: lib/vutuv_web/controllers/import_controller.ex:260
+#: lib/vutuv_web/controllers/import_controller.ex:267
 #, elixir-autogen, elixir-format
 msgid "%{count} social account could not be added because another member has already claimed it."
 msgid_plural "%{count} social accounts could not be added because another member has already claimed them."
@@ -20426,7 +20392,7 @@ msgstr ""
 msgid "Section"
 msgstr "Bereich"
 
-#: lib/vutuv_web/controllers/import_controller.ex:238
+#: lib/vutuv_web/controllers/import_controller.ex:245
 #, elixir-autogen, elixir-format
 msgid "Skipped %{count} entry that is already on your profile."
 msgid_plural "Skipped %{count} entries that are already on your profile."
@@ -20443,7 +20409,7 @@ msgstr ""
 "Beschreibung und die Zeitangaben, die sie auf vutuv haben, auch wenn Ihr "
 "Archiv neuere enthält."
 
-#: lib/vutuv_web/controllers/import_controller.ex:279
+#: lib/vutuv_web/controllers/import_controller.ex:286
 #: lib/vutuv_web/views/user_helpers.ex:242
 #, elixir-autogen, elixir-format
 msgid "%{count} tag did not fit: your profile holds at most %{max}. Remove some and try again."
@@ -20455,12 +20421,12 @@ msgstr[1] ""
 "Für %{count} Tags war kein Platz mehr: Ihr Profil fasst höchstens %{max}. "
 "Entfernen Sie einige und versuchen Sie es noch einmal."
 
-#: lib/vutuv_web/views/import_html.ex:189
+#: lib/vutuv_web/views/import_html.ex:190
 #, elixir-autogen, elixir-format
 msgid "Remove tags first"
 msgstr "Zuerst Tags entfernen"
 
-#: lib/vutuv_web/views/import_html.ex:230
+#: lib/vutuv_web/views/import_html.ex:231
 #, elixir-autogen, elixir-format
 msgid "Select as many as fit"
 msgstr "So viele wie möglich auswählen"
@@ -20472,24 +20438,24 @@ msgid_plural "Skipped %{count} tags that are duplicates or invalid."
 msgstr[0] "%{count} Tag übersprungen, das doppelt oder ungültig ist."
 msgstr[1] "%{count} Tags übersprungen, die doppelt oder ungültig sind."
 
-#: lib/vutuv_web/views/import_html.ex:184
+#: lib/vutuv_web/views/import_html.ex:185
 #, elixir-autogen, elixir-format
 msgid "There is no room for more."
 msgstr "Es ist kein Platz mehr frei."
 
-#: lib/vutuv_web/views/import_html.ex:147
+#: lib/vutuv_web/views/import_html.ex:148
 #, elixir-autogen, elixir-format
 msgid "There is no room for more. Uncheck one to pick another."
 msgstr ""
 "Es ist kein Platz mehr frei. Nehmen Sie einen Haken weg, um ein anderes Tag "
 "zu wählen."
 
-#: lib/vutuv_web/views/import_html.ex:179
+#: lib/vutuv_web/views/import_html.ex:180
 #, elixir-autogen, elixir-format
 msgid "You have %{used} of %{max} tags."
 msgstr "Sie haben %{used} von %{max} Tags."
 
-#: lib/vutuv_web/views/import_html.ex:201
+#: lib/vutuv_web/views/import_html.ex:202
 #, elixir-autogen, elixir-format
 msgid "{n} of {max} free slots selected."
 msgstr "{n} von {max} freien Plätzen ausgewählt."
@@ -20937,7 +20903,7 @@ msgstr "Gleiche E-Mail-Adresse wie Ihr Kontakt"
 msgid "Search by name"
 msgstr "Nach Namen suchen"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:124
+#: lib/vutuv_web/templates/import/preview.html.heex:136
 #, elixir-autogen, elixir-format
 msgid "See which of them are already on vutuv"
 msgstr "Sehen Sie, wer davon schon auf vutuv ist"
@@ -21009,7 +20975,7 @@ msgstr "Ihr LinkedIn-Datenexport enthält Ihre Kontakte. Wir lesen diese Liste, 
 msgid "Your contacts on vutuv"
 msgstr "Ihre Kontakte auf vutuv"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:122
+#: lib/vutuv_web/templates/import/preview.html.heex:134
 #, elixir-autogen, elixir-format
 msgid "Your export also lists your LinkedIn contacts."
 msgstr "Ihr Export enthält auch Ihre LinkedIn-Kontakte."
@@ -27595,3 +27561,80 @@ msgstr "Abbrechen und diese Seite löschen"
 #, elixir-autogen, elixir-format
 msgid "Cannot verify this domain? Cancel the claim and the page is deleted."
 msgstr "Sie können diese Domain nicht bestätigen? Brechen Sie die Anmeldung ab, dann wird die Seite gelöscht."
+
+#: lib/vutuv_web/controllers/import_controller.ex:220
+#, elixir-autogen, elixir-format
+msgid "%{count} language"
+msgid_plural "%{count} languages"
+msgstr[0] "%{count} Sprache"
+msgstr[1] "%{count} Sprachen"
+
+#: lib/vutuv_web/views/language_html.ex:43
+#, elixir-autogen, elixir-format
+msgid "A normal conversation with native speakers works without much effort."
+msgstr "Ein normales Gespräch mit Muttersprachlern gelingt ohne größere Mühe."
+
+#: lib/vutuv_web/views/language_html.ex:26
+#, elixir-autogen, elixir-format
+msgid "Basic knowledge"
+msgstr "Grundkenntnisse"
+
+#: lib/vutuv_web/views/language_html.ex:27
+#, elixir-autogen, elixir-format
+msgid "Beginner"
+msgstr "Anfänger"
+
+#: lib/vutuv_web/views/language_html.ex:23
+#, elixir-autogen, elixir-format
+msgid "Business fluent"
+msgstr "Verhandlungssicher"
+
+#: lib/vutuv_web/views/language_html.ex:24
+#, elixir-autogen, elixir-format
+msgid "Fluent"
+msgstr "Fließend"
+
+#: lib/vutuv_web/views/language_html.ex:25
+#, elixir-autogen, elixir-format
+msgid "Good command"
+msgstr "Gute Kenntnisse"
+
+#: lib/vutuv_web/views/language_html.ex:49
+#, elixir-autogen, elixir-format
+msgid "I can communicate in simple, familiar situations."
+msgstr "Ich verständige mich in einfachen, vertrauten Situationen."
+
+#: lib/vutuv_web/views/language_html.ex:46
+#, elixir-autogen, elixir-format
+msgid "I get by in most everyday and travel situations."
+msgstr "Ich komme in den meisten Alltags- und Reisesituationen zurecht."
+
+#: lib/vutuv_web/views/language_html.ex:40
+#, elixir-autogen, elixir-format
+msgid "I speak spontaneously and fluently and use the language effectively at work."
+msgstr "Ich spreche spontan und fließend und setze die Sprache im Beruf wirksam ein."
+
+#: lib/vutuv_web/views/language_html.ex:52
+#, elixir-autogen, elixir-format
+msgid "I understand and use familiar everyday expressions."
+msgstr "Ich verstehe und verwende vertraute, alltägliche Ausdrücke."
+
+#: lib/vutuv_web/views/language_html.ex:37
+#, elixir-autogen, elixir-format
+msgid "I understand virtually everything with ease and express myself precisely."
+msgstr "Ich verstehe praktisch alles mühelos und drücke mich sehr genau aus."
+
+#: lib/vutuv_web/views/language_html.ex:22
+#, elixir-autogen, elixir-format
+msgid "Near-native"
+msgstr "Annähernd muttersprachlich"
+
+#: lib/vutuv_web/templates/language/form_content.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "Rate yourself. You do not need an exam for this."
+msgstr "Schätzen Sie sich selbst ein. Eine Prüfung brauchen Sie dafür nicht."
+
+#: lib/vutuv_web/views/language_html.ex:34
+#, elixir-autogen, elixir-format
+msgid "The language I grew up with."
+msgstr "Die Sprache, mit der ich aufgewachsen bin."

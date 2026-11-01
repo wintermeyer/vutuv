@@ -205,27 +205,34 @@ defmodule VutuvWeb.ImportController do
 
   defp imported_parts(created) do
     [
-      created.positions > 0 &&
-        ngettext("%{count} work experience", "%{count} work experiences", created.positions),
-      created.educations > 0 &&
-        ngettext("%{count} education entry", "%{count} education entries", created.educations),
-      created.certifications > 0 &&
-        ngettext(
-          "%{count} certificate or license",
-          "%{count} certificates or licenses",
-          created.certifications
-        ),
-      created.skills > 0 && ngettext("%{count} tag", "%{count} tags", created.skills),
-      created.urls > 0 && ngettext("%{count} link", "%{count} links", created.urls),
-      created.social > 0 &&
-        ngettext("%{count} social account", "%{count} social accounts", created.social),
-      created.phones > 0 &&
-        ngettext("%{count} phone number", "%{count} phone numbers", created.phones),
-      created.profile != [] &&
-        ngettext("%{count} profile field", "%{count} profile fields", length(created.profile))
+      part(
+        created.positions,
+        &ngettext("%{count} work experience", "%{count} work experiences", &1)
+      ),
+      part(
+        created.educations,
+        &ngettext("%{count} education entry", "%{count} education entries", &1)
+      ),
+      part(
+        created.certifications,
+        &ngettext("%{count} certificate or license", "%{count} certificates or licenses", &1)
+      ),
+      part(created.languages, &ngettext("%{count} language", "%{count} languages", &1)),
+      part(created.skills, &ngettext("%{count} tag", "%{count} tags", &1)),
+      part(created.urls, &ngettext("%{count} link", "%{count} links", &1)),
+      part(created.social, &ngettext("%{count} social account", "%{count} social accounts", &1)),
+      part(created.phones, &ngettext("%{count} phone number", "%{count} phone numbers", &1)),
+      part(
+        length(created.profile),
+        &ngettext("%{count} profile field", "%{count} profile fields", &1)
+      )
     ]
     |> Enum.filter(& &1)
   end
+
+  # A section that created nothing is left out of the sentence.
+  defp part(0, _phrase), do: nil
+  defp part(count, phrase), do: phrase.(count)
 
   defp imported_message([]), do: gettext("Nothing new to import.")
   defp imported_message(parts), do: gettext("Imported %{items}.", items: Enum.join(parts, ", "))

@@ -13,28 +13,67 @@ defmodule VutuvWeb.LanguageHTML do
   defdelegate language_options, to: Languages, as: :options
 
   @doc """
-  The full, descriptive proficiency label (the form select and the entry show
-  page). CEFR levels carry a plain-language gloss so the code is never opaque.
+  The word for a level, the way a CV says it ("Verhandlungssicher"). It sits
+  beside the CEFR code wherever the code shows, because a bare "C1" reads like
+  an exam grade to anybody who never sat one, and a member assessing
+  themselves felt like a fraud claiming it.
   """
-  def proficiency_label("native"), do: gettext("Native speaker")
-  def proficiency_label("c2"), do: gettext("C2 (Proficient)")
-  def proficiency_label("c1"), do: gettext("C1 (Advanced)")
-  def proficiency_label("b2"), do: gettext("B2 (Upper intermediate)")
-  def proficiency_label("b1"), do: gettext("B1 (Intermediate)")
-  def proficiency_label("a2"), do: gettext("A2 (Elementary)")
-  def proficiency_label("a1"), do: gettext("A1 (Beginner)")
+  def proficiency_word("native"), do: gettext("Native speaker")
+  def proficiency_word("c2"), do: gettext("Near-native")
+  def proficiency_word("c1"), do: gettext("Business fluent")
+  def proficiency_word("b2"), do: gettext("Fluent")
+  def proficiency_word("b1"), do: gettext("Good command")
+  def proficiency_word("a2"), do: gettext("Basic knowledge")
+  def proficiency_word("a1"), do: gettext("Beginner")
 
   @doc """
-  The compact proficiency badge shown on the profile card and CV: the mother
-  tongue reads "Native"/"Muttersprache", a CEFR level shows its bare code.
+  What a member at this level can do, in the first person, after the CEFR
+  self-assessment grid. The form shows it under each choice and the badge
+  carries it as its hover title.
+  """
+  def proficiency_can_do("native"), do: gettext("The language I grew up with.")
+
+  def proficiency_can_do("c2"),
+    do: gettext("I understand virtually everything with ease and express myself precisely.")
+
+  def proficiency_can_do("c1"),
+    do: gettext("I speak spontaneously and fluently and use the language effectively at work.")
+
+  def proficiency_can_do("b2"),
+    do: gettext("A normal conversation with native speakers works without much effort.")
+
+  def proficiency_can_do("b1"),
+    do: gettext("I get by in most everyday and travel situations.")
+
+  def proficiency_can_do("a2"),
+    do: gettext("I can communicate in simple, familiar situations.")
+
+  def proficiency_can_do("a1"),
+    do: gettext("I understand and use familiar everyday expressions.")
+
+  @doc """
+  The full proficiency label (the entry show page, the CV, the import
+  preview): the code and the word, or the word alone for a mother tongue.
+  """
+  def proficiency_label("native"), do: proficiency_word("native")
+
+  def proficiency_label(level) when level in ~w(c2 c1 b2 b1 a2 a1),
+    do: proficiency_badge(level) <> " · " <> proficiency_word(level)
+
+  @doc """
+  The bare proficiency code the agent formats carry as `level`: the mother
+  tongue reads "Native"/"Muttersprache", a CEFR level shows its code.
   """
   def proficiency_badge("native"), do: gettext("Native")
   def proficiency_badge(level) when level in ~w(c2 c1 b2 b1 a2 a1), do: String.upcase(level)
 
+  @doc "The levels in the form's order, highest first."
+  def proficiencies, do: Language.proficiencies()
+
   @doc """
   The proficiency badge as it is actually rendered: the brand-tint pill around
-  `proficiency_badge/1`, with the full `proficiency_label/1` as its hover title
-  (which is what the `cursor-help` announces).
+  the code and its word ("C1 · Verhandlungssicher"), with the can-do sentence
+  as its hover title (which is what the `cursor-help` announces).
 
   Three call sites wrote this span out by hand and had already drifted — the
   profile's compact language pill carried `rounded` + `px-1.5` against the
@@ -56,20 +95,15 @@ defmodule VutuvWeb.LanguageHTML do
         proficiency_pill_size(@size),
         @class
       ]}
-      title={proficiency_label(@proficiency)}
+      title={proficiency_can_do(@proficiency)}
     >
-      {proficiency_badge(@proficiency)}
+      {proficiency_label(@proficiency)}
     </span>
     """
   end
 
   defp proficiency_pill_size("sm"), do: "rounded px-1.5 py-0.5"
   defp proficiency_pill_size(_md), do: "rounded-lg px-2 py-0.5"
-
-  @doc "The `{label, value}` options for the form's proficiency select."
-  def proficiency_options do
-    for level <- Language.proficiencies(), do: {proficiency_label(level), level}
-  end
 
   @doc """
   The neutral "language" glyph shown beside each entry (the Heroicons

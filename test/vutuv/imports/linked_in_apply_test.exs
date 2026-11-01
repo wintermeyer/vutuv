@@ -11,6 +11,7 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
   alias Vutuv.Imports.LinkedIn
   alias Vutuv.PageScreenshot
   alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
@@ -167,6 +168,34 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
       assert Enum.all?(candidates.educations, & &1.select?)
       assert Enum.all?(candidates.certifications, & &1.select?)
     end
+  end
+
+  test "imported languages land after the ones already listed, and only once" do
+    user = insert(:user)
+    insert(:language, user: user, language_code: "de", proficiency: "native", position: 1)
+
+    archive =
+      zip([
+        {"Languages.csv",
+         "Name,Proficiency\nGerman,Native or bilingual proficiency\n" <>
+           "English,Full professional proficiency\nFrench,Elementary proficiency\n"}
+      ])
+
+    {:ok, parsed} = LinkedIn.parse(archive)
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.languages == 2
+    assert summary.skipped.languages == 1
+
+    rows =
+      from(l in Language, where: l.user_id == ^user.id, order_by: l.position)
+      |> Repo.all()
+      |> Enum.map(&{&1.language_code, &1.proficiency, &1.position})
+
+    assert rows == [{"de", "native", 1}, {"en", "c1", 2}, {"fr", "a2", 3}]
+
+    {:ok, again} = LinkedIn.apply_selection(user, parsed)
+    assert again.created.languages == 0
   end
 
   test "a re-import does not double a certification (issue #859)" do

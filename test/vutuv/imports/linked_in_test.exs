@@ -200,6 +200,45 @@ defmodule Vutuv.Imports.LinkedInTest do
     end
   end
 
+  describe "Languages.csv" do
+    test "maps each language to its code and LinkedIn's level to a CEFR level" do
+      csv = """
+      Name,Proficiency
+      English,Full professional proficiency
+      Deutsch,Native or bilingual proficiency
+      Französisch,Elementary proficiency
+      Spanish,Professional working proficiency
+      Italiano,Limited working proficiency
+      """
+
+      {:ok, result} = LinkedIn.parse(zip([{"Languages.csv", csv}]))
+
+      assert Enum.map(result.languages, &{&1.params["language_code"], &1.params["proficiency"]}) ==
+               [{"en", "c1"}, {"de", "native"}, {"fr", "a2"}, {"es", "b2"}, {"it", "b1"}]
+    end
+
+    test "reads the enum spelling some exports use" do
+      csv = "Name,Proficiency\nEnglish,NATIVE_OR_BILINGUAL\nGerman,PROFESSIONAL_WORKING\n"
+      {:ok, result} = LinkedIn.parse(zip([{"Sprachen.csv", csv}]))
+
+      assert Enum.map(result.languages, & &1.params["proficiency"]) == ["native", "b2"]
+    end
+
+    test "drops a language we do not know or a row without a level, keeps one row per language" do
+      csv = """
+      Name,Proficiency
+      Klingon,Full professional proficiency
+      English,
+      English,Elementary proficiency
+      english,Full professional proficiency
+      """
+
+      {:ok, result} = LinkedIn.parse(zip([{"Languages.csv", csv}]))
+
+      assert [%{params: %{"language_code" => "en", "proficiency" => "a2"}}] = result.languages
+    end
+  end
+
   describe "Skills.csv" do
     test "keeps a multi-word skill whole as one tag candidate and dedups" do
       csv = "Name\nElixir\nRuby on Rails\nElixir\n"
@@ -401,6 +440,7 @@ defmodule Vutuv.Imports.LinkedInTest do
       assert result.educations == []
       assert result.skills == []
       assert result.phones == []
+      assert result.languages == []
     end
   end
 

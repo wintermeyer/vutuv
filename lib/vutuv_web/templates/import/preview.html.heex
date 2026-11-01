@@ -54,6 +54,18 @@
         <.candidate_row :for={c <- @candidates.certifications} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
+      <%!-- LinkedIn's five levels arrive as the CEFR code that describes the
+      same ability, so the row shows what will land on the profile. --%>
+      <.candidate_section title={section_label(:languages)} items={@candidates.languages}>
+        <.candidate_row
+          :for={c <- @candidates.languages}
+          id={c.id}
+          label={c.label <> " · " <> VutuvWeb.LanguageHTML.proficiency_label(c.params["proficiency"])}
+          duplicate?={c.duplicate?}
+          select?={c.select?}
+        />
+      </.candidate_section>
+
       <%!-- Tags are the one capped section: a profile carries at most
       Vutuv.Tags.max_user_tags/0 of them, so the preselection stops at the free
       slots and the section says how many that is. --%>
