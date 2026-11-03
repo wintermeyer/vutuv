@@ -343,6 +343,16 @@ defmodule VutuvWeb.Router do
       assigns: %{mastodon_scope: "read:notifications"}
     )
 
+    # Before `:group_key`, or "policy" is read as one and 404s. The official iOS
+    # app asks for it when its notifications tab opens (#2363).
+    get("/api/v2/notifications/policy", NotificationController, :policy,
+      assigns: %{mastodon_scope: "read:notifications"}
+    )
+
+    patch("/api/v2/notifications/policy", NotificationController, :policy,
+      assigns: %{mastodon_scope: "write:notifications"}
+    )
+
     # The three companions of that list. A client holds a `group_key` from it and
     # opens, fills or dismisses the row with these; all three used to 404.
     get("/api/v2/notifications/:group_key/accounts", NotificationController, :group_accounts,
@@ -358,6 +368,12 @@ defmodule VutuvWeb.Router do
     )
 
     get("/api/v1/notifications/unread_count", NotificationController, :unread_count,
+      assigns: %{mastodon_scope: "read:notifications"}
+    )
+
+    # Before `:id` for the same reason: nothing here is ever filtered into a
+    # request, so the list is always empty.
+    get("/api/v1/notifications/requests", CompatibilityController, :empty,
       assigns: %{mastodon_scope: "read:notifications"}
     )
 

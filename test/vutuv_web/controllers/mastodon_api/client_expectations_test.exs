@@ -232,6 +232,52 @@ defmodule VutuvWeb.MastodonApi.ClientExpectationsTest do
       assert Enum.map(groups, & &1["type"]) == ["favourite", "follow"]
     end
 
+    test "carry most_recent_notification_id as a number, as Mastodon does", %{
+      conn: conn,
+      token: token
+    } do
+      # Mastodon serializes this one field as a bare integer, and the official
+      # iOS app and Ice Cubes decode it as `Int`. A string failed the decode of
+      # the whole page, so the notifications tab showed an error (#2363).
+      body =
+        conn
+        |> mastodon_conn(token)
+        |> get("/api/v2/notifications")
+        |> json_response(200)
+
+      assert [group] = body["notification_groups"]
+      assert is_integer(group["most_recent_notification_id"])
+      assert group["most_recent_notification_id"] < Integer.pow(2, 53)
+      assert is_binary(group["page_max_id"])
+    end
+
+    test "answer the notification policy instead of reading it as a group key", %{
+      conn: conn,
+      token: token
+    } do
+      # The official iOS app reads the policy when its notifications tab opens.
+      # It fell through to `/api/v2/notifications/:group_key` and came back as
+      # "Record not found".
+      policy =
+        conn
+        |> mastodon_conn(token)
+        |> get("/api/v2/notifications/policy")
+        |> json_response(200)
+
+      assert policy["for_not_following"] == "accept"
+      assert policy["for_private_mentions"] == "accept"
+
+      assert policy["summary"] == %{
+               "pending_requests_count" => 0,
+               "pending_notifications_count" => 0
+             }
+
+      assert conn
+             |> mastodon_conn(token)
+             |> get("/api/v1/notifications/requests")
+             |> json_response(200) == []
+    end
+
     defp stamp(table, column, id, at) do
       Repo.update_all(
         Ecto.Query.from(r in table,
