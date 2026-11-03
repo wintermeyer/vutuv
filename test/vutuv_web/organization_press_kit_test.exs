@@ -126,10 +126,9 @@ defmodule VutuvWeb.OrganizationPressKitTest do
 
       html = conn |> get(press_path(organization)) |> html_response(200)
 
-      # The PNG is a rasterisation of the upload and is offered whatever the
-      # cleaner makes of the markup; the vector's own link waits on a file this
-      # inserted row has never had (issue #2182).
-      assert html =~ "/system/press_kit/#{logo.token}/download.png"
+      # This fixture has no stored file, so it offers neither download even
+      # though the row describes a vector logo (issue #2203).
+      refute html =~ "/system/press_kit/#{logo.token}/download.png"
       refute html =~ "/system/press_kit/#{logo.token}/download.orig"
       assert html =~ "Wortmarke"
     end
@@ -331,10 +330,10 @@ defmodule VutuvWeb.OrganizationPressKitTest do
       assert card =~ "Zur freien redaktionellen Verwendung mit Bildnachweis."
       assert page =~ "Pressefotos"
       assert page =~ "Logo-Varianten"
-      # The one download these fileless rows still offer (issue #2182); the
-      # German of the other buttons is pinned in
+      # These inserted rows have no stored files, so the page offers no
+      # downloads. The German download labels are pinned in
       # `VutuvWeb.PressKitDownloadOfferTest`.
-      assert page =~ "PNG herunterladen"
+      refute page =~ "PNG herunterladen"
       # The heading names the page, not a bare category.
       assert page =~ "Media Kit von Acme GmbH"
     end

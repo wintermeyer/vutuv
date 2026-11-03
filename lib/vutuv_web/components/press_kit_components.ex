@@ -375,17 +375,14 @@ defmodule VutuvWeb.PressKitComponents do
 
       <.press_meta image={@view.image} download={@view.download} report={@view.report} />
 
-      <%!-- The file's own link is drawn only while there is a file (issue
-      #2182), which is the same answer the size beside it already gives: a logo
-      stored before the cleaning shipped can be one the cleaner now refuses, and
-      its Download button answered 404. The PNG keeps its own link either way —
-      it is a rasterisation of the same upload, and no verdict on the markup
-      reaches it. --%>
+      <%!-- Each link follows the file it can hand over: the SVG can be refused
+      by the cleaner while its PNG raster remains available, but neither link
+      exists when the original file is gone. --%>
       <div :if={@view.photo} class="flex flex-wrap gap-2">
         <.press_download :if={@view.download} href={@view.download.url}>
           {gettext("Download %{format}", format: format_name(@view.image))}
         </.press_download>
-        <.press_download :if={vector?(@view.image)} href={PressKit.png_download_url(@view.image)}>
+        <.press_download :if={@view.png_download} href={@view.png_download.url}>
           {gettext("Download %{format}", format: "PNG")}
         </.press_download>
       </div>
@@ -420,13 +417,15 @@ defmodule VutuvWeb.PressKitComponents do
       Enum.map_reduce(shown, 0, fn
         {image, true}, next ->
           download = PressKit.download_offer(image)
+          png_download = PressKit.png_download_offer(image)
 
           {%{
              image: image,
              held: false,
              photo: photo_data(image, next, visible, download),
              report: report_href(image, scope),
-             download: download
+             download: download,
+             png_download: png_download
            }, next + 1}
 
         # Nothing is handed over while the AI gate holds a picture, so the disk
@@ -437,7 +436,8 @@ defmodule VutuvWeb.PressKitComponents do
              held: PressKit.pixelated_url(image) || :none,
              photo: nil,
              report: nil,
-             download: nil
+             download: nil,
+             png_download: nil
            }, next}
       end)
 

@@ -84,6 +84,7 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
     # Once per picture: the address and the length are one answer, and for a
     # file the strippers refuse, asking twice means stripping it twice.
     download = PressKit.download_offer(image)
+    png_download = PressKit.png_download_offer(image)
 
     %{
       id: image.id,
@@ -109,9 +110,9 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
       download_url: download && AgentDocs.abs_url(download.url),
       # Only a vector logo has one; a photo's download is already the file
       # itself, and an absent fact is no key at all rather than null.
-      png_download_url: png_url(image)
+      png_download_url: png_download && AgentDocs.abs_url(png_download.url)
     }
-    |> Map.merge(pixel_size(image))
+    |> Map.merge(pixel_size(image, png_download))
     |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
     |> Map.new()
   end
@@ -119,16 +120,11 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
   # `width`/`height` describe whatever `download_url` hands over — except for a
   # vector, which has no pixel size of its own: there the stored numbers are the
   # rasterisation's, i.e. the PNG offered beside it, so they are named after it.
-  defp pixel_size(%Image{} = image) do
-    if PressKit.vector?(image),
-      do: %{png_width: image.width, png_height: image.height},
-      else: %{width: image.width, height: image.height}
+  defp pixel_size(%Image{} = image, png_download) do
+    case {PressKit.vector?(image), png_download} do
+      {true, nil} -> %{}
+      {true, _offer} -> %{png_width: image.width, png_height: image.height}
+      {false, _offer} -> %{width: image.width, height: image.height}
+    end
   end
-
-  # The same question `pixel_size/1` asks, so the two keys travel together: an
-  # entry carries `png_width`/`png_height` exactly when it carries the PNG. The
-  # PNG is not gated on the cleaner the way the vector above is — it is a
-  # rasterisation of the same upload, so no verdict on the markup reaches it.
-  defp png_url(%Image{} = image),
-    do: if(PressKit.vector?(image), do: AgentDocs.abs_url(PressKit.png_download_url(image)))
 end
