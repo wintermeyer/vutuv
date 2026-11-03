@@ -1,0 +1,8 @@
+<.form_page
+  user={@user}
+  active={:publications}
+  section={{gettext("Publications"), ~p"/settings/publications"}}
+  title={gettext("Add a publication")}
+>
+  <%= render "form_content.html", backlink: ~p"/settings/publications", changeset: @changeset, action: ~p"/settings/publications", followers: @followers %>
+</.form_page>

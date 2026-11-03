@@ -60,6 +60,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         gettext("Languages"),
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
+      section(
+        gettext("Publications"),
+        Enum.map(doc.publications, &entry_line("publications", &1))
+      ),
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
       section(gettext("Media Kit"), Enum.map(doc.press_kit, &press_picture_line/1)),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
@@ -774,6 +778,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("languages", language),
     do: "- #{md_text(language.name)}: #{language.level}#{language_preferred_gloss(language)}"
 
+  defp entry_line("publications", publication), do: publication_line(publication)
+
   defp entry_line("links", link), do: link_line(link)
 
   defp entry_line("emails", email),
@@ -951,6 +957,32 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "school" -> gettext("School Education")
       _university -> nil
     end
+  end
+
+  # A publication line: the title, then its facts (authors, where, when),
+  # then the link as an autolink. The description is authored Markdown (#905),
+  # emitted raw on an indented line like a work entry's notes.
+  defp publication_line(publication) do
+    facts = publication_facts(publication)
+
+    base =
+      if facts == "",
+        do: "- #{md_text(publication.title)}",
+        else: "- #{md_text(publication.title)}: #{md_text(facts)}"
+
+    base
+    |> append_if(publication.url, &(&1 <> " " <> md_autolink(publication.url)))
+    |> append_if(publication.description, &(&1 <> "\n" <> publication.description))
+    |> indent_item_body()
+  end
+
+  @doc false
+  # "Carberry, J. · Journal of Psychoceramics · 2012": the facts beside a
+  # publication's title, blank ones dropped. Shared with the text renderer.
+  def publication_facts(publication) do
+    [publication.authors, publication.publisher, publication.published]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" · ")
   end
 
   # A credential line: the name, then its facts, then the verification link as

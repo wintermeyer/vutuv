@@ -1,0 +1,13 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/publications
+shows the plain showcase view. Publications sort by date, so there is no
+reorder tool here (like the other CV sections). --%>
+<.settings_shell user={@user} active={:publications} title={gettext("Publications")}>
+  <.card_section
+    empty={Enum.empty?(@publications)}
+    add_href={~p"/settings/publications/new"}
+    add_label={gettext("Add a publication")}
+  >
+    <%= render "card_list.html", assigns %>
+  </.card_section>
+</.settings_shell>

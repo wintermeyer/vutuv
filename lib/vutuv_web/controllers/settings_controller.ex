@@ -82,6 +82,7 @@ defmodule VutuvWeb.SettingsController do
       education: counts.educations,
       qualifications: counts.qualifications,
       languages: counts.languages,
+      publications: counts.publications,
       links: counts.urls,
       social: counts.social_media_accounts,
       messengers: counts.messengers,

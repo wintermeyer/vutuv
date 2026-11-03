@@ -46,15 +46,17 @@ defmodule VutuvWeb.SettingsHubTest do
       refute "Other" in names
 
       # A group you have to scroll is a group you scan instead of read. Eight
-      # everywhere, and **Profile alone** at nine since the press kit joined it
-      # (issue #2085): every other group either names a different subject or is
-      # full itself, and filing the one row a member will hunt for under a
-      # heading it does not belong to is exactly the failure this bound exists
-      # to prevent. The exception is named rather than raising the bound for
-      # everybody — Profile is the one, and a
-      # blanket nine would let the next group drift there unremarked.
+      # everywhere, and **Profile alone** at ten: nine since the press kit
+      # joined it (issue #2085), ten since publications did (issue #2350) —
+      # every other group either names a different subject or is full itself,
+      # and filing the one row a member will hunt for under a heading it does
+      # not belong to is exactly the failure this bound exists to prevent. The
+      # exception is named rather than raising the bound for everybody —
+      # Profile is the one, and a blanket ten would let the next group drift
+      # there unremarked. Profile is the CV, and a CV has many parts; the next
+      # row there is the point to split the group, not to widen this number.
       for {name, rows} <- menu do
-        cap = if name == "Profile", do: 9, else: 8
+        cap = if name == "Profile", do: 10, else: 8
 
         assert length(rows) <= cap,
                "#{name} has #{length(rows)} rows, more than a glance holds"

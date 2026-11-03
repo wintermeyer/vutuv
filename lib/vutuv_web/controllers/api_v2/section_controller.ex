@@ -24,6 +24,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     Language,
     Messenger,
     PhoneNumber,
+    Publication,
     Qualification,
     SocialMediaAccount,
     Url,
@@ -50,7 +51,8 @@ defmodule VutuvWeb.ApiV2.SectionController do
     addresses: %{assoc: :addresses, schema: Address},
     phone_numbers: %{assoc: :phone_numbers, schema: PhoneNumber},
     languages: %{assoc: :languages, schema: Language},
-    qualifications: %{assoc: :qualifications, schema: Qualification}
+    qualifications: %{assoc: :qualifications, schema: Qualification},
+    publications: %{assoc: :publications, schema: Publication}
   }
 
   def index(conn, %{"slug" => slug}) do

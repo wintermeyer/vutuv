@@ -1595,7 +1595,7 @@ defmodule VutuvWeb.Router do
     # email list is viewer-aware). Which section a route means travels in
     # the route assigns.
     for section <- ~w(work_experiences links social_media_accounts messengers addresses
-                      phone_numbers emails tags languages qualifications)a do
+                      phone_numbers emails tags languages qualifications publications)a do
       get("/users/:slug/#{section}", SectionController, :index,
         assigns: %{section: section, api_scope: "profile:read"}
       )
@@ -1604,7 +1604,7 @@ defmodule VutuvWeb.Router do
     # Writes on the authorized user's own sections. No email routes (an
     # address is a PIN-verified identity); tags go through TagController.
     for section <- ~w(work_experiences links social_media_accounts messengers addresses
-                      phone_numbers languages qualifications)a do
+                      phone_numbers languages qualifications publications)a do
       post("/me/#{section}", SectionController, :create,
         assigns: %{section: section, api_scope: "profile:write"}
       )
@@ -2037,6 +2037,13 @@ defmodule VutuvWeb.Router do
       as: :settings_language
     )
 
+    get("/publications", PublicationController, :manage)
+
+    resources("/publications", PublicationController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_publication
+    )
+
     get("/qualifications", QualificationController, :manage)
 
     resources("/qualifications", QualificationController,
@@ -2168,6 +2175,7 @@ defmodule VutuvWeb.Router do
       resources("/work_experiences", WorkExperienceController, only: [:index, :show])
       resources("/educations", EducationController, only: [:index, :show])
       resources("/languages", LanguageController, only: [:index, :show])
+      resources("/publications", PublicationController, only: [:index, :show])
       resources("/qualifications", QualificationController, only: [:index, :show])
 
       # The authorizing proxy for a qualification's proof document (thumbnail

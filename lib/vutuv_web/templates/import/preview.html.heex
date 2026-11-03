@@ -66,6 +66,10 @@
         />
       </.candidate_section>
 
+      <.candidate_section title={section_label(:publications)} items={@candidates.publications}>
+        <.candidate_row :for={c <- @candidates.publications} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
+      </.candidate_section>
+
       <%!-- Tags are the one capped section: a profile carries at most
       Vutuv.Tags.max_user_tags/0 of them, so the preselection stops at the free
       slots and the section says how many that is. --%>

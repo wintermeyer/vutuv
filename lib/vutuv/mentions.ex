@@ -73,6 +73,7 @@ defmodule Vutuv.Mentions do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts.Post
   alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.Publication
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.SearchText
@@ -158,6 +159,7 @@ defmodule Vutuv.Mentions do
     {User, :headline},
     {WorkExperience, :description},
     {Education, :description},
+    {Publication, :description},
     {JobPosting, :description}
   ]
 
@@ -1105,6 +1107,7 @@ defmodule Vutuv.Mentions do
   defp surface_key(User), do: :headlines
   defp surface_key(WorkExperience), do: :work_experiences
   defp surface_key(Education), do: :educations
+  defp surface_key(Publication), do: :publications
   defp surface_key(JobPosting), do: :job_postings
 
   defp normalize(value) when is_binary(value), do: Handles.normalize(value)

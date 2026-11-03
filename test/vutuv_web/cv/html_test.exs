@@ -40,6 +40,7 @@ defmodule VutuvWeb.CV.HtmlTest do
       skills: [],
       qualifications: [],
       languages: [],
+      publications: [],
       links: [],
       social_media: []
     }

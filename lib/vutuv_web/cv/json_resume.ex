@@ -38,6 +38,7 @@ defmodule VutuvWeb.CV.JsonResume do
       "education" => Enum.map(cv.educations, &education/1),
       "skills" => Enum.map(cv.skills, &%{"name" => &1.name}),
       "languages" => Enum.map(cv.languages, &%{"language" => &1.name, "fluency" => &1.fluency}),
+      "publications" => Enum.map(cv.publications, &publication/1),
       "certificates" => Enum.map(cv.qualifications, &certificate/1)
     }
     |> Enum.reject(fn {_key, value} -> value == [] end)
@@ -114,6 +115,18 @@ defmodule VutuvWeb.CV.JsonResume do
 
   # A JSON Resume `certificates[]` entry (name / date / issuer / url); certs
   # and licences alike map here, the only credential section the schema has.
+  # The JSON Resume `publications` entry: name, publisher, releaseDate, url,
+  # summary — the schema's own field names.
+  defp publication(publication) do
+    compact(%{
+      "name" => publication.name,
+      "publisher" => publication.publisher,
+      "releaseDate" => publication.date,
+      "url" => publication.url,
+      "summary" => publication.summary
+    })
+  end
+
   defp certificate(qualification) do
     compact(%{
       "name" => qualification.name,

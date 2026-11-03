@@ -218,6 +218,10 @@ defmodule VutuvWeb.ImportController do
         &ngettext("%{count} certificate or license", "%{count} certificates or licenses", &1)
       ),
       part(created.languages, &ngettext("%{count} language", "%{count} languages", &1)),
+      part(
+        created.publications,
+        &ngettext("%{count} publication", "%{count} publications", &1)
+      ),
       part(created.skills, &ngettext("%{count} tag", "%{count} tags", &1)),
       part(created.urls, &ngettext("%{count} link", "%{count} links", &1)),
       part(created.social, &ngettext("%{count} social account", "%{count} social accounts", &1)),

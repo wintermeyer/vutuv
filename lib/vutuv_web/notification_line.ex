@@ -245,6 +245,9 @@ defmodule VutuvWeb.NotificationLine do
       "qualifications" ->
         gettext("added a new certificate to their CV: %{entry}", entry: cv_entry_label(entry))
 
+      "publications" ->
+        gettext("added a new publication to their CV: %{entry}", entry: cv_entry_label(entry))
+
       _ ->
         gettext("added a new position to their CV: %{entry}", entry: cv_entry_label(entry))
     end
@@ -653,6 +656,7 @@ defmodule VutuvWeb.NotificationLine do
         "work_experiences" -> ~p"/#{slug}/work_experiences/#{param}"
         "educations" -> ~p"/#{slug}/educations/#{param}"
         "qualifications" -> ~p"/#{slug}/qualifications/#{param}"
+        "publications" -> ~p"/#{slug}/publications/#{param}"
         _ -> ~p"/#{slug}"
       end
     else

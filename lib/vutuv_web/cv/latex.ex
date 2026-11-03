@@ -36,6 +36,7 @@ defmodule VutuvWeb.CV.Latex do
     #{skills(cv.skills)}
     #{qualifications(cv.qualifications)}
     #{languages(cv.languages)}
+    #{publications(cv.publications)}
     #{links(cv.links)}
     #{social_media(cv.social_media)}
     \\end{document}
@@ -150,6 +151,18 @@ defmodule VutuvWeb.CV.Latex do
     """
     \\section*{#{esc(gettext("Languages"))}}
     #{Enum.map_join(languages, " \\textbullet{} ", fn language -> esc("#{language.name} (#{language.fluency})") end)}
+    """
+  end
+
+  # One item per publication: a citation is too long for a bullet-joined line.
+  defp publications([]), do: ""
+
+  defp publications(publications) do
+    """
+    \\section*{#{esc(gettext("Publications"))}}
+    \\begin{itemize}
+    #{Enum.map_join(publications, "\n", fn publication -> "\\item " <> esc(publication.label) end)}
+    \\end{itemize}
     """
   end
 

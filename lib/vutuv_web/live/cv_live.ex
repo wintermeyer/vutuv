@@ -119,7 +119,7 @@ defmodule VutuvWeb.CVLive do
 
   defp allowed_keys(cv) do
     identity = for {key, _field} <- CV.identity_fields(), do: key
-    card_keys = ~w(tags links qualifications languages social_media)
+    card_keys = ~w(tags links qualifications languages publications social_media)
     section_keys = for section <- cv.sections, do: section.key
 
     entry_ids =
@@ -128,6 +128,7 @@ defmodule VutuvWeb.CVLive do
         ids(cv.links) ++
         ids(cv.qualifications) ++
         ids(cv.languages) ++
+        ids(cv.publications) ++
         ids(cv.social_media)
 
     MapSet.new(identity ++ card_keys ++ section_keys ++ entry_ids)
@@ -411,6 +412,30 @@ defmodule VutuvWeb.CVLive do
                 />
                 <span class="text-sm text-slate-700 dark:text-slate-300">
                   <span class="font-medium">{language.name}</span>: {language.fluency}
+                </span>
+              </label>
+            </div>
+          </.card>
+
+          <.card :if={@cv.publications != []}>
+            <.heading_toggle hide={@hide} key="publications">{gettext("Publications")}</.heading_toggle>
+            <div class={["mt-3 space-y-1", shown?(@hide, "publications") || "opacity-40"]}>
+              <label
+                :for={publication <- @cv.publications}
+                class={[
+                  "flex cursor-pointer items-baseline gap-3 rounded-lg px-2 py-1.5",
+                  shown?(@hide, publication.id) || "line-through opacity-50"
+                ]}
+              >
+                <input
+                  type="checkbox"
+                  class={checkbox_class()}
+                  checked={shown?(@hide, publication.id)}
+                  phx-click="toggle"
+                  phx-value-key={publication.id}
+                />
+                <span class="text-sm text-slate-700 dark:text-slate-300">
+                  {publication.label}
                 </span>
               </label>
             </div>

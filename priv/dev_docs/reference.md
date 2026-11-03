@@ -84,8 +84,8 @@ auth -X PATCH $API/me \
 ## Profile sections
 
 Sections: `work_experiences`, `links`, `social_media_accounts`,
-`addresses`, `phone_numbers`, `languages`, `qualifications`, `emails`
-(read-only), `tags`.
+`addresses`, `phone_numbers`, `languages`, `qualifications`, `publications`,
+`emails` (read-only), `tags`.
 
 ### GET /users/:username/&lt;section&gt;
 
@@ -118,7 +118,7 @@ auth -X PATCH $API/me/work_experiences/0190abcd-… \
 auth -X DELETE $API/me/work_experiences/0190abcd-…
 ```
 
-A **CV** section (`work_experiences`, `qualifications`) also accepts
+A **CV** section (`work_experiences`, `qualifications`, `publications`) also accepts
 `"announce_to_followers?": true` on **create**, which notifies the people
 who already follow you about the new entry (in-app only, never email).
 It is ignored on `PATCH`: only a brand-new entry can announce itself.
@@ -133,7 +133,9 @@ links (`value` = the URL, `description`), social_media_accounts
 `en`/`de`, `proficiency` = `native` or a CEFR level `a1`…`c2`),
 qualifications (`name`, `kind` = `certification`/`license` (default
 `certification`), `issuer`, `awarded_year`, `awarded_month`,
-`expires_year`, `expires_month`, `credential_id`, `url`).
+`expires_year`, `expires_month`, `credential_id`, `url`), publications
+(`title`, `authors`, `publisher`, `published_year`, `published_month`, `url`
+(a bare DOI such as `10.1000/xyz` is accepted and resolved), `description`).
 `number_type` must be one of `Work`, `Cell`, `Home`, `Fax`
 (case-sensitive); any other value is rejected with `422`.
 
