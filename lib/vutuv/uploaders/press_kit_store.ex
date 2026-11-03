@@ -112,7 +112,7 @@ defmodule Vutuv.PressKitStore do
       # same door the scan judges it through.
       Pixelation.write_if_enabled(rotated, dir)
       :ok = Originals.store(storage_dir(token), path, ext)
-      stored(rotated, path, token)
+      stored(rotated, path, token, logo?)
     end
   end
 
@@ -136,20 +136,37 @@ defmodule Vutuv.PressKitStore do
   # processed", which told somebody looking at a Figma export nothing at all.
   # `{:refused, reason}` is how `Vutuv.Uploads.store_upload/4` tells a reason
   # meant for a member from the ones that are ours.
-  defp stored(rotated, path, token) do
-    case cleaned_download(token) do
-      {:ok, _file} ->
-        {:ok,
-         %{
-           width: Image.width(rotated),
-           height: Image.height(rotated),
-           size_bytes: File.stat!(path).size
-         }}
-
+  #
+  # A logo's PNG rendering is derived here for the same reason (#2203): the page
+  # draws its link only once `png_download_file/1` has answered, so leaving the
+  # rasterisation to the first request put it inside the first page render.
+  # `open_rotated/1` above already rasterised the vector, so a failure here is
+  # not expected; it refuses the upload rather than store a logo whose second
+  # link would never appear.
+  defp stored(rotated, path, token, logo?) do
+    with {:ok, _file} <- cleaned_download(token),
+         :ok <- derive_png(token, logo?) do
+      {:ok,
+       %{
+         width: Image.width(rotated),
+         height: Image.height(rotated),
+         size_bytes: File.stat!(path).size
+       }}
+    else
       {:error, reason} ->
         delete(token)
         {:error, {:refused, reason}}
+
+      :no_png ->
+        delete(token)
+        {:error, :invalid_file}
     end
+  end
+
+  defp derive_png(_token, false), do: :ok
+
+  defp derive_png(token, true) do
+    if png_file(token), do: :ok, else: :no_png
   end
 
   defp write_derived_versions(rotated, dir, logo?) do
@@ -289,21 +306,24 @@ defmodule Vutuv.PressKitStore do
 
   For a logo uploaded as PNG this is its cleaned original: re-encoding a raster
   that is already the right format would only lose pixels. For an SVG it is the
-  vetted rasterisation at `Vutuv.Uploads.Spec.svg_raster_size/0`, derived once
-  and cached beside the original, saved with `keep: []` like every other file
+  vetted rasterisation at `Vutuv.Uploads.Spec.svg_raster_size/0`, derived at the
+  upload (`store/4`) and cached beside the original; a logo stored before that
+  gets it on first request. Saved with `keep: []` like every other file
   that leaves here.
 
   `nil` for a press photo, which has no such thing, and for a logo whose
   original is gone.
   """
-  def png_download_file(%ImageRow{logo: true, token: token}) do
+  def png_download_file(%ImageRow{logo: true, token: token}), do: png_file(token)
+  def png_download_file(%ImageRow{}), do: nil
+
+  # By token rather than row, because the upload derives it before there is one.
+  defp png_file(token) do
     case Originals.path(storage_dir(token)) do
       nil -> nil
       original -> png_download(original, Path.extname(original), token)
     end
   end
-
-  def png_download_file(%ImageRow{}), do: nil
 
   # A logo already stored as PNG is handed over as its cleaned self: re-encoding
   # a raster that is already the right format would only lose pixels.
