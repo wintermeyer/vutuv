@@ -733,12 +733,12 @@ msgstr "Profil wurde geändert."
 msgid "Profile deleted successfully."
 msgstr "Profil wurde gelöscht."
 
-#: lib/vutuv_web/views/user_html.ex:1052
+#: lib/vutuv_web/views/user_html.ex:1057
 #, elixir-autogen, elixir-format
 msgid "Social networks"
 msgstr "Soziale Netzwerke"
 
-#: lib/vutuv_web/views/user_html.ex:1059
+#: lib/vutuv_web/views/user_html.ex:1064
 #, elixir-autogen, elixir-format
 msgid "Code & repositories"
 msgstr "Code & Repositorys"
@@ -1854,9 +1854,9 @@ msgstr "Zu viele Versuche. Bitte versuchen Sie es später erneut."
 
 #: lib/vutuv_web/templates/social_media_account/card_list.html.heex:19
 #: lib/vutuv_web/templates/social_media_account/show.html.heex:27
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:18
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:19
 #: lib/vutuv_web/templates/user/show.html.heex:242
-#: lib/vutuv_web/views/user_html.ex:1104
+#: lib/vutuv_web/views/user_html.ex:1109
 #, elixir-autogen, elixir-format
 msgid "Verified profile"
 msgstr "Verifiziertes Profil"
@@ -5458,7 +5458,7 @@ msgstr "Andere"
 
 #: lib/vutuv_web/templates/email/form_content.html.heex:33
 #: lib/vutuv_web/views/email_html.ex:12
-#: lib/vutuv_web/views/user_html.ex:1224
+#: lib/vutuv_web/views/user_html.ex:1229
 #, elixir-autogen, elixir-format
 msgid "Personal"
 msgstr "Privat"
@@ -6703,7 +6703,7 @@ msgstr "Folgen Sie einander, um mit %{name} vernetzt zu sein und ihn zu lesen."
 msgid "Go to profile to follow"
 msgstr "Zum Profil, um zu folgen"
 
-#: lib/vutuv_web/views/user_html.ex:1223
+#: lib/vutuv_web/views/user_html.ex:1228
 #, elixir-autogen, elixir-format
 msgid "Professional"
 msgstr "Beruflich"
@@ -8435,7 +8435,7 @@ msgstr "Zu viele Importe. Bitte versuchen Sie es in Kürze erneut."
 msgid "Please check the fields marked in red."
 msgstr "Bitte prüfen Sie die rot markierten Felder."
 
-#: lib/vutuv_web/views/user_html.ex:1113
+#: lib/vutuv_web/views/user_html.ex:1118
 #, elixir-autogen, elixir-format
 msgid "Loading posts"
 msgstr "Beiträge werden geladen"
@@ -10390,15 +10390,15 @@ msgstr[1] "%{count} Sterne"
 #: lib/vutuv_web/live/investors_reach_live.ex:321
 #: lib/vutuv_web/live/organization_live/show.ex:688
 #: lib/vutuv_web/templates/remote_actor_card/card.html.heex:108
-#: lib/vutuv_web/views/user_html.ex:977
-#: lib/vutuv_web/views/user_html.ex:1153
+#: lib/vutuv_web/views/user_html.ex:982
+#: lib/vutuv_web/views/user_html.ex:1158
 #, elixir-autogen, elixir-format
 msgid "%{formatted} follower"
 msgid_plural "%{formatted} followers"
 msgstr[0] "%{formatted} Follower"
 msgstr[1] "%{formatted} Follower"
 
-#: lib/vutuv_web/views/user_html.ex:970
+#: lib/vutuv_web/views/user_html.ex:975
 #, elixir-autogen, elixir-format
 msgid "%{formatted} star"
 msgid_plural "%{formatted} stars"
@@ -10427,7 +10427,7 @@ msgstr ""
 "dessen öffentliche Statistiken zeigen: Sterne, Repositories, Follower, "
 "Sprachen und letzte Aktivität."
 
-#: lib/vutuv_web/views/user_html.ex:984
+#: lib/vutuv_web/views/user_html.ex:989
 #, elixir-autogen, elixir-format
 msgid "Last active %{date}"
 msgstr "Zuletzt aktiv %{date}"
@@ -10454,7 +10454,7 @@ msgstr "zuletzt aktiv %{date}"
 msgid "since %{date}"
 msgstr "seit %{date}"
 
-#: lib/vutuv_web/views/user_html.ex:900
+#: lib/vutuv_web/views/user_html.ex:905
 #, elixir-autogen, elixir-format
 msgid "since %{year}"
 msgstr "seit %{year}"
@@ -17318,18 +17318,18 @@ msgstr "Weiteren Tag hinzufügen"
 msgid "Remove the tag %{name}"
 msgstr "Tag %{name} entfernen"
 
-#: lib/vutuv_web/views/social_media_account_html.ex:24
+#: lib/vutuv_web/views/social_media_account_html.ex:30
 #, elixir-autogen, elixir-format
 msgid "Add this address to your Bluesky profile description (your bio), then run the check:"
 msgstr "Tragen Sie diese Adresse in Ihre Bluesky-Profilbeschreibung (Ihre Bio) ein und starten Sie dann die Prüfung:"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:84
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:85
 #, elixir-autogen, elixir-format
 msgid "Back to Profiles"
 msgstr "Zurück zu den Profilen"
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:196
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:51
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:52
 #, elixir-autogen, elixir-format
 msgid "Profile verification is disabled on this installation."
 msgstr "Die Profil-Verifizierung ist auf dieser Installation deaktiviert."
@@ -17339,12 +17339,12 @@ msgstr "Die Profil-Verifizierung ist auf dieser Installation deaktiviert."
 msgid "Profile verified. It now shows a verified mark."
 msgstr "Profil verifiziert. Es zeigt jetzt ein Verifizierungs-Häkchen."
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:32
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:33
 #, elixir-autogen, elixir-format
 msgid "Prove this profile is yours by linking back to vutuv from it. It then shows a verified mark."
 msgstr "Weisen Sie nach, dass dieses Profil Ihnen gehört, indem Sie von dort auf vutuv zurückverlinken. Es zeigt dann ein Verifizierungs-Häkchen."
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:75
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:76
 #, elixir-autogen, elixir-format
 msgid "Run the check"
 msgstr "Prüfung starten"
@@ -17354,13 +17354,13 @@ msgstr "Prüfung starten"
 msgid "This network cannot be verified."
 msgstr "Dieses Netzwerk lässt sich nicht verifizieren."
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:26
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:27
 #, elixir-autogen, elixir-format
 msgid "Verified. Run the check again below to refresh it."
 msgstr "Verifiziert. Starten Sie die Prüfung unten erneut, um sie aufzufrischen."
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:166
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:7
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:8
 #, elixir-autogen, elixir-format
 msgid "Verify profile"
 msgstr "Profil verifizieren"
@@ -20601,17 +20601,17 @@ msgstr "ISO 8601 (Schweden, Japan, China)"
 msgid "Language & display settings changed"
 msgstr "Sprache & Anzeige geändert"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:42
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:43
 #, elixir-autogen, elixir-format
 msgid "%{provider} profiles cannot be verified yet: the network offers no field we could check."
 msgstr "%{provider}-Profile lassen sich noch nicht verifizieren: Das Netzwerk bietet kein Feld, das wir prüfen könnten."
 
-#: lib/vutuv_web/views/social_media_account_html.ex:19
+#: lib/vutuv_web/views/social_media_account_html.ex:25
 #, elixir-autogen, elixir-format
 msgid "Add this address to your %{provider} profile, in the website field or your description, then run the check:"
 msgstr "Tragen Sie diese Adresse in Ihr %{provider}-Profil ein, in das Feld Website oder in Ihre Beschreibung, und starten Sie dann die Prüfung:"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:55
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:56
 #, elixir-autogen, elixir-format
 msgid "Link back from your profile"
 msgstr "Von Ihrem Profil zurückverlinken"
@@ -20621,7 +20621,7 @@ msgstr "Von Ihrem Profil zurückverlinken"
 msgid "On your own Gitea or Forgejo instance: name@git.example.com"
 msgstr "Bei einer eigenen Gitea- oder Forgejo-Instanz: name@git.example.com"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:64
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:65
 #, elixir-autogen, elixir-format
 msgid "The rest of the field can say whatever you like. We only look for this address."
 msgstr "Der Rest des Feldes kann beliebig aussehen. Wir suchen nur nach dieser Adresse."
@@ -27638,3 +27638,8 @@ msgstr "Schätzen Sie sich selbst ein. Eine Prüfung brauchen Sie dafür nicht."
 #, elixir-autogen, elixir-format
 msgid "The language I grew up with."
 msgstr "Die Sprache, mit der ich aufgewachsen bin."
+
+#: lib/vutuv_web/views/social_media_account_html.ex:18
+#, elixir-autogen, elixir-format
+msgid "Add this address to your ORCID record under “Websites & social links”, visible to everyone, then run the check:"
+msgstr "Tragen Sie diese Adresse in Ihrem ORCID-Datensatz unter „Websites & social links“ ein, sichtbar für alle, und starten Sie dann die Prüfung:"

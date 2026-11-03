@@ -6,6 +6,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   alias PhoenixHTMLHelpers.Link, as: HTMLLink
   alias Vutuv.Bluesky
   alias Vutuv.ChangesetHelpers
+  alias Vutuv.Orcid
 
   schema "social_media_accounts" do
     field(:provider, :string)
@@ -51,7 +52,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   @required_fields ~w(provider value)a
   @optional_fields ~w()a
 
-  @accepted_providers ~w(Facebook Twitter Mastodon Friendica Bluesky Pixelfed BookWyrm Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg Gitea Forgejo)
+  @accepted_providers ~w(Facebook Twitter Mastodon Friendica Bluesky Pixelfed BookWyrm Instagram Youtube Snapchat LinkedIn XING ORCID GitHub GitLab Codeberg Gitea Forgejo)
 
   # The providers whose instance is part of the handle: the value is stored as
   # `user@instance` and the link is built from that pair rather than from a
@@ -133,6 +134,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Snapchat", nil},
     {"LinkedIn", "https://www.linkedin.com/in/"},
     {"XING", "https://www.xing.com/profile/"},
+    # The value is the bare iD (Vutuv.Orcid), so the base plus the iD is the
+    # record's canonical address.
+    {"ORCID", "https://orcid.org/"},
     {"GitHub", "https://github.com/"},
     {"GitLab", "https://gitlab.com/"},
     {"Codeberg", "https://codeberg.org/"}
@@ -151,6 +155,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Snapchat", ""},
     {"LinkedIn", ""},
     {"XING", ""},
+    {"ORCID", ""},
     {"GitHub", ""},
     {"GitLab", ""},
     {"Codeberg", ""},
@@ -296,6 +301,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
           case get_field(changeset, :provider) do
             provider when provider in @fediverse_providers -> parse_fediverse(value, provider)
             "Bluesky" -> parse_bluesky(value)
+            "ORCID" -> Orcid.parse(value)
             provider when provider in @self_hosted_providers -> parse_self_hosted(value)
             _ -> parse_value(value)
           end
@@ -444,6 +450,10 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp valid_value?("Bluesky", value), do: Bluesky.actor?(value)
 
+  # An iD with a wrong check digit is a typo that would link to a stranger's
+  # record, so it is refused rather than stored.
+  defp valid_value?("ORCID", value), do: Orcid.valid?(value)
+
   defp valid_value?(provider, value) when provider in @self_hosted_providers,
     do: Regex.match?(@self_hosted_format, value)
 
@@ -468,6 +478,8 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp invalid_message("Bluesky"),
     do: "Enter your Bluesky handle, e.g. name.bsky.social"
+
+  defp invalid_message("ORCID"), do: "Enter your ORCID iD, e.g. 0000-0002-1825-0097"
 
   defp invalid_message(provider) when provider in @self_hosted_providers,
     do: "Enter your username and your instance, e.g. name@git.example.com"

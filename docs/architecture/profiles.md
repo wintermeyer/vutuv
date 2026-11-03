@@ -1244,7 +1244,7 @@ small emerald mark a verified webpage link gets
 (`Vutuv.Profiles.SocialAccountVerification`, the social twin of
 `Vutuv.Profiles.LinkVerification`).
 
-Two kinds of account can be proved. **Bluesky** (`bluesky_bio`): its profile
+Three kinds of account can be proved. **Bluesky** (`bluesky_bio`): its profile
 description (the bio) must carry the member's vutuv profile URL, which is the
 one field only the account holder can write — the network has no `rel="me"`. A
 **self-hosted Gitea / Forgejo** account (`forgejo_profile`, issue #1504): the
@@ -1254,8 +1254,15 @@ URL — a forge profile has no single obvious place for it, and refusing the oth
 one would just read as the check being broken. There it also means more than
 elsewhere: an instance a member runs themselves vouches for nothing by existing,
 so the proof is what earns the entry the trust a github.com handle gets for
-free. The URL is matched as a whole address in both cases, so a bio linking to
-`/alicexyz` never verifies the member `alice`.
+free. An **ORCID iD** (`orcid_record`, issue #2350): the provider `ORCID`
+stores the bare 16-character iD (`Vutuv.Orcid` reads it out of any pasted
+`orcid.org` address, including the `my-orcid?orcid=` page, and refuses one whose
+ISO 7064 MOD 11-2 check digit is off — a typo would link to a stranger's
+record), and the proof is the vutuv profile URL listed under the record's
+"Websites & social links", which the ORCID public API (`pub.orcid.org`, seam
+`:orcid_req_options`) hands out without a token, so no installation has to
+register a client with ORCID. The URL is matched as a whole address in all
+three cases, so a bio linking to `/alicexyz` never verifies the member `alice`.
 The columns on `social_media_accounts` are deliberately provider-agnostic
 (`verification_method`, `verified_at`, `last_checked_at`, `grace_deadline_at`),
 so a second network is one clause rather than another migration.

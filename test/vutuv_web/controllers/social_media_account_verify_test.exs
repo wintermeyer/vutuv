@@ -63,6 +63,31 @@ defmodule VutuvWeb.SocialMediaAccountVerifyTest do
       assert html =~ ~s(action="#{~p"/settings/social_media_accounts/#{account}/verify"}")
     end
 
+    test "an ORCID iD is told which field of the record to use (#2350)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      account =
+        insert(:social_media_account, provider: "ORCID", value: "0000-0002-1825-0097", user: user)
+
+      html =
+        conn |> get(~p"/settings/social_media_accounts/#{account}/verify") |> html_response(200)
+
+      assert html =~ "Websites &amp; social links"
+      assert html =~ url(~p"/#{user}")
+      assert html =~ ~s(action="#{~p"/settings/social_media_accounts/#{account}/verify"}")
+
+      # The German sentence by name: a freshly merged msgid is the one most
+      # likely to ship fuzzy-filled with some unrelated translation.
+      german =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/settings/social_media_accounts/#{account}/verify")
+        |> html_response(200)
+
+      assert german =~ "in Ihrem ORCID-Datensatz unter „Websites &amp; social links“"
+    end
+
     test "a network with no proof says so instead of offering the check", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       account = insert(:social_media_account, provider: "LinkedIn", value: "alice", user: user)

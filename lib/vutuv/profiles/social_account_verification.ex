@@ -17,6 +17,10 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
       parsing. It is the one provider where the mark says more than usual: an
       instance a member runs themselves vouches for nothing by existing, so the
       proof is what makes the entry worth the same trust as a github.com handle.
+    * `orcid_record` — an ORCID iD (issue #2350) whose public record lists the
+      URL under "Websites & social links". Only the record's owner can write
+      that list, and the ORCID public API hands it out without a token, so
+      the proof costs one request and no registration with ORCID.
 
   The state lives on the `social_media_accounts` row and is written **only**
   through `SocialMediaAccount.verification_changeset/2`, never from a form —
@@ -38,6 +42,7 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   alias Vutuv.Accounts.User
   alias Vutuv.Bluesky
   alias Vutuv.CodeStats.Forgejo
+  alias Vutuv.Orcid
   alias Vutuv.Profiles.LinkVerification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Repo
@@ -45,6 +50,7 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
 
   @bluesky_method "bluesky_bio"
   @forgejo_method "forgejo_profile"
+  @orcid_method "orcid_record"
 
   # Read at compile time so the guard below can use it — the list itself still
   # lives in exactly one place (the schema).
@@ -57,15 +63,17 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   def enabled?, do: Application.get_env(:vutuv, :verify_social_accounts, true)
 
   @doc """
-  Whether this provider can be proved at all: Bluesky, and a self-hosted
-  Gitea/Forgejo instance. Every other listed account (LinkedIn, github.com, …)
-  simply offers no verify affordance — the network exposes no field we can read
-  that only its owner can write.
+  Whether this provider can be proved at all: Bluesky, a self-hosted
+  Gitea/Forgejo instance, and an ORCID iD. Every other listed account
+  (LinkedIn, github.com, …) simply offers no verify affordance — the network
+  exposes no field we can read that only its owner can write.
   """
   def verifiable?(%SocialMediaAccount{provider: provider}), do: verifiable?(provider)
 
   def verifiable?(provider),
-    do: provider == "Bluesky" or SocialMediaAccount.self_hosted_provider?(provider)
+    do:
+      provider in ["Bluesky", "ORCID"] or
+        SocialMediaAccount.self_hosted_provider?(provider)
 
   @doc """
   The URL the member must put in their Bluesky bio: their canonical vutuv
@@ -126,6 +134,18 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
     end
   end
 
+  # An ORCID record: the "Websites & social links" list the public API hands
+  # out. Each entry is a whole URL the owner typed, so the proof is one of them
+  # naming the profile — matched with the same whole-address rule as a bio.
+  defp proof_present?(%SocialMediaAccount{provider: "ORCID", value: id}, %User{} = user) do
+    case Orcid.fetch_researcher_urls(id) do
+      {:ok, urls} -> {:ok, Enum.any?(urls, &mentions_profile?(&1, user))}
+      # No such record, or a deactivated one — a real answer, not a blip.
+      {:error, :gone} -> {:ok, false}
+      {:error, _transient} -> {:error, :unreachable}
+    end
+  end
+
   defp proof_present?(_account, _user), do: {:error, :unsupported}
 
   defp proves?(remote, user) when is_map(remote) do
@@ -135,6 +155,7 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   defp proves?(_remote, _user), do: false
 
   defp method(%SocialMediaAccount{provider: "Bluesky"}), do: @bluesky_method
+  defp method(%SocialMediaAccount{provider: "ORCID"}), do: @orcid_method
   defp method(%SocialMediaAccount{}), do: @forgejo_method
 
   # The URL must appear as a whole address, not as the prefix of a longer one:
