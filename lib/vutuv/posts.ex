@@ -7975,7 +7975,7 @@ defmodule Vutuv.Posts do
   end
 
   defp parse_ids(ids) when is_list(ids),
-    do: ids |> Enum.map(&parse_id/1) |> Enum.reject(&is_nil/1)
+    do: ids |> Enum.map(&parse_id/1) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
   # Ids are UUID strings; anything that does not cast (stale form payloads,
   # tampering) is dropped rather than raising in the changeset cast.

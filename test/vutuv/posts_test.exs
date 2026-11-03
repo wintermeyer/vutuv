@@ -85,6 +85,17 @@ defmodule Vutuv.PostsTest do
       assert attached.position == 0
     end
 
+    test "attaches a repeated image id only once" do
+      author = user()
+      image = insert(:post_image, user: author, post: nil)
+
+      assert {:ok, post} =
+               Posts.create_post(author, %{body: "pics", image_ids: [image.id, image.id]})
+
+      assert [%PostImage{id: image_id, position: 0}] = post.images
+      assert image_id == image.id
+    end
+
     test "attaches pending images in the given order" do
       author = user()
       [a, b, c] = for _ <- 1..3, do: insert(:post_image, user: author, post: nil)
