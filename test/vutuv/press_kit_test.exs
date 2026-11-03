@@ -287,6 +287,16 @@ defmodule Vutuv.PressKitTest do
       assert <<137, "PNG\r\n", 26, 10, _rest::binary>> = File.read!(png)
     end
 
+    # The section page asks whether the PNG can be handed over (#2203), so a
+    # rendering left to the first request would rasterise inside a page render.
+    test "an SVG logo's PNG rendering is written at the upload, not on first request",
+         %{owner: owner, tmp: tmp} do
+      assert {:ok, logo} = PressKit.create(owner, owner, svg_file(tmp), logo_attrs())
+
+      cached = Path.join(Path.dirname(PressKitStore.original_path(logo.token)), "download.png")
+      assert <<137, "PNG\r\n", 26, 10, _rest::binary>> = File.read!(cached)
+    end
+
     # The promise the Media Kit makes is that a download never carries a GPS fix
     # or a camera serial, and for a photo it holds by construction. A vector was
     # the one file that left byte for byte as uploaded (issue #2145).
