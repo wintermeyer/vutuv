@@ -119,8 +119,8 @@ contributions: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ## API
 
-Third-party REST/JSON API at `/api/2.0` (Bearer tokens). Create a personal
-access token at [`/access_tokens`](https://vutuv.de/access_tokens), then:
+Third-party REST/JSON API at `/api/2.0` (Bearer tokens). Sign in and create a
+personal access token at `/access_tokens`, then:
 
 ```bash
 curl -H "Authorization: Bearer vutuv_pat_YOUR_TOKEN" https://vutuv.de/api/2.0/me

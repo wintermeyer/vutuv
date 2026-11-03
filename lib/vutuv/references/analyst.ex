@@ -288,7 +288,7 @@ defmodule Vutuv.References.Analyst do
   like a host (Docker's rule, which Ollama inherits). So:
 
     * `qwen3.6:27b` -> `https://ollama.com/library/qwen3.6:27b`
-    * `someone/model:7b` -> `https://ollama.com/someone/model:7b`
+    * `ibm/granite4:3b` -> `https://ollama.com/ibm/granite4:3b`
     * `hf.co/user/repo:Q4_K_M` -> `https://huggingface.co/user/repo`
       (a Hugging Face repository has no tag in its path, so the quantization
       suffix is dropped rather than carried into a 404)
