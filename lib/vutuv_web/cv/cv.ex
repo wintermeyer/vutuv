@@ -46,6 +46,7 @@ defmodule VutuvWeb.CV do
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Publication
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
@@ -121,6 +122,7 @@ defmodule VutuvWeb.CV do
       skills: Enum.map(user.user_tags, &%{id: &1.id, name: UserTag.name(&1)}),
       qualifications: Enum.map(user.qualifications, &qualification_entry/1),
       languages: Enum.map(user.languages, &language_entry/1),
+      publications: Enum.map(user.publications, &publication_entry/1),
       photo: photo(user, opts),
       work_groups: work_groups(user),
       educations: Enum.map(user.educations, &education_raw/1)
@@ -160,7 +162,15 @@ defmodule VutuvWeb.CV do
     # The lists the print puts after the sections are below a full page too.
     if left > 0,
       do: cv,
-      else: %{cv | skills: [], qualifications: [], languages: [], links: [], social_media: []}
+      else: %{
+        cv
+        | skills: [],
+          qualifications: [],
+          languages: [],
+          publications: [],
+          links: [],
+          social_media: []
+      }
   end
 
   defp take_entries([entry | rest], left, kept) when left > 0 do
@@ -191,6 +201,7 @@ defmodule VutuvWeb.CV do
         skills: filter_by_id(cv.skills, "tags", hide),
         qualifications: filter_by_id(cv.qualifications, "qualifications", hide),
         languages: filter_by_id(cv.languages, "languages", hide),
+        publications: filter_by_id(cv.publications, "publications", hide),
         links: filter_by_id(cv.links, "links", hide),
         social_media: filter_by_id(cv.social_media, "social_media", hide),
         work_groups: filter_work_groups(cv.work_groups, hide),
@@ -256,6 +267,7 @@ defmodule VutuvWeb.CV do
       # Valid credentials first, then the expired ones.
       qualifications: Qualification.valid_first() |> Qualification.ordered(),
       languages: Language.ordered(),
+      publications: Publication.ordered(),
       social_media_accounts: SocialMediaAccount.ordered(),
       phone_numbers: PhoneNumber.ordered(),
       urls: Url.ordered(),
@@ -405,6 +417,25 @@ defmodule VutuvWeb.CV do
       id: language.id,
       name: Languages.name(language.language_code),
       fluency: LanguageHTML.proficiency_label(language.proficiency)
+    }
+  end
+
+  # A publication line for the CV (issue #2350): the structured facts for the
+  # JSON Resume `publications` shape plus a ready-made `label` ("On Bridges
+  # (Span Review, 2019)") the text formats print, so the joining logic lives
+  # here once, not in each renderer.
+  defp publication_entry(publication) do
+    publisher = presence(publication.publisher)
+    date = year_month(publication.published_year, publication.published_month)
+
+    %{
+      id: publication.id,
+      name: publication.title,
+      publisher: publisher,
+      date: date,
+      url: presence(publication.url),
+      summary: presence(publication.description),
+      label: qualification_label(publication.title, [publisher, date])
     }
   end
 

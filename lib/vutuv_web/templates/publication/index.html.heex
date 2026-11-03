@@ -1,0 +1,16 @@
+<%!-- The public showcase view of this section — identical for every viewer,
+and exactly what the agent-format docs render. The owner edits at
+/settings/publications; the header carries a quiet "Manage" bridge there. --%>
+<.page_header
+  title={gettext("Publications by %{name}", name: full_name(@user))}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/publications"}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    gettext("Publications")
+  ]}
+/>
+
+<.card_section empty={Enum.empty?(@publications)}>
+  <%= render "card_list.html", assigns %>
+</.card_section>

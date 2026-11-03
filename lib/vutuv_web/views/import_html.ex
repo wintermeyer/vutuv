@@ -70,6 +70,7 @@ defmodule VutuvWeb.ImportHTML do
   def section_label(:educations), do: gettext("Education")
   def section_label(:certifications), do: gettext("Certificates & licenses")
   def section_label(:languages), do: gettext("Languages")
+  def section_label(:publications), do: gettext("Publications")
   def section_label(:skills), do: gettext("Tags")
   def section_label(:urls), do: gettext("Links")
   def section_label(:social), do: gettext("Social media")

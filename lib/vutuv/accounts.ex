@@ -1618,6 +1618,7 @@ defmodule Vutuv.Accounts do
       {Vutuv.Profiles.Education, "educations"},
       {Vutuv.Profiles.Qualification, "qualifications"},
       {Vutuv.Profiles.Language, "languages"},
+      {Vutuv.Profiles.Publication, "publications"},
       {Vutuv.Profiles.Url, "urls"},
       {Vutuv.Profiles.SocialMediaAccount, "social_media_accounts"},
       {Vutuv.Profiles.Messenger, "messengers"},

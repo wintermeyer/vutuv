@@ -46,6 +46,7 @@ defmodule Vutuv.Profiles.CvUpdates do
   alias Vutuv.Activity
   alias Vutuv.Moderation
   alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.Publication
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
@@ -385,8 +386,12 @@ defmodule Vutuv.Profiles.CvUpdates do
     work = arm(WorkExperience, "work_experiences", :title, :organization, slug: true)
     education = arm(Education, "educations", :degree, :school, slug: true)
     qualification = arm(Qualification, "qualifications", :name, :issuer, slug: false)
+    publication = arm(Publication, "publications", :title, :publisher, slug: true)
 
-    work |> union_all(^education) |> union_all(^qualification)
+    work
+    |> union_all(^education)
+    |> union_all(^qualification)
+    |> union_all(^publication)
   end
 
   defp arm(schema, section, title_field, subtitle_field, slug: true) do

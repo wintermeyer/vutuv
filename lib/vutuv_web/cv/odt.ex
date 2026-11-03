@@ -66,6 +66,7 @@ defmodule VutuvWeb.CV.Odt do
         skills(cv.skills),
         qualifications(cv.qualifications),
         languages(cv.languages),
+        publications(cv.publications),
         links(cv.links),
         social_media(cv.social_media)
       ]
@@ -163,6 +164,13 @@ defmodule VutuvWeb.CV.Odt do
       heading(gettext("Languages")),
       p(Enum.map_join(languages, " | ", &"#{&1.name} (#{&1.fluency})"))
     ]
+  end
+
+  # One paragraph per publication: a citation is too long for a joined line.
+  defp publications([]), do: nil
+
+  defp publications(publications) do
+    [heading(gettext("Publications")) | Enum.map(publications, &p(&1.label))]
   end
 
   defp links([]), do: nil

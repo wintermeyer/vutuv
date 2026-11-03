@@ -239,6 +239,45 @@ defmodule Vutuv.Imports.LinkedInTest do
     end
   end
 
+  describe "Publications.csv" do
+    test "reads title, publisher, link, description and the date in every spelling" do
+      csv = """
+      Name,Published On,Description,Publisher,Url
+      On Bridges,Mar 2019,Load paths.,Span Review,https://doi.org/10.5555/spans
+      Old Paper,2010,,,
+      Dated Paper,"Jan 15, 2020",,Nature,
+      ISO Paper,2021-06-03,,,
+      ,Mar 2019,A row with no title,,
+      """
+
+      {:ok, result} = LinkedIn.parse(zip([{"Publications.csv", csv}]))
+
+      assert [bridges, old, dated, iso] = result.publications
+
+      assert bridges.params == %{
+               "title" => "On Bridges",
+               "publisher" => "Span Review",
+               "published_month" => 3,
+               "published_year" => 2019,
+               "url" => "https://doi.org/10.5555/spans",
+               "description" => "Load paths."
+             }
+
+      assert bridges.label == "On Bridges, Span Review"
+      assert {old.params["published_month"], old.params["published_year"]} == {nil, 2010}
+      assert {dated.params["published_month"], dated.params["published_year"]} == {1, 2020}
+      assert {iso.params["published_month"], iso.params["published_year"]} == {6, 2021}
+    end
+
+    test "keeps one row per title" do
+      csv =
+        "Name,Published On,Description,Publisher,Url\nOn Bridges,2019,,,\non bridges,2019,,,\n"
+
+      {:ok, result} = LinkedIn.parse(zip([{"Publications.csv", csv}]))
+      assert [%{params: %{"title" => "On Bridges"}}] = result.publications
+    end
+  end
+
   describe "Skills.csv" do
     test "keeps a multi-word skill whole as one tag candidate and dedups" do
       csv = "Name\nElixir\nRuby on Rails\nElixir\n"

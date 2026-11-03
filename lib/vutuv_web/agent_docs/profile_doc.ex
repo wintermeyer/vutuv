@@ -22,6 +22,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Publication
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
@@ -150,6 +151,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # reaches a document served anonymously.
       job_references: Enum.map(user.job_references, &SectionDocs.job_reference_entry(&1, user)),
       languages: SectionDocs.language_entries(user.languages),
+      publications: Enum.map(user.publications, &SectionDocs.publication_entry/1),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
       # The press kit the profile card shows (issue #2086), whole rather than
       # capped: a member offers at most fifteen pictures, and an agent asked to
@@ -252,6 +254,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       work_experiences:
         {WorkExperience.order_by_date(WorkExperience), WorkExperience.display_preloads()},
       educations: Education.order_by_date(Education),
+      publications: Publication.ordered(),
       # Valid credentials first, then the expired ones, each flagged
       # `expired`. The citing
       # jobs ride along for the usage facts (issue #1005).

@@ -36,6 +36,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Publication
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
@@ -53,6 +54,7 @@ defmodule Vutuv.Imports.LinkedIn do
     educations: [],
     certifications: [],
     languages: [],
+    publications: [],
     skills: [],
     emails: [],
     phones: [],
@@ -460,6 +462,11 @@ defmodule Vutuv.Imports.LinkedIn do
         |> Map.get(:languages, [])
         |> Enum.map(&language_candidate/1)
         |> tidy(),
+      publications:
+        rows_by_type
+        |> Map.get(:publications, [])
+        |> Enum.map(&publication_candidate/1)
+        |> tidy(),
       skills: rows_by_type |> Map.get(:skills, []) |> parse_skills(),
       emails: rows_by_type |> Map.get(:emails, []) |> Enum.map(&email_info/1),
       phones: rows_by_type |> Map.get(:phones, []) |> Enum.map(&phone_candidate/1) |> tidy(),
@@ -528,6 +535,8 @@ defmodule Vutuv.Imports.LinkedIn do
     certifications: ["Name", "Authority"],
     # Languages.csv: Name, Proficiency.
     languages: ["Name", "Proficiency"],
+    # Publications.csv: Name, Published On, Description, Publisher, Url.
+    publications: ["Name", "Published On"],
     connections: ["Connected On"],
     profile: ["First Name", "Headline"],
     phones: ["Number"],
@@ -552,6 +561,7 @@ defmodule Vutuv.Imports.LinkedIn do
     {"education", :educations},
     {"certification", :certifications},
     {"languages", :languages},
+    {"publications", :publications},
     {"skills", :skills},
     {"profile", :profile},
     {"phonenumbers", :phones},
@@ -926,6 +936,72 @@ defmodule Vutuv.Imports.LinkedIn do
 
   defp linkedin_level(_value), do: nil
 
+  # ── Publications.csv → Publication params (issue #2350) ──
+  #
+  # Name, Published On, Description, Publisher, Url. A nameless row could never
+  # import (the title is required), so it is dropped here like a school-less
+  # education. "Published On" arrives in more than one spelling across exports
+  # ("Jan 2020", "2020", "Jan 15, 2020", "2020-01-15"), so it goes through
+  # `parse_publication_date/1`, which reads the year and month out of any of
+  # them and leaves the day behind — the profile dates by month.
+
+  defp publication_candidate(row) do
+    title = blank_nil(row["Name"])
+
+    if is_nil(title) do
+      nil
+    else
+      {month, year} = parse_publication_date(row["Published On"])
+      publisher = blank_nil(row["Publisher"])
+
+      %{
+        id: cid("publication", "#{downcase(title)}"),
+        label: [title, publisher] |> compact() |> Enum.join(", "),
+        params: %{
+          "title" => title,
+          "publisher" => publisher,
+          "published_month" => month,
+          "published_year" => year,
+          "url" => blank_nil(row["Url"]),
+          "description" => blank_nil(row["Description"])
+        }
+      }
+    end
+  end
+
+  @doc """
+  Reads `{month, year}` out of a LinkedIn publication date in any of its
+  spellings: `"Jan 2020"`, `"2020"`, `"Jan 15, 2020"`, `"2020-01-15"`. Either
+  may be nil; the day is never kept.
+  """
+  def parse_publication_date(nil), do: {nil, nil}
+
+  def parse_publication_date(value) do
+    trimmed = value |> to_string() |> String.trim()
+
+    cond do
+      # ISO: 2020-01-15 or 2020-01
+      match = Regex.run(~r/^(\d{4})-(\d{2})(?:-\d{2})?$/, trimmed) ->
+        [_whole, year, month] = match
+        {to_month_number(month), to_year(year)}
+
+      # "Jan 15, 2020" / "January 15, 2020": drop the day, keep month and year.
+      match = Regex.run(~r/^([A-Za-z]+)\s+\d{1,2},\s*(\d{4})$/, trimmed) ->
+        [_whole, month, year] = match
+        {to_month(String.slice(month, 0, 3)), to_year(year)}
+
+      true ->
+        parse_month_year(trimmed)
+    end
+  end
+
+  defp to_month_number(token) do
+    case Integer.parse(token) do
+      {month, ""} when month in 1..12 -> month
+      _ -> nil
+    end
+  end
+
   # ── Skills.csv → tag candidates ──
   #
   # One CSV row is one skill, and tags may contain spaces now, so a multi-word
@@ -1047,6 +1123,7 @@ defmodule Vutuv.Imports.LinkedIn do
       certifications:
         mark(parsed.certifications, existing.certifications, &certification_key(&1.params)),
       languages: mark(parsed.languages, existing.languages, & &1.params["language_code"]),
+      publications: mark(parsed.publications, existing.publications, &publication_key(&1.params)),
       urls: mark(parsed.urls, existing.urls, &downcase(&1.params["value"])),
       social: mark(parsed.social, existing.social, &social_key(&1.params)),
       phones: mark(parsed.phones, existing.phones, &Phone.tel(&1.params["value"])),
@@ -1087,6 +1164,7 @@ defmodule Vutuv.Imports.LinkedIn do
     :educations,
     :certifications,
     :languages,
+    :publications,
     :skills,
     :urls,
     :social,
@@ -1156,6 +1234,7 @@ defmodule Vutuv.Imports.LinkedIn do
       "educations" => Enum.map(parsed.educations, &Map.take(&1, [:id, :params])),
       "certifications" => Enum.map(parsed.certifications, &Map.take(&1, [:id, :params])),
       "languages" => Enum.map(parsed.languages, &Map.take(&1, [:id, :params])),
+      "publications" => Enum.map(parsed.publications, &Map.take(&1, [:id, :params])),
       "urls" => Enum.map(parsed.urls, &Map.take(&1, [:id, :params])),
       "social" => Enum.map(parsed.social, &Map.take(&1, [:id, :params])),
       "phones" => Enum.map(parsed.phones, &Map.take(&1, [:id, :params])),
@@ -1179,6 +1258,7 @@ defmodule Vutuv.Imports.LinkedIn do
       educations: pick(payload["educations"], set),
       certifications: pick(payload["certifications"], set),
       languages: pick(payload["languages"], set),
+      publications: pick(payload["publications"], set),
       urls: pick(payload["urls"], set),
       social: pick(payload["social"], set),
       phones: pick(payload["phones"], set),
@@ -1265,6 +1345,11 @@ defmodule Vutuv.Imports.LinkedIn do
           {c.params["language_code"], &language_changeset(&1, c.params), :languages}
         end)
 
+      {existing, publications} =
+        insert_scoped(existing, :publications, Map.get(selection, :publications, []), fn c ->
+          {publication_key(c.params), &Publication.changeset(&1, c.params), :publications}
+        end)
+
       {existing, urls} =
         insert_scoped(existing, :urls, Map.get(selection, :urls, []), fn c ->
           {downcase(c.params["value"]), &Url.changeset(&1, c.params), :urls}
@@ -1290,6 +1375,7 @@ defmodule Vutuv.Imports.LinkedIn do
         educations: educations,
         certifications: certifications,
         languages: languages,
+        publications: publications,
         urls: urls,
         social: social,
         phones: phones,
@@ -1471,6 +1557,7 @@ defmodule Vutuv.Imports.LinkedIn do
           certification_key(%{"name" => r.name, "issuer" => r.issuer})
         end),
       languages: keys(Language, user.id, & &1.language_code),
+      publications: keys(Publication, user.id, &publication_key(%{"title" => &1.title})),
       urls: keys(Url, user.id, fn r -> downcase(r.value) end),
       social:
         keys(SocialMediaAccount, user.id, fn r ->
@@ -1534,6 +1621,11 @@ defmodule Vutuv.Imports.LinkedIn do
       n -> "#{n}|#{downcase(params["issuer"])}"
     end
   end
+
+  # A publication is keyed by its title alone: the same paper listed twice
+  # with and without its publisher is one entry, and LinkedIn's own export
+  # repeats rows across files.
+  defp publication_key(%{"title" => title}), do: downcase(title)
 
   defp social_key(%{"provider" => provider, "value" => value}),
     do: "#{downcase(provider)}|#{downcase(value)}"

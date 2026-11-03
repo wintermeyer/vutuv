@@ -101,6 +101,7 @@ defmodule VutuvWeb.CV.Docx do
         skills(cv.skills),
         qualifications(cv.qualifications),
         languages(cv.languages),
+        publications(cv.publications),
         links(cv.links),
         social_media(cv.social_media)
       ]
@@ -191,6 +192,16 @@ defmodule VutuvWeb.CV.Docx do
     [
       paragraph(gettext("Languages"), style: "Heading1"),
       paragraph(Enum.map_join(languages, " | ", &"#{&1.name} (#{&1.fluency})"))
+    ]
+  end
+
+  # One paragraph per publication: a citation is too long for a joined line.
+  defp publications([]), do: nil
+
+  defp publications(publications) do
+    [
+      paragraph(gettext("Publications"), style: "Heading1")
+      | Enum.map(publications, &paragraph(&1.label))
     ]
   end
 

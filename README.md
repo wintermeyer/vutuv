@@ -40,7 +40,7 @@ We use the [MIT License](LICENSE).
 - `/system/investors` adds up that potential repost reach for every public post
   of the last 12 months, and shows the calculation's steps live while it runs.
 
-- Public member profiles (work experience, education, spoken languages, tags,
+- Public member profiles (work experience, education, spoken languages, publications, tags,
   links, contact details, online messengers with click-to-chat deep links) with
   follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.

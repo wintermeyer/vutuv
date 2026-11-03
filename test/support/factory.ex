@@ -263,6 +263,13 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def publication_factory do
+    %Vutuv.Profiles.Publication{
+      title: sequence(:publication_title, &"Paper #{&1}"),
+      slug: sequence(:publication_slug, &"paper-#{&1}")
+    }
+  end
+
   def qualification_factory do
     %Vutuv.Profiles.Qualification{
       name: sequence(:qualification_name, &"AWS Solutions Architect #{&1}"),

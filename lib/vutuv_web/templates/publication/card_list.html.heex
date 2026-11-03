@@ -1,0 +1,20 @@
+<%!-- The publications list, shared by the public /:slug/publications index and
+the /settings/publications editor. Each row: a document glyph, the title
+(linking to its entry page), the authors · publisher · date meta line, the
+description, an outbound "Read" link, and, for the owner, the calm Edit/Delete
+actions. Entries arrive newest first (Publication.ordered). --%>
+<ul class="divide-y divide-slate-100 dark:divide-slate-800">
+  <li
+    :for={publication <- @publications}
+    class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+  >
+    <.publication_row user={@user} publication={publication} />
+
+    <.row_actions
+      :if={@as_owner?}
+      class="ml-auto shrink-0"
+      edit_to={~p"/settings/publications/#{publication}/edit"}
+      delete_to={~p"/settings/publications/#{publication}"}
+    />
+  </li>
+</ul>

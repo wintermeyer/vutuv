@@ -43,6 +43,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     educations: "education",
     qualifications: "qualification",
     languages: "language",
+    publications: "publication",
     links: "link",
     social_media_accounts: "social_media_account",
     messengers: "messenger",
@@ -102,6 +103,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     do: gettext("Certificates & licenses of %{name}", name: name)
 
   defp index_title(:languages, name), do: gettext("Languages of %{name}", name: name)
+  defp index_title(:publications, name), do: gettext("Publications by %{name}", name: name)
   defp index_title(:links, name), do: gettext("Links of %{name}", name: name)
 
   defp index_title(:social_media_accounts, name),
@@ -125,6 +127,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry_title(:qualifications, entry), do: entry.name
 
   defp entry_title(:languages, entry), do: entry.name
+  defp entry_title(:publications, entry), do: entry.title
 
   defp entry_title(:links, entry), do: entry.description || entry.url
   defp entry_title(:social_media_accounts, entry), do: entry.provider
@@ -138,6 +141,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry(:work_experiences, record), do: work_entry(record)
   defp entry(:educations, record), do: education_entry(record)
   defp entry(:languages, record), do: language_entry(record)
+  defp entry(:publications, record), do: publication_entry(record)
   defp entry(:links, record), do: link_entry(record)
   defp entry(:social_media_accounts, record), do: social_entry(record)
   defp entry(:messengers, record), do: messenger_entry(record)
@@ -251,6 +255,20 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       kind: edu.kind,
       start: CV.year_month(edu.start_year, edu.start_month),
       end: CV.year_month(edu.end_year, edu.end_month)
+    }
+  end
+
+  @doc false
+  def publication_entry(publication) do
+    %{
+      id: publication.id,
+      title: publication.title,
+      authors: publication.authors,
+      publisher: publication.publisher,
+      # "2019" or "2019-03", the same shape the CV entries' dates take.
+      published: CV.year_month(publication.published_year, publication.published_month),
+      url: publication.url,
+      description: publication.description
     }
   end
 

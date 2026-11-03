@@ -5862,6 +5862,16 @@ defmodule VutuvWeb.UI do
            hint: gettext("The languages you speak"),
            terms: gettext("language speak spoken fluent native mother tongue")
          ),
+         # The tenth row of this group (issue #2350), one past the press kit's
+         # nine — it is CV content like the five rows above it, and no other
+         # group names its subject. See `settings_hub_test.exs` for the bound.
+         row(:publications, gettext("Publications"), ~p"/settings/publications",
+           hint: gettext("Papers, books and articles you wrote"),
+           terms:
+             gettext(
+               "publication paper article book chapter journal doi research author veröffentlichung"
+             )
+         ),
          row(:tags, gettext("Tags"), ~p"/settings/tags",
            hint: gettext("The topics you are known for"),
            terms: gettext("skill topic keyword expertise endorsement")

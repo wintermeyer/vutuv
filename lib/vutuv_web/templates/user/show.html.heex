@@ -847,6 +847,49 @@ up. The rest of the geometry is one block in the phone section of
       />
     </.card>
 
+    <%!-- Publications (issue #2350): the title, linking to its entry page, over
+    the authors · publisher · date meta line, newest first (Publication.ordered).
+    The description and the outbound link stay on the section page; the card
+    is a glanceable list of what the member wrote. --%>
+    <.card :if={@publications != [] or @as_owner?} id="profile-publications">
+      <.section_header title={gettext("Publications")} />
+
+      <.empty_add :if={@as_owner? and @publications == []} href={~p"/settings/publications/new"}>
+        {gettext("Add a publication")}
+      </.empty_add>
+
+      <ul :if={@publications != []} class="divide-y divide-slate-100 dark:divide-slate-800">
+        <li
+          :for={publication <- @publications}
+          class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0"
+        >
+          <VutuvWeb.PublicationHTML.publication_glyph class="mt-0.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
+          <div class="min-w-0">
+            <.link
+              href={~p"/#{@user}/publications/#{publication}"}
+              class="font-medium text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white"
+            >
+              {publication.title}
+            </.link>
+            <p
+              :if={VutuvWeb.PublicationHTML.meta_line(publication) != ""}
+              class="text-sm text-slate-600 dark:text-slate-400"
+            >
+              {VutuvWeb.PublicationHTML.meta_line(publication)}
+            </p>
+          </div>
+        </li>
+      </ul>
+
+      <.manage_footer
+        href={~p"/#{@user}/publications"}
+        manage_href={~p"/settings/publications"}
+        total={@totals.publications}
+        preview={VutuvWeb.UserProfileLive.preview_limit(:publications)}
+        owner={@as_owner?}
+      />
+    </.card>
+
     <%!-- Arbeitszeugnisse. Only the published ones are preloaded, so the owner
     sees exactly what a visitor sees; their private entries stay in
     /settings/job_references, which is where the empty tile points. The AI

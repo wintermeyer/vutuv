@@ -466,7 +466,7 @@ defmodule VutuvWeb.PageController do
   - `/<username>/posts/<id>` — a single post with replies
   - `/<username>/followers`, `/<username>/following`, `/<username>/connections` — people lists
   - `/<username>/<section>` — the profile sections in full: `work_experiences`,
-    `educations`, `qualifications`, `languages`, `links`, `social_media_accounts`,
+    `educations`, `qualifications`, `languages`, `publications`, `links`, `social_media_accounts`,
     `messengers`, `addresses`, `phone_numbers`, `emails` (public addresses only),
     `tags`, `job_references` (Arbeitszeugnisse the member chose to publish, with
     their full text); a single entry lives at `/<username>/<section>/<id-or-slug>`

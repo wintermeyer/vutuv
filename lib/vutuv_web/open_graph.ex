@@ -320,6 +320,9 @@ defmodule VutuvWeb.OpenGraph do
   defp settings_copy(["languages" | _]),
     do: gettext("Manage the languages on your vutuv profile.")
 
+  defp settings_copy(["publications" | _]),
+    do: gettext("Manage the publications on your vutuv profile.")
+
   defp settings_copy(["links" | _]),
     do: gettext("Manage the links on your vutuv profile.")
 

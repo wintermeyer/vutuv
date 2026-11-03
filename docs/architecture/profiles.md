@@ -594,6 +594,40 @@ GDPR export, and its own "Sprachen" section on the CV (issue #841, mapped to the
 JSON Resume `languages` field). Linking a language to a specific work experience
 or qualification is deliberately left out for now (revisit if members ask).
 
+## Publications profile section
+
+Members list **publications** they authored or co-authored (issue #2350,
+`Vutuv.Profiles.Publication`, `/:slug/publications`): a paper, a book chapter,
+a talk's proceedings, a report. The section exists for the academic members an
+ORCID iD brings in, but it is deliberately plain — a title (the one required
+field), the co-authors as free text, where it appeared (`publisher`: journal,
+conference, book or publisher), a month/year, a link and a Markdown
+description — so a journalist's articles or an engineer's conference talks fit
+the same shape. A bare DOI pasted into the link field (`10.1000/xyz`, with or
+without a `doi:` prefix) becomes its `https://doi.org/…` address, since the
+citation form is what a member is likeliest to have at hand.
+
+Entries sort newest first like the other CV sections (`Publication.ordered/1`:
+year, then month, undated last, then title), so there is no reorder tool. A new
+entry may announce itself to followers like a job or certificate (issue #980;
+the `publications` arm in `Vutuv.Profiles.CvUpdates`, its own wording in
+`VutuvWeb.NotificationLine`). The slug derives from the title with the id as
+fallback, as for educations.
+
+Like the other sections it has a profile card (the five newest, `preview_limit(:publications)`),
+owner CRUD on `/settings/publications`, Markdown / plain text / JSON / XML
+siblings (`SectionDocs.publication_entry/1`, kept in sync by the agent-docs
+drift test), an `/api/2.0` read+write section, a line in the GDPR export, and
+its own "Publications" section on the CV in every format (mapped to the JSON
+Resume `publications` field: `name` / `publisher` / `releaseDate` / `url` /
+`summary`). The LinkedIn import reads `Publications.csv` (Name, Published On,
+Description, Publisher, Url); the date arrives in several spellings across
+exports (`Jan 2020`, `2020`, `Jan 15, 2020`, `2020-01-15`), all read by
+`LinkedIn.parse_publication_date/1`, which keeps month and year and drops the
+day. Importing a member's works from their ORCID record is deliberately left
+for a follow-up: the public API hands them out, but the mapping from ORCID's
+work types and contributor lists to this plain shape deserves its own pass.
+
 ## Certificates & licenses profile section
 
 Members list **certificates and licenses** (issue #859,

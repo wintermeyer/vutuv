@@ -198,6 +198,38 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert again.created.languages == 0
   end
 
+  test "imported publications land once, keyed by title, with a DOI resolved" do
+    user = insert(:user)
+    insert(:publication, user: user, title: "On Bridges", slug: "on-bridges")
+
+    archive =
+      zip([
+        {"Publications.csv",
+         "Name,Published On,Description,Publisher,Url\n" <>
+           "On Bridges,2019,,Span Review,\n" <>
+           "Load Paths,Mar 2020,Where the load goes.,Nature,10.5555/paths\n"}
+      ])
+
+    {:ok, parsed} = LinkedIn.parse(archive)
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.publications == 1
+    assert summary.skipped.publications == 1
+
+    rows =
+      from(p in Vutuv.Profiles.Publication, where: p.user_id == ^user.id, order_by: p.title)
+      |> Repo.all()
+      |> Enum.map(&{&1.title, &1.publisher, &1.published_month, &1.published_year, &1.url})
+
+    assert rows == [
+             {"Load Paths", "Nature", 3, 2020, "https://doi.org/10.5555/paths"},
+             {"On Bridges", nil, nil, nil, nil}
+           ]
+
+    {:ok, again} = LinkedIn.apply_selection(user, parsed)
+    assert again.created.publications == 0
+  end
+
   test "a re-import does not double a certification (issue #859)" do
     user = insert(:user)
     {:ok, parsed} = LinkedIn.parse(sample_archive())

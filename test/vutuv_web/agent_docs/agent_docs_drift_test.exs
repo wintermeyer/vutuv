@@ -158,6 +158,18 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     insert(:language, user: user, language_code: "fr", proficiency: "native")
 
+    insert(:publication,
+      user: user,
+      title: "Load Paths in Long Spans",
+      slug: "load-paths-in-long-spans",
+      authors: "Gradient, G.",
+      publisher: "Span Review",
+      published_year: 2019,
+      published_month: 3,
+      url: "https://doi.org/10.5555/spans",
+      description: "Where the load goes."
+    )
+
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
     insert(:address, user: user, description: "Office", city: "Berlin", zip_code: "10115")
@@ -280,6 +292,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # JSON/XML the raw "native" proficiency)
       "French",
       "native",
+      # publications (issue #2350): the title and where it appeared show in
+      # every format (the profile card's meta line, md/txt, JSON/XML)
+      "Load Paths in Long Spans",
+      "Span Review",
       # qualifications (issue #859): the credential name and its issuer appear
       # in every format (the profile card's meta line, md/txt, JSON/XML)
       "Chartered Structural Engineer",
@@ -1222,6 +1238,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         "Thesis on load distribution"
       ],
       languages: ["French", "native"],
+      publications: ["Load Paths in Long Spans", "Gradient, G.", "Span Review", "2019"],
       qualifications: ["Chartered Structural Engineer", "IStructE"],
       links: ["bridges.example.org", "Bridge blog"],
       social_media_accounts: ["github.com/gretagradient"],
@@ -1305,6 +1322,13 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     rendered = formats_for("/drift_tester/languages/fr")
     assert_fact_everywhere(rendered, "French")
     assert Jason.decode!(rendered.json)["type"] == "language"
+
+    rendered = formats_for("/drift_tester/publications/load-paths-in-long-spans")
+
+    for fact <- ["Load Paths in Long Spans", "Span Review", "Where the load goes."],
+        do: assert_fact_everywhere(rendered, fact)
+
+    assert Jason.decode!(rendered.json)["type"] == "publication"
 
     qualification = Repo.one!(Ecto.assoc(user, :qualifications))
     rendered = formats_for("/drift_tester/qualifications/#{qualification.id}")

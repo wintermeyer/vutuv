@@ -54,6 +54,10 @@ defmodule VutuvWeb.AgentDocs.Text do
         gettext("Languages"),
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
+      section(
+        gettext("Publications"),
+        Enum.map(doc.publications, &entry_line("publications", &1))
+      ),
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
       section(gettext("Media Kit"), Enum.map(doc.press_kit, &press_picture_lines/1)),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
@@ -704,6 +708,16 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp entry_line("languages", language),
     do: "* #{language.name}: #{language.level}#{Markdown.language_preferred_gloss(language)}"
+
+  defp entry_line("publications", publication) do
+    facts = Markdown.publication_facts(publication)
+
+    "* " <>
+      publication.title <>
+      if(facts == "", do: "", else: ": #{facts}") <>
+      if(publication.url, do: " #{publication.url}", else: "") <>
+      if(publication.description, do: "\n  #{publication.description}", else: "")
+  end
 
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "* #{email.type}: #{email.value}"

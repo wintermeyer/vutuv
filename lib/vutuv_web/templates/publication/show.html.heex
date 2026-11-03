@@ -1,0 +1,56 @@
+<.page_header
+  title={@publication.title}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Publications"), ~p"/#{@user}/publications"},
+    @publication.title
+  ]}
+/>
+
+<.card_section>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/settings/publications/#{@publication}/edit"}
+    delete_to={~p"/settings/publications/#{@publication}"}
+  />
+
+  <%!-- Two facts per row (`.card__facts`, components.css). As one stacked
+  ladder they pushed everything worth reading below the fold. --%>
+  <div class="card__facts">
+    <div :if={@publication.authors}>
+      <h2 class="card__label">{gettext("Authors")}</h2>
+      <p class="breakwrap">{@publication.authors}</p>
+    </div>
+
+    <div :if={@publication.publisher}>
+      <h2 class="card__label">{gettext("Published in")}</h2>
+      <p>{@publication.publisher}</p>
+    </div>
+
+    <div :if={published_text(@publication)}>
+      <h2 class="card__label">{gettext("Published")}</h2>
+      <p>{published_text(@publication)}</p>
+    </div>
+
+    <div :if={@publication.url}>
+      <h2 class="card__label">{gettext("Link")}</h2>
+      <p>
+        <a
+          href={@publication.url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class="breakwrap"
+        >
+          {@publication.url}
+        </a>
+      </p>
+    </div>
+  </div>
+
+  <%= if @publication.description do %>
+    <h2 class="card__label">{gettext("Description")}</h2>
+    <.markdown_prose text={@publication.description} class="mt-1" />
+  <% end %>
+</.card_section>

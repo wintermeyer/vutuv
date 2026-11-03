@@ -41,6 +41,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Publication
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
@@ -999,6 +1000,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:education, user.educations)
     |> assign(:education_groups, EducationHTML.profile_groups(user.educations))
     |> assign(:languages, user.languages)
+    |> assign(:publications, user.publications)
     # The preload put the valid entries first; the card shows the expired ones folded away under
     # "Previously held". JSON-LD reads :qualifications alone, so a search
     # engine is never told a lapsed credential is held.
@@ -1375,6 +1377,7 @@ defmodule VutuvWeb.UserProfileLive do
   # cut happens in memory — a cut before the grouping drops whole categories.
   @preview_limits %{
     languages: 6,
+    publications: 5,
     qualifications: 8,
     phone_numbers: 3,
     links: 3,
@@ -1410,6 +1413,7 @@ defmodule VutuvWeb.UserProfileLive do
       # its own in memory — a cut before the grouping drops whole categories.
       educations: Education.order_by_date(Education),
       languages: Language.ordered() |> limit(^preview_limit(:languages)),
+      publications: Publication.ordered() |> limit(^preview_limit(:publications)),
       # valid_first keeps the valid ones inside the preview cut (the same
       # order the section page, CV and agent docs use). citing_jobs_preload:
       # the jobs earned with each credential ride along for the usage badges
@@ -1474,6 +1478,7 @@ defmodule VutuvWeb.UserProfileLive do
       section_count(WorkExperience, uid, "jobs"),
       section_count(Education, uid, "educations"),
       section_count(Language, uid, "languages"),
+      section_count(Publication, uid, "publications"),
       section_count(Qualification, uid, "qualifications"),
       section_count(PhoneNumber, uid, "numbers"),
       section_count(Messenger, uid, "messengers"),
@@ -1497,6 +1502,7 @@ defmodule VutuvWeb.UserProfileLive do
       jobs: Map.get(counts, "jobs", 0),
       educations: Map.get(counts, "educations", 0),
       languages: Map.get(counts, "languages", 0),
+      publications: Map.get(counts, "publications", 0),
       qualifications: Map.get(counts, "qualifications", 0),
       numbers: Map.get(counts, "numbers", 0),
       messengers: Map.get(counts, "messengers", 0),

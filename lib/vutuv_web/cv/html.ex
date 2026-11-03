@@ -44,6 +44,7 @@ defmodule VutuvWeb.CV.Html do
     #{skills(cv.skills)}
     #{qualifications(cv.qualifications)}
     #{languages(cv.languages)}
+    #{publications(cv.publications)}
     #{links(cv.links)}
     #{social_media(cv.social_media)}
     </div>
@@ -186,6 +187,22 @@ defmodule VutuvWeb.CV.Html do
     <section>
     <h2>#{esc(gettext("Languages"))}</h2>
     <p class="items">#{items}</p>
+    </section>
+    """
+  end
+
+  # Publications, one per line: a paper's full citation is too long for the
+  # middot-joined inline list the credentials and languages use.
+  defp publications([]), do: ""
+
+  defp publications(publications) do
+    items =
+      Enum.map_join(publications, fn publication -> "<li>#{esc(publication.label)}</li>" end)
+
+    """
+    <section>
+    <h2>#{esc(gettext("Publications"))}</h2>
+    <ul>#{items}</ul>
     </section>
     """
   end
