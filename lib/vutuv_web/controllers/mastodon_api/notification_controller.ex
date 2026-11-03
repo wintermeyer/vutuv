@@ -121,7 +121,7 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
       group_key: key,
       notifications_count: length(group),
       type: newest.type,
-      most_recent_notification_id: newest.id,
+      most_recent_notification_id: notification_number(newest.id),
       page_min_id: Enum.min(ids),
       page_max_id: Enum.max(ids),
       latest_page_notification_at: newest.created_at,
@@ -129,6 +129,21 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
       sample_account_ids: group |> Enum.map(& &1.account.id) |> Enum.uniq() |> Enum.take(8),
       status_id: newest.status[:id]
     }
+  end
+
+  # Mastodon serializes `most_recent_notification_id` as a bare integer, and the
+  # official iOS app and Ice Cubes decode it as `Int`: our `like-<uuid>` string
+  # failed the decode of the whole page (#2363). The number is the v7 id's
+  # millisecond plus the top 10 sub-millisecond bits, so it keeps creation order
+  # and stays below 2^53 (exact in a JavaScript client) until 2109. The `page_*`
+  # ids stay strings: a client hands those back as `max_id`, and they are.
+  defp notification_number(id) do
+    with uuid when is_binary(uuid) <- UUIDv7.cast_or_nil(bare_id(id)),
+         {:ok, <<ms::48, 7::4, sub_ms::12, _rest::64>>} <- Ecto.UUID.dump(uuid) do
+      Bitwise.bsl(ms, 10) + Bitwise.bsr(sub_ms, 2)
+    else
+      _not_v7 -> :erlang.phash2(id, 4_294_967_296)
+    end
   end
 
   # A group is one type over one status. Without a status there is nothing to
@@ -221,6 +236,25 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
       nil -> not_found(conn)
       item -> json(conn, hd(notifications(conn, [item])))
     end
+  end
+
+  @doc """
+  The notification policy (`GET` and `PATCH /api/v2/notifications/policy`).
+
+  vutuv filters no notifications into requests, so every category is `accept`
+  and nothing is pending; a `PATCH` changes nothing and answers the same. The
+  official iOS app reads this when its notifications tab opens, and the 404 it
+  got before showed as "Record not found" (#2363).
+  """
+  def policy(conn, _params) do
+    json(conn, %{
+      for_not_following: "accept",
+      for_not_followers: "accept",
+      for_new_accounts: "accept",
+      for_private_mentions: "accept",
+      for_limited_accounts: "accept",
+      summary: %{pending_requests_count: 0, pending_notifications_count: 0}
+    })
   end
 
   def unread_count(conn, _params) do

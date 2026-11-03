@@ -87,7 +87,9 @@ Server discovery, login and the core social workflow:
 - `GET /api/v1/notifications` (+ `/unread_count`, `/clear`, `/:id`) and the
   grouped `GET /api/v2/notifications` a 4.3+ client asks for, with its three
   companions `/api/v2/notifications/:group_key`, `/:group_key/accounts` and
-  `POST /:group_key/dismiss`
+  `POST /:group_key/dismiss`, plus `GET`/`PATCH /api/v2/notifications/policy`
+  (everything `accept`, nothing pending) and an always-empty
+  `GET /api/v1/notifications/requests`
 - `GET /api/v1/tags/:id`, `POST /api/v1/tags/:id/follow` / `/unfollow` and
   `GET /api/v1/followed_tags` — vutuv's own tag subscriptions (issue #872).
   The hashtag is matched case-insensitively, the way `/timelines/tag/:hashtag`
@@ -788,7 +790,12 @@ grouped list, 4.3+), which answered 404 while the v1 list beside it was fine —
 its whole notifications tab, and its "@ mentions" page, showed "an error
 occurred". The grouped list is served from the same derived items, with the
 accounts and statuses hoisted into two shared lists; a group is one type over
-one status, which is what makes several likes on one post a single row. The same
+one status, which is what makes several likes on one post a single row. A
+group's `most_recent_notification_id` is a JSON **integer** (the v7 id's
+millisecond and sub-millisecond bits), because Mastodon serializes it that way
+and the official iOS app and Ice Cubes decode it as `Int`: our string failed the
+whole page there (#2363). The same
+
 reasoning covers the tabs that have no content here: `trends/statuses|tags|links`,
 `announcements` and `suggestions` answer the **empty list** Mastodon itself
 answers when an instance has them switched off, because the difference between
