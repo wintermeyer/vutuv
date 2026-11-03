@@ -143,6 +143,18 @@ defmodule VutuvWeb.RateLimit do
   def check_linkedin_import(user), do: check_linkedin_import(nil, user)
 
   @doc """
+  Throttles a member's ORCID works imports (issue #2383) on the same budget as
+  the LinkedIn import: each preview is one to three requests this server
+  sends to the ORCID public API, and a page anybody can reload in a loop is a
+  page anybody can use to spend this installation's goodwill there.
+  """
+  def check_orcid_import(conn, user) do
+    {limit, window_ms} = import_budget()
+
+    check(conn, :orcid_import, user.id, limit: limit, window_ms: window_ms)
+  end
+
+  @doc """
   Throttles the self-hosted-forge admission check (20 per hour, per IP and per
   member): saving a Gitea/Forgejo profile makes this server send one request to
   a host the member typed (`Vutuv.CodeStats.verify_instance/1`), and a form

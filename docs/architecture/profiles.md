@@ -624,9 +624,32 @@ Resume `publications` field: `name` / `publisher` / `releaseDate` / `url` /
 Description, Publisher, Url); the date arrives in several spellings across
 exports (`Jan 2020`, `2020`, `Jan 15, 2020`, `2020-01-15`), all read by
 `LinkedIn.parse_publication_date/1`, which keeps month and year and drops the
-day. Importing a member's works from their ORCID record is deliberately left
-for a follow-up: the public API hands them out, but the mapping from ORCID's
-work types and contributor lists to this plain shape deserves its own pass.
+day.
+
+**Import from ORCID (issue #2383).** The editor offers to read the member's
+own public ORCID record once an ORCID iD is listed among their social-media
+accounts (`Vutuv.Profiles.OrcidImport`, `/settings/publications/orcid`), and
+shows a one-line hint pointing at the social-media form before that. The
+preview is the LinkedIn import's shape (`ImportHTML.candidate_section` /
+`candidate_row`, a hidden payload, the picks posted back) and writes nothing
+until confirmed. `Vutuv.Orcid.fetch_works/1` reads the works in two steps,
+because the summary listing carries no author list: the summary call yields
+one preferred `put-code` per group (ORCID groups a paper's sources — Crossref
+and the member — under one identifier), and the bulk endpoint
+(`/works/<put-codes>`, 100 per request, capped at 200 works) hands back the
+full works with their contributors. Each work becomes the plain publication:
+title, contributors' credit names joined, `journal-title`, year/month, and
+the DOI as `https://doi.org/…` (a DOI beats the record's own URL, being the
+stable one); ORCID's work type is shown on the preview row only. The short
+description is deliberately not imported — an abstract would make a long
+card out of a list. Dedup is `Publication.dedup_key/1` (the title,
+case-folded), shared with the LinkedIn import, so a re-import adds nothing
+and a preprint and its article under one title fold into one row. The
+verified mark on the ORCID account is not required: the works land on the
+importer's own profile, so a wrong iD can only fill their own list, and the
+preview shows them whose papers these are first. Gated by
+`:import_orcid_works` (env `IMPORT_ORCID_WORKS=false`), throttled on the
+LinkedIn import's budget (`RateLimit.check_orcid_import/2`).
 
 ## Certificates & licenses profile section
 
