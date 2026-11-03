@@ -230,7 +230,7 @@ Everything else has a default (the vutuv.de production value):
 | `AUDIBLE_DOMAIN` | `www.audible.de` | The Audible store an **audiobook** review card links the "Hörbuch"/"Audiobook" word to (a title search, since Audible keys by its own ASIN, not the print ISBN). Set your regional store (`www.audible.com`, …) — or an **empty** value (`AUDIBLE_DOMAIN=`) to keep the word plain text |
 | `VERIFY_ORGANIZATION_DOMAINS` | `true` | `false` disables the verified-organization-page domain proof (the DNS TXT and well-known-file checks and their periodic re-check) — no new organization page can be verified, existing ones keep working. Set it on installations that must not make outbound DNS/HTTP calls. A newly verified organization sends an operator notice to `OPERATOR_EMAIL` |
 | `VERIFY_USER_LINKS` | `true` | `false` disables verified personal-webpage links (a member proving a profile link is their own page via a rel=me back-link, or the same DNS TXT / well-known-file domain proof, plus their periodic re-check) — no new link can be verified, existing marks keep working. Set it on installations that must not make outbound DNS/HTTP calls |
-| `VERIFY_SOCIAL_ACCOUNTS` | `true` | `false` disables verified social-media handles (a member proving a listed account is theirs, plus its periodic re-check) — no new account can be verified, existing marks keep working. Two kinds of account can be proved: Bluesky (its profile description must carry the member's vutuv profile URL, which the public Bluesky AppView is asked for) and a self-hosted Gitea/Forgejo profile (the website field or the description, read from that instance's public API). Set it on installations that must not make outbound HTTP calls |
+| `VERIFY_SOCIAL_ACCOUNTS` | `true` | `false` disables verified social-media handles (a member proving a listed account is theirs, plus its periodic re-check) — no new account can be verified, existing marks keep working. Three kinds of account can be proved: Bluesky (its profile description must carry the member's vutuv profile URL, which the public Bluesky AppView is asked for), a self-hosted Gitea/Forgejo profile (the website field or the description, read from that instance's public API) and an ORCID iD (the record's "Websites & social links", read from the ORCID public API, which needs no registration). Set it on installations that must not make outbound HTTP calls |
 | `GITHUB_API_TOKEN` | – | Optional token for the profile code-stats fetches (GitHub allows 60 unauthenticated requests/hour per IP; a token raises that to 5,000). A [fine-grained PAT](https://github.com/settings/personal-access-tokens) with **no** scopes/permissions is enough — the fetches read public data only. Can be added (or rotated) at any time; without it everything still works, the 7-day snapshot cache is sized for the unauthenticated limit |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
 | `JOB_RUNTIME_DAYS` | `90` | How long a published job posting stays live before it auto-expires. Flat, no renewals — a still-open role gets a fresh posting |
@@ -648,8 +648,9 @@ vutuv runs fine without internet access:
   to hide the feature if link verification is not wanted on the installation.
 - Set `VERIFY_SOCIAL_ACCOUNTS=false`: verified social-media handles ask the
   public Bluesky AppView (`public.api.bsky.app`) for the account's profile
-  description, or a self-hosted Gitea/Forgejo instance for its public user
-  object, so unlike the link proofs there is no internal-resolver variant that
+  description, a self-hosted Gitea/Forgejo instance for its public user
+  object, or the ORCID public API (`pub.orcid.org`) for a record's links, so
+  unlike the link proofs there is no internal-resolver variant that
   could work air-gapped — the check simply fails. Turn it off so the verify
   page says so plainly instead of offering a button that can never succeed.
 - Turn off the features that call out to the internet (compile-time flags in

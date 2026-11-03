@@ -735,12 +735,12 @@ msgstr "Profilo aggiornato."
 msgid "Profile deleted successfully."
 msgstr "Profilo eliminato."
 
-#: lib/vutuv_web/views/user_html.ex:1052
+#: lib/vutuv_web/views/user_html.ex:1057
 #, elixir-autogen, elixir-format
 msgid "Social networks"
 msgstr "Social network"
 
-#: lib/vutuv_web/views/user_html.ex:1059
+#: lib/vutuv_web/views/user_html.ex:1064
 #, elixir-autogen, elixir-format
 msgid "Code & repositories"
 msgstr "Codice e repository"
@@ -1854,9 +1854,9 @@ msgstr "Troppi tentativi. Riprova più tardi."
 
 #: lib/vutuv_web/templates/social_media_account/card_list.html.heex:19
 #: lib/vutuv_web/templates/social_media_account/show.html.heex:27
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:18
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:19
 #: lib/vutuv_web/templates/user/show.html.heex:242
-#: lib/vutuv_web/views/user_html.ex:1104
+#: lib/vutuv_web/views/user_html.ex:1109
 #, elixir-autogen, elixir-format
 msgid "Verified profile"
 msgstr "Profilo verificato"
@@ -5450,7 +5450,7 @@ msgstr "Altro"
 
 #: lib/vutuv_web/templates/email/form_content.html.heex:33
 #: lib/vutuv_web/views/email_html.ex:12
-#: lib/vutuv_web/views/user_html.ex:1224
+#: lib/vutuv_web/views/user_html.ex:1229
 #, elixir-autogen, elixir-format
 msgid "Personal"
 msgstr "Personale"
@@ -6688,7 +6688,7 @@ msgstr "Seguitevi a vicenda per collegarsi con %{name} e leggerlo."
 msgid "Go to profile to follow"
 msgstr "Vai al profilo per seguire"
 
-#: lib/vutuv_web/views/user_html.ex:1223
+#: lib/vutuv_web/views/user_html.ex:1228
 #, elixir-autogen, elixir-format
 msgid "Professional"
 msgstr "Professionale"
@@ -8413,7 +8413,7 @@ msgstr "Troppe importazioni. Riprova tra poco."
 msgid "Please check the fields marked in red."
 msgstr "Controlla i campi contrassegnati in rosso."
 
-#: lib/vutuv_web/views/user_html.ex:1113
+#: lib/vutuv_web/views/user_html.ex:1118
 #, elixir-autogen, elixir-format
 msgid "Loading posts"
 msgstr "Caricamento dei post"
@@ -10349,15 +10349,15 @@ msgstr[1] "%{count} stelle"
 #: lib/vutuv_web/live/investors_reach_live.ex:321
 #: lib/vutuv_web/live/organization_live/show.ex:688
 #: lib/vutuv_web/templates/remote_actor_card/card.html.heex:108
-#: lib/vutuv_web/views/user_html.ex:977
-#: lib/vutuv_web/views/user_html.ex:1153
+#: lib/vutuv_web/views/user_html.ex:982
+#: lib/vutuv_web/views/user_html.ex:1158
 #, elixir-autogen, elixir-format
 msgid "%{formatted} follower"
 msgid_plural "%{formatted} followers"
 msgstr[0] "%{formatted} follower"
 msgstr[1] "%{formatted} follower"
 
-#: lib/vutuv_web/views/user_html.ex:970
+#: lib/vutuv_web/views/user_html.ex:975
 #, elixir-autogen, elixir-format
 msgid "%{formatted} star"
 msgid_plural "%{formatted} stars"
@@ -10386,7 +10386,7 @@ msgstr ""
 "mostrarne le statistiche pubbliche: stelle, repository, follower, linguaggi "
 "e attività recente."
 
-#: lib/vutuv_web/views/user_html.ex:984
+#: lib/vutuv_web/views/user_html.ex:989
 #, elixir-autogen, elixir-format
 msgid "Last active %{date}"
 msgstr "Ultima attività il %{date}"
@@ -10413,7 +10413,7 @@ msgstr "ultima attività il %{date}"
 msgid "since %{date}"
 msgstr "dal %{date}"
 
-#: lib/vutuv_web/views/user_html.ex:900
+#: lib/vutuv_web/views/user_html.ex:905
 #, elixir-autogen, elixir-format
 msgid "since %{year}"
 msgstr "dal %{year}"
@@ -17621,20 +17621,20 @@ msgstr "Aggiungi un altro tag"
 msgid "Remove the tag %{name}"
 msgstr "Rimuovi il tag %{name}"
 
-#: lib/vutuv_web/views/social_media_account_html.ex:24
+#: lib/vutuv_web/views/social_media_account_html.ex:30
 #, elixir-autogen, elixir-format
 msgid "Add this address to your Bluesky profile description (your bio), then run the check:"
 msgstr ""
 "Aggiungi questo indirizzo alla descrizione del tuo profilo Bluesky (la tua "
 "bio), poi avvia il controllo:"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:84
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:85
 #, elixir-autogen, elixir-format
 msgid "Back to Profiles"
 msgstr "Torna ai profili"
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:196
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:51
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:52
 #, elixir-autogen, elixir-format
 msgid "Profile verification is disabled on this installation."
 msgstr "La verifica dei profili è disattivata su questa installazione."
@@ -17644,14 +17644,14 @@ msgstr "La verifica dei profili è disattivata su questa installazione."
 msgid "Profile verified. It now shows a verified mark."
 msgstr "Profilo verificato. Ora mostra un contrassegno di verifica."
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:32
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:33
 #, elixir-autogen, elixir-format
 msgid "Prove this profile is yours by linking back to vutuv from it. It then shows a verified mark."
 msgstr ""
 "Dimostra che questo profilo è tuo mettendovi un link di ritorno a vutuv. "
 "Mostrerà poi un contrassegno di verifica."
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:75
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:76
 #, elixir-autogen, elixir-format
 msgid "Run the check"
 msgstr "Avvia il controllo"
@@ -17661,13 +17661,13 @@ msgstr "Avvia il controllo"
 msgid "This network cannot be verified."
 msgstr "Questa rete non può essere verificata."
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:26
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:27
 #, elixir-autogen, elixir-format
 msgid "Verified. Run the check again below to refresh it."
 msgstr "Verificato. Riavvii il controllo qui sotto per aggiornarlo."
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:166
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:7
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:8
 #, elixir-autogen, elixir-format
 msgid "Verify profile"
 msgstr "Verifica il profilo"
@@ -21179,21 +21179,21 @@ msgstr "ISO 8601 (Svezia, Giappone, Cina)"
 msgid "Language & display settings changed"
 msgstr "Impostazioni di lingua e visualizzazione modificate"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:42
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:43
 #, elixir-autogen, elixir-format
 msgid "%{provider} profiles cannot be verified yet: the network offers no field we could check."
 msgstr ""
 "I profili %{provider} non si possono ancora verificare: la rete non offre "
 "alcun campo che potremmo controllare."
 
-#: lib/vutuv_web/views/social_media_account_html.ex:19
+#: lib/vutuv_web/views/social_media_account_html.ex:25
 #, elixir-autogen, elixir-format
 msgid "Add this address to your %{provider} profile, in the website field or your description, then run the check:"
 msgstr ""
 "Aggiungi questo indirizzo al tuo profilo %{provider}, nel campo del sito web "
 "o nella descrizione, poi avvia il controllo:"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:55
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:56
 #, elixir-autogen, elixir-format
 msgid "Link back from your profile"
 msgstr "Link di ritorno dal tuo profilo"
@@ -21203,7 +21203,7 @@ msgstr "Link di ritorno dal tuo profilo"
 msgid "On your own Gitea or Forgejo instance: name@git.example.com"
 msgstr "Sulla tua istanza Gitea o Forgejo: nome@git.esempio.com"
 
-#: lib/vutuv_web/templates/social_media_account/verify.html.heex:64
+#: lib/vutuv_web/templates/social_media_account/verify.html.heex:65
 #, elixir-autogen, elixir-format
 msgid "The rest of the field can say whatever you like. We only look for this address."
 msgstr ""
@@ -28466,3 +28466,8 @@ msgstr "Valutati da solo. Non serve nessun esame."
 #, elixir-autogen, elixir-format
 msgid "The language I grew up with."
 msgstr "La lingua della mia infanzia."
+
+#: lib/vutuv_web/views/social_media_account_html.ex:18
+#, elixir-autogen, elixir-format
+msgid "Add this address to your ORCID record under “Websites & social links”, visible to everyone, then run the check:"
+msgstr "Aggiungi questo indirizzo al tuo record ORCID sotto “Websites & social links”, visibile a tutti, poi avvia la verifica:"

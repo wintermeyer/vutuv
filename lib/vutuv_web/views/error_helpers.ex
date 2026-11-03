@@ -184,6 +184,7 @@ defmodule VutuvWeb.ErrorHelpers do
       dgettext_noop("errors", "Enter your full Pixelfed handle, e.g. @user@pixelfed.social"),
       dgettext_noop("errors", "Enter your full BookWyrm handle, e.g. @user@bookwyrm.social"),
       dgettext_noop("errors", "Enter your Bluesky handle, e.g. name.bsky.social"),
+      dgettext_noop("errors", "Enter your ORCID iD, e.g. 0000-0002-1825-0097"),
       dgettext_noop(
         "errors",
         "Enter your username and your instance, e.g. name@git.example.com"

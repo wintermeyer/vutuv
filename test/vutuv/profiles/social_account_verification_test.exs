@@ -334,4 +334,80 @@ defmodule Vutuv.Profiles.SocialAccountVerificationTest do
       refute unverified.id in due
     end
   end
+
+  # An ORCID record (issue #2350): its "Websites & social links" are public
+  # data the ORCID public API hands out without a token, and only the record's
+  # owner can write them — the same threat model as the Bluesky bio.
+  describe "verify/2 for an ORCID iD" do
+    @orcid "0000-0002-1825-0097"
+
+    setup do
+      enable()
+      user = insert_activated_user()
+      account = insert(:social_media_account, provider: "ORCID", value: @orcid, user: user)
+      %{user: user, account: account}
+    end
+
+    defp serve_orcid_urls(urls) do
+      test_pid = self()
+
+      Application.put_env(:vutuv, :orcid_req_options,
+        plug: fn conn ->
+          send(test_pid, {:req, conn.host, conn.request_path})
+
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_resp(
+            200,
+            Jason.encode!(%{
+              "researcher-url" => Enum.map(urls, &%{"url-name" => "x", "url" => %{"value" => &1}})
+            })
+          )
+        end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :orcid_req_options) end)
+    end
+
+    test "a record linking the vutuv profile earns the mark", ctx do
+      serve_orcid_urls(["https://lab.example.org/", profile_url(ctx.user)])
+
+      assert {:ok, account} = Verification.verify(ctx.account, ctx.user)
+      assert account.verification_method == "orcid_record"
+      assert account.verified_at
+
+      assert_receive {:req, "pub.orcid.org", "/v3.0/" <> @orcid <> "/researcher-urls"}
+    end
+
+    test "a trailing slash on the pasted address still counts", ctx do
+      serve_orcid_urls([profile_url(ctx.user) <> "/"])
+      assert {:ok, _account} = Verification.verify(ctx.account, ctx.user)
+    end
+
+    test "a record without the URL earns nothing", ctx do
+      serve_orcid_urls(["https://lab.example.org/"])
+
+      assert {:error, :not_found} = Verification.verify(ctx.account, ctx.user)
+      assert Repo.reload(ctx.account).verified_at == nil
+    end
+
+    test "another member's profile URL does not count, nor a longer handle", ctx do
+      stranger = insert_activated_user()
+      serve_orcid_urls([profile_url(stranger), profile_url(ctx.user) <> "xyz"])
+
+      assert {:error, :not_found} = Verification.verify(ctx.account, ctx.user)
+    end
+
+    test "an unknown iD is not found, an outage is not a verdict", ctx do
+      for {status, expected} <- [{404, :not_found}, {500, :unreachable}] do
+        Application.put_env(:vutuv, :orcid_req_options,
+          plug: fn conn -> Plug.Conn.send_resp(conn, status, "{}") end
+        )
+
+        assert {:error, ^expected} = Verification.verify(ctx.account, ctx.user)
+      end
+
+      Application.delete_env(:vutuv, :orcid_req_options)
+    end
+  end
 end

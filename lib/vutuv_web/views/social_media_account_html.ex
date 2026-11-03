@@ -14,6 +14,12 @@ defmodule VutuvWeb.SocialMediaAccountHTML do
   this page is finding the right field, and Bluesky's bio and a forge's website
   field are not the same place.
   """
+  def verify_instructions("ORCID") do
+    gettext(
+      "Add this address to your ORCID record under “Websites & social links”, visible to everyone, then run the check:"
+    )
+  end
+
   def verify_instructions(provider) do
     if SocialMediaAccount.self_hosted_provider?(provider) do
       gettext(

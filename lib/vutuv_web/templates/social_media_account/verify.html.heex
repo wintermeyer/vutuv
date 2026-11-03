@@ -1,9 +1,10 @@
 <%!-- Owner-only "prove this account is yours" page (classic settings page). One
 proof: a field on the account's own profile must carry the member's vutuv
 profile URL — the Bluesky bio (that network has no rel=me, so the bio is the one
-field only the account holder can write), or the website field / description of
-a self-hosted Gitea or Forgejo profile. On success the account earns the
-verified mark shown on the profile card + section pages. --%>
+field only the account holder can write), the website field / description of
+a self-hosted Gitea or Forgejo profile, or the "Websites & social links" of an
+ORCID record. On success the account earns the verified mark shown on the
+profile card + section pages. --%>
 <.settings_shell user={@user} active={:social} title={gettext("Verify profile")}>
   <.card class="space-y-4">
     <div class="flex flex-wrap items-center gap-2">
