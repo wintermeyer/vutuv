@@ -29,6 +29,34 @@ defmodule VutuvWeb.PublicationHTML do
     |> Enum.join(" · ")
   end
 
+  @doc """
+  One ORCID import candidate's row text (issue #2383): the title, its facts
+  (authors · venue · year) and the work's kind in the reader's language, so a
+  preprint and the article it became can be told apart before ticking.
+  """
+  def orcid_candidate_label(candidate) do
+    [candidate.title, candidate.facts, work_type_label(candidate.type)]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" · ")
+  end
+
+  # The ORCID work types a member is likeliest to carry, in words. Anything
+  # else shows the record's own type with its hyphens spaced, which reads well
+  # enough for the long tail ("lecture-speech", "data-set") and never hides a
+  # kind behind a wrong label.
+  defp work_type_label("journal-article"), do: gettext("Journal article")
+  defp work_type_label("book"), do: gettext("Book")
+  defp work_type_label("book-chapter"), do: gettext("Book chapter")
+  defp work_type_label("conference-paper"), do: gettext("Conference paper")
+  defp work_type_label("preprint"), do: gettext("Preprint")
+  # Not the bare "Report": that msgid is the verb on every post's menu, and
+  # its German ("Melden") would label a paper as something to flag.
+  defp work_type_label("report"), do: gettext("Technical report")
+  defp work_type_label("dissertation-thesis"), do: gettext("Thesis")
+  defp work_type_label("other"), do: nil
+  defp work_type_label(nil), do: nil
+  defp work_type_label(type) when is_binary(type), do: String.replace(type, "-", " ")
+
   @doc ~S(The publication date as `2018` or `3/2018`, nil when the member gave none.)
   def published_text(%{published_year: nil}), do: nil
   def published_text(%{published_year: year, published_month: nil}), do: Integer.to_string(year)

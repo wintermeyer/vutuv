@@ -1622,10 +1622,11 @@ defmodule Vutuv.Imports.LinkedIn do
     end
   end
 
-  # A publication is keyed by its title alone: the same paper listed twice
-  # with and without its publisher is one entry, and LinkedIn's own export
-  # repeats rows across files.
-  defp publication_key(%{"title" => title}), do: downcase(title)
+  # A publication is keyed by its title alone (`Publication.dedup_key/1`, the
+  # rule the ORCID import shares): the same paper listed twice with and
+  # without its publisher is one entry, and LinkedIn's own export repeats rows
+  # across files.
+  defp publication_key(%{"title" => title}), do: Publication.dedup_key(title)
 
   defp social_key(%{"provider" => provider, "value" => value}),
     do: "#{downcase(provider)}|#{downcase(value)}"

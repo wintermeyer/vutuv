@@ -113,6 +113,21 @@ defmodule Vutuv.Profiles.Publication do
   end
 
   @doc """
+  The key two publications are the same under: the title, case-folded. The
+  LinkedIn import and the ORCID import both ask it, so the same paper listed
+  twice with and without its publisher is one entry everywhere. `nil` for a
+  blank title, which no import can create anyway.
+  """
+  def dedup_key(title) when is_binary(title) do
+    case title |> String.trim() |> String.downcase() do
+      "" -> nil
+      key -> key
+    end
+  end
+
+  def dedup_key(_title), do: nil
+
+  @doc """
   Entries in display order: most recently published first (the way a CV
   reads), undated entries last, then alphabetically by title so the order is
   stable.

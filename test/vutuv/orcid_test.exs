@@ -138,4 +138,126 @@ defmodule Vutuv.OrcidTest do
       refute_receive :req
     end
   end
+
+  describe "fetch_works/1" do
+    # The summary listing (groups, first summary preferred) and the bulk
+    # detail call (where the contributors are), as the public API answers.
+    defp serve_works(groups, bulk) do
+      test_pid = self()
+
+      stub(fn conn ->
+        send(test_pid, {:req, conn.request_path})
+
+        body =
+          if String.ends_with?(conn.request_path, "/works"),
+            do: %{"group" => groups},
+            else: %{"bulk" => bulk}
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(body))
+      end)
+    end
+
+    defp group(put_codes),
+      do: %{"work-summary" => Enum.map(put_codes, &%{"put-code" => &1, "title" => %{}})}
+
+    defp work(put_code, attrs) do
+      Map.merge(
+        %{
+          "put-code" => put_code,
+          "title" => %{"title" => %{"value" => "Paper #{put_code}"}},
+          "journal-title" => nil,
+          "type" => "journal-article",
+          "publication-date" => nil,
+          "external-ids" => %{"external-id" => []},
+          "contributors" => %{"contributor" => []},
+          "url" => nil
+        },
+        attrs
+      )
+    end
+
+    test "reads one work per group, with authors, venue, date and the DOI as a link" do
+      serve_works([group([11, 12]), group([13])], [
+        %{
+          "work" =>
+            work(11, %{
+              "title" => %{"title" => %{"value" => " On Bridges "}},
+              "journal-title" => %{"value" => "Span Review"},
+              "publication-date" => %{
+                "year" => %{"value" => "2019"},
+                "month" => %{"value" => "03"}
+              },
+              "external-ids" => %{
+                "external-id" => [
+                  %{"external-id-type" => "issn", "external-id-value" => "1234-5678"},
+                  %{"external-id-type" => "doi", "external-id-value" => "10.5555/spans"}
+                ]
+              },
+              "contributors" => %{
+                "contributor" => [
+                  %{"credit-name" => %{"value" => "Gradient, G."}},
+                  %{"credit-name" => nil},
+                  %{"credit-name" => %{"value" => "Span, S."}}
+                ]
+              },
+              "url" => %{"value" => "https://example.org/ignored-in-favour-of-the-doi"}
+            })
+        },
+        %{"work" => work(13, %{"url" => %{"value" => "https://example.org/13"}})}
+      ])
+
+      assert {:ok, [bridges, other]} = Orcid.fetch_works(@id)
+
+      assert bridges == %{
+               put_code: 11,
+               title: "On Bridges",
+               authors: "Gradient, G., Span, S.",
+               publisher: "Span Review",
+               published_year: 2019,
+               published_month: 3,
+               url: "https://doi.org/10.5555/spans",
+               type: "journal-article"
+             }
+
+      assert other.url == "https://example.org/13"
+      assert other.authors == nil
+      assert other.published_year == nil
+
+      # The summary call, then ONE bulk call naming the preferred put code of
+      # each group — never the second summary of the first group.
+      assert_receive {:req, "/v3.0/" <> _ = summary_path}
+      assert summary_path == "/v3.0/#{@id}/works"
+      assert_receive {:req, "/v3.0/" <> _ = bulk_path}
+      assert bulk_path == "/v3.0/#{@id}/works/11,13"
+      refute_receive {:req, _}
+    end
+
+    test "a work without a title is dropped, an empty record answers an empty list" do
+      serve_works([group([21])], [%{"work" => work(21, %{"title" => %{"title" => nil}})}])
+      assert {:ok, []} = Orcid.fetch_works(@id)
+
+      serve_works([], [])
+      assert {:ok, []} = Orcid.fetch_works(@id)
+    end
+
+    test "an unknown iD is gone, an outage transient, a malformed iD never asked" do
+      stub(fn conn -> Plug.Conn.send_resp(conn, 404, "{}") end)
+      assert {:error, :gone} = Orcid.fetch_works(@id)
+
+      stub(fn conn -> Plug.Conn.send_resp(conn, 503, "") end)
+      assert {:error, :transient} = Orcid.fetch_works(@id)
+
+      test_pid = self()
+
+      stub(fn conn ->
+        send(test_pid, :req)
+        Plug.Conn.send_resp(conn, 200, "{}")
+      end)
+
+      assert {:error, :gone} = Orcid.fetch_works("alice")
+      refute_receive :req
+    end
+  end
 end

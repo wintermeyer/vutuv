@@ -709,6 +709,12 @@ config :vutuv, :fetch_friendica_posts, true
 config :vutuv, :fetch_bluesky_posts, true
 config :vutuv, :fetch_bookwyrm_posts, true
 
+# "Import from ORCID" on the publications editor (issue #2383): reads the
+# works of the member's own public ORCID record from pub.orcid.org, which
+# needs no token. Off for installations that must not call out; tests turn
+# it off and stub HTTP via :orcid_req_options.
+config :vutuv, :import_orcid_works, true
+
 # The posts a followed tag pulls from the other servers it names (issue #2126).
 # Off = nothing is ever asked and the standing job does not even start — the
 # switch for installations that must not call out (intranets), and the reason a

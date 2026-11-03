@@ -2038,6 +2038,11 @@ defmodule VutuvWeb.Router do
     )
 
     get("/publications", PublicationController, :manage)
+    # "Import from ORCID" (issue #2383): the preview, and the POST that writes
+    # the picks. Before the resources block, which has no :show, so the word
+    # "orcid" can never be read as an entry's slug here.
+    get("/publications/orcid", PublicationController, :orcid_import)
+    post("/publications/orcid", PublicationController, :orcid_apply)
 
     resources("/publications", PublicationController,
       only: [:new, :create, :edit, :update, :delete],

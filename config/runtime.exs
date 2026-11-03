@@ -979,6 +979,13 @@ if config_env() == :prod do
     config :vutuv, :verify_social_accounts, false
   end
 
+  # "Import from ORCID" on the publications editor (issue #2383).
+  # IMPORT_ORCID_WORKS=false hides it, so no request reaches pub.orcid.org —
+  # for installations that must not call out (intranets).
+  if System.get_env("IMPORT_ORCID_WORKS") == "false" do
+    config :vutuv, :import_orcid_works, false
+  end
+
   # Avatars and URL screenshots are written under this root and served by
   # nginx (location /avatars/, /screenshots/). Override with UPLOADS_DIR_PREFIX;
   # the default must match the nginx alias root or fresh uploads will 404.

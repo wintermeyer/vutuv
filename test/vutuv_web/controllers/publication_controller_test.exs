@@ -155,4 +155,151 @@ defmodule VutuvWeb.PublicationControllerTest do
     assert html =~ "Card paper"
     assert html =~ ~p"/#{user}/publications"
   end
+
+  # The editor's ORCID offer with the import switched off (the test default):
+  # neither the button nor the hint, so an intranet never dangles a dead link.
+  test "the editor offers no ORCID import while the switch is off", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    insert(:social_media_account, provider: "ORCID", value: "0000-0002-1825-0097", user: user)
+
+    html = conn |> get(~p"/settings/publications") |> html_response(200)
+    refute html =~ "orcid-import-offer"
+    refute html =~ "orcid-import-hint"
+
+    conn = get(conn, ~p"/settings/publications/orcid")
+    assert redirected_to(conn) == ~p"/settings/publications"
+  end
+end
+
+defmodule VutuvWeb.PublicationOrcidImportTest do
+  @moduledoc """
+  "Import from ORCID" (issue #2383) end to end: the offer on the editor, the
+  preview and the POST that writes the picks.
+
+  Not async: the switch (`:import_orcid_works`) and the Req seam
+  (`:orcid_req_options`) live in the application env.
+  """
+  use VutuvWeb.ConnCase
+
+  import Ecto.Query
+  import Vutuv.Factory
+
+  alias Vutuv.Profiles.Publication
+
+  @id "0000-0002-1825-0097"
+
+  setup do
+    Application.put_env(:vutuv, :import_orcid_works, true)
+    on_exit(fn -> Application.put_env(:vutuv, :import_orcid_works, false) end)
+    :ok
+  end
+
+  defp serve_works(titles) do
+    groups =
+      for {_title, put_code} <- Enum.with_index(titles, 1),
+          do: %{"work-summary" => [%{"put-code" => put_code}]}
+
+    bulk =
+      for {title, put_code} <- Enum.with_index(titles, 1) do
+        %{
+          "work" => %{
+            "put-code" => put_code,
+            "title" => %{"title" => %{"value" => title}},
+            "journal-title" => %{"value" => "Span Review"},
+            "type" => "journal-article",
+            "publication-date" => %{"year" => %{"value" => "2019"}}
+          }
+        }
+      end
+
+    Application.put_env(:vutuv, :orcid_req_options,
+      plug: fn conn ->
+        body =
+          if String.ends_with?(conn.request_path, "/works"),
+            do: %{"group" => groups},
+            else: %{"bulk" => bulk}
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(body))
+      end
+    )
+
+    on_exit(fn -> Application.delete_env(:vutuv, :orcid_req_options) end)
+  end
+
+  test "the editor hints at the iD, then offers the import once it is listed", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    html = conn |> get(~p"/settings/publications") |> html_response(200)
+    assert html =~ "orcid-import-hint"
+    refute html =~ "orcid-import-offer"
+
+    insert(:social_media_account, provider: "ORCID", value: @id, user: user)
+
+    html = conn |> recycle() |> get(~p"/settings/publications") |> html_response(200)
+    assert html =~ "orcid-import-offer"
+    assert html =~ ~p"/settings/publications/orcid"
+  end
+
+  test "without an iD the preview sends the member to the social-media form", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+    conn = get(conn, ~p"/settings/publications/orcid")
+    assert redirected_to(conn) == ~p"/settings/social_media_accounts/new"
+  end
+
+  test "the preview lists the record's works, the POST imports the ticked ones", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    insert(:social_media_account, provider: "ORCID", value: @id, user: user)
+    insert(:publication, user: user, title: "On Bridges", slug: "on-bridges")
+    serve_works(["On Bridges", "Load Paths", "Unticked"])
+
+    html = conn |> get(~p"/settings/publications/orcid") |> html_response(200)
+    assert html =~ "Load Paths · Span Review · 2019 · Journal article"
+    assert html =~ "already on your profile"
+    assert html =~ ~s(action="#{~p"/settings/publications/orcid"}")
+
+    # The hidden field as the browser would submit it: the attribute value
+    # with its HTML escapes undone.
+    [payload] = Regex.run(~r/name="payload" value="([^"]+)"/, html, capture: :all_but_first)
+    decoded_payload = payload |> String.replace("&quot;", "\"") |> String.replace("&amp;", "&")
+
+    ids =
+      Regex.scan(~r/name="selected\[\]" value="([^"]+)"/, html, capture: :all_but_first)
+      |> List.flatten()
+
+    assert length(ids) == 3
+    # Tick the first two: the duplicate and "Load Paths".
+    conn =
+      post(conn, ~p"/settings/publications/orcid", %{
+        "payload" => decoded_payload,
+        "selected" => Enum.take(ids, 2)
+      })
+
+    assert redirected_to(conn) == ~p"/settings/publications"
+    assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "1 publication imported"
+
+    titles =
+      Repo.all(from(p in Publication, where: p.user_id == ^user.id, select: p.title))
+      |> Enum.sort()
+
+    assert titles == ["Load Paths", "On Bridges"]
+  end
+
+  test "an unreachable ORCID lands back on the editor with a sentence, not a 500", %{
+    conn: conn
+  } do
+    {conn, user} = create_and_login_user(conn)
+    insert(:social_media_account, provider: "ORCID", value: @id, user: user)
+
+    Application.put_env(:vutuv, :orcid_req_options,
+      plug: fn conn -> Plug.Conn.send_resp(conn, 503, "") end
+    )
+
+    on_exit(fn -> Application.delete_env(:vutuv, :orcid_req_options) end)
+
+    conn = get(conn, ~p"/settings/publications/orcid")
+    assert redirected_to(conn) == ~p"/settings/publications"
+    assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "did not answer"
+  end
 end

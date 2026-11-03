@@ -1,0 +1,64 @@
+<%!-- The ORCID import preview (issue #2383): every work the member's public
+record lists, one box each, duplicates unticked — the same preview shape the
+LinkedIn import uses, so a member who has done one knows the other. Nothing is
+written until the button below. --%>
+<.settings_shell user={@user} active={:publications} title={gettext("Import from ORCID")}>
+  <div class="max-w-3xl">
+    <.card>
+      <div
+        data-import-analysis
+        class="rounded-lg bg-brand-50 p-4 text-sm text-brand-900 ring-1 ring-brand-100 dark:bg-brand-800/60 dark:text-brand-100 dark:ring-brand-800"
+      >
+        <p class="font-semibold">
+          {gettext("These are the works your public ORCID record lists. Nothing has been imported yet.")}
+        </p>
+        <p class="mt-1">
+          {gettext(
+            "Uncheck anything you do not want. Publications already on your profile are unchecked for you, and nothing you have is overwritten."
+          )}
+        </p>
+      </div>
+
+      <p :if={@candidates == []} class="mt-4 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("Your public ORCID record lists no works yet.")}
+      </p>
+
+      <.form
+        :if={@candidates != []}
+        for={to_form(%{}, as: :import)}
+        action={~p"/settings/publications/orcid"}
+        method="post"
+        id="orcid-import-preview"
+        class="mt-4"
+      >
+        <input type="hidden" name="payload" value={@payload} />
+
+        <VutuvWeb.ImportHTML.candidate_section title={gettext("Publications")} items={@candidates}>
+          <VutuvWeb.ImportHTML.candidate_row
+            :for={c <- @candidates}
+            id={c.id}
+            label={orcid_candidate_label(c)}
+            duplicate?={c.duplicate?}
+            select?={c.select?}
+          />
+        </VutuvWeb.ImportHTML.candidate_section>
+
+        <div class="mt-6 flex items-center gap-3">
+          <.button type="submit">{gettext("Import selected")}</.button>
+          <.link
+            navigate={~p"/settings/publications"}
+            class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400"
+          >
+            {gettext("Cancel")}
+          </.link>
+        </div>
+      </.form>
+
+      <p class="mt-6 border-t border-slate-100 pt-4 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400">
+        {gettext(
+          "Only the public part of your record is read. Works you keep private on ORCID do not appear here."
+        )}
+      </p>
+    </.card>
+  </div>
+</.settings_shell>
