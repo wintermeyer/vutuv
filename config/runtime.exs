@@ -170,14 +170,36 @@ if config_env() == :prod do
     config :vutuv, :bounce_address, bounce_address
   end
 
-  if appeal_reply_to = System.get_env("APPEAL_REPLY_TO") do
-    config :vutuv, :appeal_reply_to, appeal_reply_to
-  end
+  # The config.exs defaults name vutuv.de's own operator, so they hold only on
+  # vutuv.de. Anywhere else an unset OPERATOR_EMAIL used to send that
+  # installation's daily report, member names included, to vutuv.de and print
+  # vutuv.de's contact in its security.txt and error pages. There it falls
+  # back to postmaster@ of the domain the installation sends mail from, the
+  # one mailbox every mail domain must have (RFC 5321).
+  vutuv_de? = String.replace_prefix(host, "www.", "") == "vutuv.de"
 
-  if operator_email = System.get_env("OPERATOR_EMAIL") do
+  operator_email =
+    System.get_env("OPERATOR_EMAIL") ||
+      unless vutuv_de? do
+        mail_domain =
+          case String.split(System.get_env("MAILER_FROM_ADDRESS") || "", "@") do
+            [_local, domain] when domain != "" -> domain
+            _ -> host
+          end
+
+        fallback = "postmaster@" <> mail_domain
+        IO.warn("OPERATOR_EMAIL is not set; operator notices go to #{fallback}", [])
+        fallback
+      end
+
+  if operator_email do
     config :vutuv,
            :operator_recipient,
            {System.get_env("OPERATOR_NAME") || operator_email, operator_email}
+  end
+
+  if appeal_reply_to = System.get_env("APPEAL_REPLY_TO") || (!vutuv_de? && operator_email) do
+    config :vutuv, :appeal_reply_to, appeal_reply_to
   end
 
   if operator_name = System.get_env("OPERATOR_NAME") do

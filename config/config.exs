@@ -1053,6 +1053,8 @@ config :vutuv, :appeal_reply_to, "sw@wintermeyer-consulting.de"
 # mailto:) because they cannot say what went wrong. Use an address a human
 # reads. It is the *person*, distinct from :operator_name below, which is the
 # organization credited in the footer. (OPERATOR_NAME / OPERATOR_EMAIL)
+# This default and :appeal_reply_to above apply on vutuv.de only; another
+# host without OPERATOR_EMAIL gets postmaster@ its own domain (runtime.exs).
 config :vutuv, :operator_recipient, {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
 
 # The operator credit in the site and email footers ("a service provided
