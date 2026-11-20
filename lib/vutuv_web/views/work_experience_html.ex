@@ -294,7 +294,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
 
     if starts == [] or finishes == [],
       do: nil,
-      else: max(Enum.max(finishes) - Enum.min(starts), 0)
+      else: months_between(Enum.min(starts), Enum.max(finishes))
   end
 
   defp build_block(circles, months, max_months, label_style) do
@@ -542,8 +542,12 @@ defmodule VutuvWeb.WorkExperienceHTML do
     start = start_index(job)
     finish = end_index(job) || if(not is_nil(start), do: current_idx)
 
-    if is_nil(start) or is_nil(finish), do: nil, else: max(finish - start, 0)
+    if is_nil(start) or is_nil(finish), do: nil, else: months_between(start, finish)
   end
+
+  # Both ends count: a role from 10/2004 to 9/2005 ran twelve months, and a
+  # year-only 2003 - 2003 entry (January to December) one year.
+  defp months_between(start, finish), do: max(finish - start + 1, 0)
 
   defp duration_label(nil, _style), do: ""
   # The compact circle label is localized: the "y"/"m" unit is not universal, so

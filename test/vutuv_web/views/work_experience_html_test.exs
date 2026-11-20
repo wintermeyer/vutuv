@@ -91,8 +91,25 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
 
       assert one_year.length == "1 year"
       assert many_years.length == "12 years"
-      assert months.length == "4 months"
+      assert months.length == "5 months"
       assert undated.length == nil
+    end
+
+    # Issue #2388: both the start and the end month belong to the role, so
+    # 10/2004 - 9/2005 is a year, not eleven months.
+    test "counts the start and the end month" do
+      [year, same_month, year_only] =
+        WorkExperienceHTML.circle_durations([
+          job(start_year: 2004, start_month: 10, end_year: 2005, end_month: 9),
+          job(start_year: 2003, start_month: 5, end_year: 2003, end_month: 5),
+          job(start_year: 2003, end_year: 2003)
+        ])
+
+      assert year.months == 12
+      assert year.length == "1 year"
+      assert same_month.months == 1
+      assert year_only.months == 12
+      assert year_only.label == "1"
     end
 
     test "compact style labels whole years as Ny and sub-year spans as Nm" do
@@ -108,11 +125,11 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
         )
 
       assert long.label == "5y"
-      assert short.label == "3m"
+      assert short.label == "4m"
     end
 
     # The compact unit is localized (the "y"/"m" abbreviation is not universal),
-    # so a German viewer reads "5 J." / "3 M." (Jahre / Monate) in the circles.
+    # so a German viewer reads "5 J." / "4 M." (Jahre / Monate) in the circles.
     test "compact style localizes the unit for German" do
       Gettext.put_locale(VutuvWeb.Gettext, "de")
 
@@ -126,7 +143,7 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
         )
 
       assert long.label == "5 J."
-      assert short.label == "3 M."
+      assert short.label == "4 M."
     end
   end
 
